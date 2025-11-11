@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GameStateManager } from '@/managers/GameStateManager';
+import { WaveManager } from '@/managers/WaveManager';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -7,9 +8,12 @@ import { GameStateManager } from '@/managers/GameStateManager';
  */
 export class StadiumScene extends Phaser.Scene {
   private gameState: GameStateManager;
+  private waveManager!: WaveManager;
   private sectionAText?: Phaser.GameObjects.Text;
   private sectionBText?: Phaser.GameObjects.Text;
   private sectionCText?: Phaser.GameObjects.Text;
+  private scoreText?: Phaser.GameObjects.Text;
+  private countdownText?: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'StadiumScene' });
@@ -17,12 +21,29 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Initialize WaveManager
+    this.waveManager = new WaveManager(this.gameState);
+
     // Title at top center
     this.add.text(this.cameras.main.centerX, 50, 'STADIUM SIMULATOR', {
       fontSize: '48px',
       fontFamily: 'Arial',
       color: '#ffffff',
     }).setOrigin(0.5, 0.5);
+
+    // Score display at top-right
+    this.scoreText = this.add.text(900, 50, 'Score: 0', {
+      fontSize: '24px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+    }).setOrigin(1, 0.5);
+
+    // Countdown display at top-left
+    this.countdownText = this.add.text(100, 50, '', {
+      fontSize: '24px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+    }).setOrigin(0, 0.5);
 
     // Section A - Blue
     this.add.rectangle(200, 300, 250, 200, 0x4a90e2);
@@ -65,11 +86,51 @@ export class StadiumScene extends Phaser.Scene {
 
     // Initial update of text displays
     this.updateDisplay();
+
+    // Setup wave button listener
+    const waveBtn = document.getElementById('wave-btn') as HTMLButtonElement;
+    if (waveBtn) {
+      waveBtn.addEventListener('click', () => {
+        if (!this.waveManager.isActive()) {
+          this.waveManager.startWave();
+          waveBtn.disabled = true;
+          waveBtn.textContent = 'WAVE IN PROGRESS...';
+        }
+      });
+    }
+
+    // Listen to WaveManager events
+    this.waveManager.on('waveComplete', () => {
+      if (waveBtn) {
+        waveBtn.disabled = false;
+        waveBtn.textContent = 'START WAVE';
+      }
+    });
   }
 
   update(time: number, delta: number): void {
     // Update game state with elapsed time
     this.gameState.updateStats(delta);
+
+    // Update wave countdown if active
+    if (this.waveManager.isActive()) {
+      this.waveManager.updateCountdown(delta);
+      
+      // Update countdown display
+      if (this.countdownText) {
+        const countdown = Math.max(0, Math.ceil(this.waveManager.getCountdown()));
+        this.countdownText.setText(`Wave: ${countdown}s`);
+      }
+    } else {
+      if (this.countdownText) {
+        this.countdownText.setText('');
+      }
+    }
+
+    // Update score display
+    if (this.scoreText) {
+      this.scoreText.setText(`Score: ${this.waveManager.getScore()}`);
+    }
 
     // Update visual displays
     this.updateDisplay();
