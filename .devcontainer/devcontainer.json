@@ -1,7 +1,6 @@
 {
   "name": "Stadium Simulator",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
-  "postCreateCommand": "npm create vite@latest stadium-simulator -- --template vanilla-ts && cd stadium-simulator && npm install phaser howler axios && mkdir -p src/{scenes,managers,sprites,types} public/assets/{sprites,sounds}",
   "customizations": {
     "vscode": {
       "extensions": [
