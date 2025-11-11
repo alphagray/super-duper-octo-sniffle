@@ -7,16 +7,22 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
   },
   "dependencies": {
-    "phaser": "^3.80.1",
+    "axios": "^1.7.9",
     "howler": "^2.2.4",
-    "axios": "^1.7.9"
+    "phaser": "^3.80.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",
+    "@vitest/ui": "^4.0.8",
+    "happy-dom": "^20.0.10",
     "typescript": "^5.5.2",
-    "vite": "^5.3.1"
+    "vite": "^5.3.1",
+    "vitest": "^4.0.8"
   }
 }
