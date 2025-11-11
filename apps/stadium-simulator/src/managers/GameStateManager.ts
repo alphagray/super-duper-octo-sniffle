@@ -19,7 +19,7 @@ export class GameStateManager {
    * Returns all sections
    */
   public getSections(): Section[] {
-    return this.sections;
+    return [...this.sections];
   }
 
   /**
