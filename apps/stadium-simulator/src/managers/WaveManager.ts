@@ -1,7 +1,7 @@
-import type { Wave } from '@/types/GameTypes';
+import type { WaveState } from '@/types/GameTypes';
 
 export class WaveManager {
-  private wave: Wave;
+  private wave: WaveState;
 
   constructor() {
     this.wave = {
@@ -24,7 +24,7 @@ export class WaveManager {
     // Apply multiplier bonuses
   }
 
-  public getWave(): Wave {
+  public getWave(): WaveState {
     return this.wave;
   }
 

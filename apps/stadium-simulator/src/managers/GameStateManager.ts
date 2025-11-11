@@ -1,4 +1,4 @@
-import type { GameState, Section, Wave, Vendor, Mascot } from '@/types/GameTypes';
+import type { GameState, Section, WaveState, VendorState, MascotState } from '@/types/GameTypes';
 
 export class GameStateManager {
   private gameState: GameState;
@@ -8,8 +8,6 @@ export class GameStateManager {
     this.gameState = {
       sections: [],
       wave: { countdown: 0, active: false, currentSection: 0, multiplier: 1 },
-      vendors: [],
-      mascot: { cooldown: 0, isActive: false },
       score: 0,
     };
   }
@@ -27,7 +25,7 @@ export class GameStateManager {
     // TODO: Initialize stadium sections
   }
 
-  public updateSection(id: number, updates: Partial<Section>): void {
+  public updateSection(id: string, updates: Partial<Section>): void {
     // TODO: Update specific section properties
   }
 }
