@@ -25,11 +25,11 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Initialize WaveManager
-    this.waveManager = new WaveManager(this.gameState);
-
-    // Initialize VendorManager
+    // Initialize VendorManager first
     this.vendorManager = new VendorManager(this.gameState, 2);
+
+    // Initialize WaveManager with VendorManager for interference checks
+    this.waveManager = new WaveManager(this.gameState, this.vendorManager);
 
     // Initialize section rectangles array
     this.sectionRects = [];
