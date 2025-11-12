@@ -14,6 +14,8 @@ export class StadiumScene extends Phaser.Scene {
   private sectionCText?: Phaser.GameObjects.Text;
   private scoreText?: Phaser.GameObjects.Text;
   private countdownText?: Phaser.GameObjects.Text;
+  private sectionRects!: Phaser.GameObjects.Rectangle[];
+  private successStreak: number = 0;
 
   constructor() {
     super({ key: 'StadiumScene' });
@@ -23,6 +25,10 @@ export class StadiumScene extends Phaser.Scene {
   create(): void {
     // Initialize WaveManager
     this.waveManager = new WaveManager(this.gameState);
+
+    // Initialize section rectangles array
+    this.sectionRects = [];
+    this.successStreak = 0;
 
     // Title at top center
     this.add.text(this.cameras.main.centerX, 50, 'STADIUM SIMULATOR', {
@@ -46,7 +52,8 @@ export class StadiumScene extends Phaser.Scene {
     }).setOrigin(0, 0.5);
 
     // Section A - Blue
-    this.add.rectangle(200, 300, 250, 200, 0x4a90e2);
+    const rectA = this.add.rectangle(200, 300, 250, 200, 0x4a90e2);
+    this.sectionRects.push(rectA);
     this.add.text(200, 250, 'Section A', {
       fontSize: '24px',
       fontFamily: 'Arial',
@@ -59,7 +66,8 @@ export class StadiumScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     // Section B - Green
-    this.add.rectangle(500, 300, 250, 200, 0x50c878);
+    const rectB = this.add.rectangle(500, 300, 250, 200, 0x50c878);
+    this.sectionRects.push(rectB);
     this.add.text(500, 250, 'Section B', {
       fontSize: '24px',
       fontFamily: 'Arial',
@@ -72,7 +80,8 @@ export class StadiumScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     // Section C - Red
-    this.add.rectangle(800, 300, 250, 200, 0xe74c3c);
+    const rectC = this.add.rectangle(800, 300, 250, 200, 0xe74c3c);
+    this.sectionRects.push(rectC);
     this.add.text(800, 250, 'Section C', {
       fontSize: '24px',
       fontFamily: 'Arial',
@@ -99,12 +108,69 @@ export class StadiumScene extends Phaser.Scene {
       });
     }
 
-    // Listen to WaveManager events
+    // Listen to WaveManager events for visual feedback
+    this.waveManager.on('waveStart', () => {
+      this.successStreak = 0;
+    });
+
+    this.waveManager.on('sectionSuccess', (data: { section: string; chance: number }) => {
+      const sectionIndex = this.getSectionIndex(data.section);
+      const rect = this.sectionRects[sectionIndex];
+      
+      // Increment success streak
+      this.successStreak++;
+      
+      // Flash green with alpha tween
+      this.tweens.add({
+        targets: rect,
+        alpha: 0.5,
+        duration: 200,
+        yoyo: true,
+        repeat: 2,
+        onComplete: () => {
+          rect.alpha = 1;
+        }
+      });
+      
+      // Add particle burst using simple circles
+      this.createParticleBurst(rect.x, rect.y, 0x00ff00);
+      
+      // Add screen shake on success streak (3 or more)
+      if (this.successStreak >= 3) {
+        this.cameras.main.shake(200, 0.005);
+      }
+    });
+
+    this.waveManager.on('sectionFail', (data: { section: string; chance: number }) => {
+      const sectionIndex = this.getSectionIndex(data.section);
+      const rect = this.sectionRects[sectionIndex];
+      
+      // Reset success streak
+      this.successStreak = 0;
+      
+      // Flash red with fill color change
+      const originalColor = rect.fillColor;
+      this.tweens.add({
+        targets: rect,
+        alpha: 0.7,
+        duration: 300,
+        yoyo: true,
+        onStart: () => {
+          rect.setFillStyle(0xff0000);
+        },
+        onComplete: () => {
+          rect.setFillStyle(originalColor);
+          rect.alpha = 1;
+        }
+      });
+    });
+
     this.waveManager.on('waveComplete', () => {
       if (waveBtn) {
         waveBtn.disabled = false;
         waveBtn.textContent = 'START WAVE';
       }
+      this.successStreak = 0;
     });
   }
 
@@ -166,6 +232,46 @@ export class StadiumScene extends Phaser.Scene {
         `Thirst: ${Math.round(sectionC.thirst)}\n` +
         `Attention: ${Math.round(sectionC.attention)}`
       );
+    }
+  }
+
+  /**
+   * Maps section ID to array index
+   * @param sectionId - The section identifier ('A', 'B', or 'C')
+   * @returns The section index (0, 1, or 2)
+   */
+  private getSectionIndex(sectionId: string): number {
+    const map: { [key: string]: number } = { 'A': 0, 'B': 1, 'C': 2 };
+    return map[sectionId] || 0;
+  }
+
+  /**
+   * Creates a particle burst effect at the specified location
+   * @param x - X coordinate
+   * @param y - Y coordinate
+   * @param color - Particle color
+   */
+  private createParticleBurst(x: number, y: number, color: number): void {
+    // Create simple circle particles
+    const particleCount = 20;
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount;
+      const speed = 100 + Math.random() * 50;
+      
+      const particle = this.add.circle(x, y, 4, color);
+      
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * speed,
+        y: y + Math.sin(angle) * speed,
+        alpha: 0,
+        scale: 0,
+        duration: 600,
+        ease: 'Power2',
+        onComplete: () => {
+          particle.destroy();
+        }
+      });
     }
   }
 }
