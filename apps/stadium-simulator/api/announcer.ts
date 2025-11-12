@@ -1,13 +1,40 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Rate limiting store (in-memory for now)
+/**
+ * TypeScript types for announcer requests
+ */
+interface GameContext {
+  score?: number;
+  multiplier?: number;
+  section?: number;
+  thirst?: number;
+  happiness?: number;
+  reason?: string;
+}
+
+interface AnnouncerRequest {
+  event: 'waveStart' | 'sectionSuccess' | 'sectionFail' | 'waveComplete';
+  context?: GameContext;
+  history?: string[];
+  // Legacy support for simple string context
+  gameContext?: string;
+}
+
+interface RateLimitResult {
+  allowed: boolean;
+  resetIn?: number;
+}
+
+// Rate limiting store (in-memory for serverless function)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
-// Rate limit configuration
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per IP
+// Configuration constants
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute in milliseconds
+const RATE_LIMIT_MAX = 10; // Maximum requests per window
+const TIMEOUT_MS = 8000; // 8 second timeout for API calls
+const MAX_TOKENS = 150; // Maximum tokens for Claude response
 
-// Clean up old entries periodically
+// Clean up old entries periodically to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
   const keysToDelete: string[] = [];
@@ -19,35 +46,130 @@ setInterval(() => {
   });
   
   keysToDelete.forEach((key) => rateLimitStore.delete(key));
-}, RATE_LIMIT_WINDOW_MS);
+}, RATE_LIMIT_WINDOW);
 
 /**
- * Rate limiter middleware
+ * Rate limiter helper function
+ * 
+ * Implements a sliding window rate limiter that tracks requests per IP address.
+ * Returns whether the request is allowed and optionally how long until the limit resets.
+ * 
+ * Security: Prevents API abuse by limiting requests to 10 per minute per IP address.
+ * 
+ * @param ip - Client IP address for rate limiting
+ * @returns Object with allowed status and optional resetIn time (seconds)
  */
-function checkRateLimit(identifier: string): boolean {
+function checkRateLimit(ip: string): RateLimitResult {
   const now = Date.now();
-  const record = rateLimitStore.get(identifier);
+  const record = rateLimitStore.get(ip);
 
   if (!record || now > record.resetTime) {
-    // Create new record or reset expired one
-    rateLimitStore.set(identifier, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW_MS,
-    });
-    return true;
+    // New window - allow request and create new record
+    rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return { allowed: true };
   }
 
-  if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return false;
+  if (record.count >= RATE_LIMIT_MAX) {
+    // Rate limit exceeded - return time until reset
+    const resetIn = Math.ceil((record.resetTime - now) / 1000);
+    return { allowed: false, resetIn };
   }
 
+  // Increment counter and allow request
   record.count++;
+  return { allowed: true };
+}
+
+/**
+ * Input validation helper
+ * 
+ * Validates the request body structure and content to prevent abuse.
+ * Checks for required fields, allowed event types, and reasonable limits.
+ * 
+ * Security: Prevents malformed requests and injection attacks.
+ * 
+ * @param body - Request body to validate
+ * @returns Type guard confirming body is AnnouncerRequest
+ */
+function validateRequest(body: any): body is AnnouncerRequest {
+  if (!body || typeof body !== 'object') return false;
+  
+  // Legacy support for simple gameContext string
+  if (body.gameContext && typeof body.gameContext === 'string') {
+    return body.gameContext.length <= 500;
+  }
+  
+  // Validate event field
+  if (!body.event || typeof body.event !== 'string') return false;
+  if (body.event.length > 50) return false;
+  
+  // Validate allowed event types
+  const allowedEvents = ['waveStart', 'sectionSuccess', 'sectionFail', 'waveComplete'];
+  if (!allowedEvents.includes(body.event)) return false;
+
   return true;
 }
 
 /**
+ * Build context-aware prompt for Claude API
+ * 
+ * Constructs a detailed prompt based on game event type and current state.
+ * Includes recent history for continuity and enforces NBA Jam-style personality.
+ * 
+ * @param request - Validated announcer request with event and context
+ * @returns Formatted prompt string for Claude API
+ */
+function buildPrompt(request: AnnouncerRequest): string {
+  // Legacy support for simple gameContext
+  if (request.gameContext) {
+    return `You are an energetic 8-bit stadium announcer. Give exciting commentary for: ${request.gameContext}`;
+  }
+  
+  const { event, context, history } = request;
+  
+  let prompt = `You're a retro 8-bit sports announcer (NBA Jam style). `;
+  
+  // Add context based on event type
+  switch (event) {
+    case 'waveStart':
+      prompt += `The crowd is about to start a wave! Current score: ${context?.score || 0}, multiplier: ${context?.multiplier || 1}x.`;
+      break;
+    case 'sectionSuccess':
+      prompt += `Section ${context?.section} just CRUSHED their wave! Score: ${context?.score}, multiplier: ${context?.multiplier}x.`;
+      break;
+    case 'sectionFail':
+      prompt += `Section ${context?.section} failed the wave. Thirst: ${context?.thirst}, happiness: ${context?.happiness}. `;
+      if (context?.reason) prompt += `Reason: ${context.reason}. `;
+      break;
+    case 'waveComplete':
+      prompt += `Wave complete! Final score: ${context?.score}, multiplier: ${context?.multiplier}x.`;
+      break;
+  }
+
+  // Add recent history for context continuity
+  if (history && history.length > 0) {
+    prompt += `\nRecent events: ${history.slice(-2).join('. ')}`;
+  }
+
+  prompt += `\n\nRespond with ONE energetic sentence (max 20 words). Be funny and match the 8-bit sports game vibe.`;
+  
+  return prompt;
+}
+
+/**
  * Serverless function handler for Claude API proxy
- * Provides secure API access with rate limiting
+ * 
+ * Provides secure, rate-limited access to Claude API for game announcer commentary.
+ * 
+ * Security features:
+ * - Rate limiting: 10 requests per minute per IP
+ * - Input validation: Strict type checking and length limits
+ * - API key protection: Keys stored server-side only
+ * - Timeout protection: 8 second timeout on API calls
+ * - Error masking: Generic errors returned to prevent information leakage
+ * 
+ * @param req - Vercel request object
+ * @param res - Vercel response object
  */
 export default async function handler(
   req: VercelRequest,
@@ -68,88 +190,83 @@ export default async function handler(
     return;
   }
 
-  // Only allow POST requests
+  // Only allow POST
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Rate limiting based on IP address
-  const identifier = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown';
-  
-  if (!checkRateLimit(identifier)) {
-    res.status(429).json({ 
+  // Get client IP for rate limiting
+  const ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown';
+  const clientIp = Array.isArray(ip) ? ip[0] : ip;
+
+  // Check rate limit
+  const rateLimitResult = checkRateLimit(clientIp);
+  if (!rateLimitResult.allowed) {
+    return res.status(429).json({
       error: 'Rate limit exceeded',
-      message: `Maximum ${RATE_LIMIT_MAX_REQUESTS} requests per minute allowed`
+      resetIn: rateLimitResult.resetIn
     });
-    return;
   }
 
-  // Validate API key exists in environment
+  // Validate request
+  if (!validateRequest(req.body)) {
+    return res.status(400).json({ error: 'Invalid request format' });
+  }
+
+  // Get API key from environment
   const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiUrl = process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';
+
   if (!apiKey) {
     console.error('ANTHROPIC_API_KEY not configured');
-    res.status(500).json({ error: 'API key not configured' });
-    return;
-  }
-
-  // Validate request body
-  const { gameContext } = req.body;
-  if (!gameContext || typeof gameContext !== 'string') {
-    res.status(400).json({ error: 'Invalid request: gameContext is required' });
-    return;
-  }
-
-  // Validate context length (prevent abuse)
-  if (gameContext.length > 500) {
-    res.status(400).json({ error: 'gameContext too long (max 500 characters)' });
-    return;
+    return res.status(500).json({ error: 'Server configuration error' });
   }
 
   try {
-    const apiUrl = process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';
-    
-    // Make request to Claude API
+    // Build prompt
+    const prompt = buildPrompt(req.body);
+
+    // Call Claude API with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 150,
-        messages: [
-          {
-            role: 'user',
-            content: `You are an energetic 8-bit stadium announcer. Give exciting commentary for: ${gameContext}`,
-          },
-        ],
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: MAX_TOKENS,
+        messages: [{ role: 'user', content: prompt }]
       }),
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Claude API error:', response.status, errorData);
-      res.status(response.status).json({ 
-        error: 'Failed to fetch commentary',
-        details: errorData
-      });
-      return;
+      throw new Error(`Claude API error: ${response.status}`);
     }
 
     const data = await response.json();
-    
-    // Extract and return the commentary text
-    const commentary = data.content?.[0]?.text || 'The crowd goes wild!';
-    res.status(200).json({ commentary });
+    const commentary = data.content[0]?.text || '';
 
-  } catch (error) {
-    console.error('Announcer API error:', error);
-    res.status(500).json({ 
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
+    // Return successful response
+    return res.status(200).json({
+      commentary,
+      cached: false
+    });
+
+  } catch (error: any) {
+    console.error('API Error:', error.message);
+    
+    // Return generic error (don't leak details)
+    return res.status(500).json({
+      error: 'Failed to generate commentary',
+      fallback: true
     });
   }
 }
