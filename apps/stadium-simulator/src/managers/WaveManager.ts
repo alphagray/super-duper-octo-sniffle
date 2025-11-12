@@ -1,4 +1,5 @@
 import type { GameStateManager } from './GameStateManager';
+import type { VendorManager } from './VendorManager';
 
 /**
  * Manages wave mechanics including countdown, section propagation, scoring and events
@@ -11,13 +12,15 @@ export class WaveManager {
   private multiplier: number;
   private waveResults: Array<{ section: string; success: boolean; chance: number }>;
   private gameState: GameStateManager;
+  private vendorManager?: VendorManager;
   private eventListeners: Map<string, Array<Function>>;
 
   /**
    * Creates a new WaveManager instance
    * @param gameState - The GameStateManager instance to use for wave calculations
+   * @param vendorManager - Optional VendorManager instance to check for vendor interference
    */
-  constructor(gameState: GameStateManager) {
+  constructor(gameState: GameStateManager, vendorManager?: VendorManager) {
     this.countdown = 10;
     this.active = false;
     this.currentSection = 0;
@@ -25,6 +28,7 @@ export class WaveManager {
     this.multiplier = 1.0;
     this.waveResults = [];
     this.gameState = gameState;
+    this.vendorManager = vendorManager;
     this.eventListeners = new Map();
   }
 
@@ -115,7 +119,12 @@ export class WaveManager {
 
     for (let i = 0; i < sections.length; i++) {
       const sectionId = sections[i];
-      const successChance = this.gameState.calculateWaveSuccess(sectionId);
+      let successChance = this.gameState.calculateWaveSuccess(sectionId);
+      
+      // Check for vendor interference
+      if (this.vendorManager?.isVendorInSection(sectionId)) {
+        successChance -= 25; // 25% penalty
+      }
       
       // Roll random number (0-100) vs success chance
       const roll = this.getRandom() * 100;

@@ -30,6 +30,8 @@
       margin-top: 20px;
       display: flex;
       gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
     #wave-btn {
       padding: 12px 24px;
@@ -53,12 +55,50 @@
       cursor: not-allowed;
       opacity: 0.6;
     }
+    .vendor-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .vendor-btn {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      background: #50c878;
+      color: white;
+      border: 2px solid #3da55f;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .vendor-btn:hover {
+      background: #3da55f;
+      transform: translateY(-2px);
+    }
+    .vendor-label {
+      color: #fff;
+      font-size: 14px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <div id="game-container"></div>
   <div id="controls">
     <button id="wave-btn">START WAVE</button>
+    <div class="vendor-controls">
+      <span class="vendor-label">Vendor 1:</span>
+      <button id="v1-a" class="vendor-btn">Section A</button>
+      <button id="v1-b" class="vendor-btn">Section B</button>
+      <button id="v1-c" class="vendor-btn">Section C</button>
+    </div>
+    <div class="vendor-controls">
+      <span class="vendor-label">Vendor 2:</span>
+      <button id="v2-a" class="vendor-btn">Section A</button>
+      <button id="v2-b" class="vendor-btn">Section B</button>
+      <button id="v2-c" class="vendor-btn">Section C</button>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

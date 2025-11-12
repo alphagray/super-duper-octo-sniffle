@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameStateManager } from '@/managers/GameStateManager';
 import { WaveManager } from '@/managers/WaveManager';
+import { VendorManager } from '@/managers/VendorManager';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -9,6 +10,7 @@ import { WaveManager } from '@/managers/WaveManager';
 export class StadiumScene extends Phaser.Scene {
   private gameState: GameStateManager;
   private waveManager!: WaveManager;
+  private vendorManager!: VendorManager;
   private sectionAText?: Phaser.GameObjects.Text;
   private sectionBText?: Phaser.GameObjects.Text;
   private sectionCText?: Phaser.GameObjects.Text;
@@ -23,8 +25,11 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Initialize WaveManager
-    this.waveManager = new WaveManager(this.gameState);
+    // Initialize VendorManager first
+    this.vendorManager = new VendorManager(this.gameState, 2);
+
+    // Initialize WaveManager with VendorManager for interference checks
+    this.waveManager = new WaveManager(this.gameState, this.vendorManager);
 
     // Initialize section rectangles array
     this.sectionRects = [];
@@ -108,6 +113,32 @@ export class StadiumScene extends Phaser.Scene {
       });
     }
 
+    // Setup vendor button listeners
+    ['A', 'B', 'C'].forEach(section => {
+      document.getElementById(`v1-${section.toLowerCase()}`)?.addEventListener('click', () => {
+        this.vendorManager.placeVendor(0, section);
+      });
+      document.getElementById(`v2-${section.toLowerCase()}`)?.addEventListener('click', () => {
+        this.vendorManager.placeVendor(1, section);
+      });
+    });
+
+    // Listen to VendorManager events for visual feedback
+    this.vendorManager.on('vendorPlaced', (data: { vendorId: number; section: string }) => {
+      const sectionIndex = data.section.charCodeAt(0) - 65; // A=0, B=1, C=2
+      const rect = this.sectionRects[sectionIndex];
+      // Add "VENDOR HERE" text or icon
+      this.add.text(rect.x, rect.y - 80, '🍺 VENDOR', {
+        fontSize: '20px'
+      }).setOrigin(0.5).setName(`vendor-${data.vendorId}-indicator`);
+    });
+
+    this.vendorManager.on('serviceComplete', (data: { vendorId: number; section: string }) => {
+      // Remove indicator
+      const indicator = this.children.getByName(`vendor-${data.vendorId}-indicator`);
+      indicator?.destroy();
+    });
+
     // Listen to WaveManager events for visual feedback
     this.waveManager.on('waveStart', () => {
       this.successStreak = 0;
@@ -177,6 +208,9 @@ export class StadiumScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     // Update game state with elapsed time
     this.gameState.updateStats(delta);
+
+    // Update vendor manager
+    this.vendorManager.update(delta);
 
     // Update wave countdown if active
     if (this.waveManager.isActive()) {
