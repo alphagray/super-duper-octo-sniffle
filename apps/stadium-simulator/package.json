@@ -10,8 +10,10 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "test": "vitest",
+    "test:api": "vitest --config vitest.api.config.ts",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
+    "audit:security": "./scripts/security-audit.sh",
     "vercel:dev": "vercel dev",
     "vercel:deploy": "vercel --prod"
   },
@@ -26,6 +28,7 @@
     "@vitest/coverage-v8": "^4.0.8",
     "@vitest/ui": "^4.0.8",
     "happy-dom": "^20.0.10",
+    "node-mocks-http": "^1.17.2",
     "typescript": "^5.5.2",
     "vercel": "^48.9.0",
     "vite": "^5.3.1",
