@@ -27,18 +27,26 @@ pnpm install
 
 ### Environment Setup
 
-Copy `.env.example` to `.env` and add your Claude API key:
+The app uses serverless functions to securely proxy Claude API calls. API keys are stored server-side only.
 
+**For Local Development:**
+
+1. Copy `.env.example` to `.env.local`:
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
-Edit `.env` and add your API credentials:
+2. Add your Anthropic API key to `.env.local`:
+```
+ANTHROPIC_API_KEY=your_actual_api_key_here
+ANTHROPIC_API_URL=https://api.anthropic.com/v1/messages
+```
 
-```
-VITE_CLAUDE_API_KEY=your_actual_api_key_here
-VITE_ANTHROPIC_API_URL=https://api.anthropic.com/v1/messages
-```
+**For Production (Vercel):**
+
+Set environment variables in the Vercel dashboard:
+- `ANTHROPIC_API_KEY` - Your Anthropic API key
+- `ANTHROPIC_API_URL` - (Optional) Defaults to `https://api.anthropic.com/v1/messages`
 
 ### Development
 
@@ -101,13 +109,22 @@ apps/stadium-simulator/
 
 ## 🤖 AI Integration
 
-The `AnnouncerService` class integrates with Claude API to generate dynamic, context-aware stadium announcer commentary:
+The `AnnouncerService` class integrates with Claude API via a secure serverless function to generate dynamic, context-aware stadium announcer commentary:
 
 ```typescript
 const announcer = new AnnouncerService();
 const commentary = await announcer.getCommentary('Wave starting in section 3!');
 // Returns: "Ladies and gentlemen, here it comes! Section 3 is ready to GO!"
 ```
+
+### Serverless API
+
+The `/api/announcer` endpoint provides secure proxy access to Claude API with:
+- **Rate Limiting**: 10 requests per minute per IP address
+- **Secure Keys**: API keys stored server-side only (never exposed to client)
+- **Input Validation**: Validates and sanitizes all requests
+- **CORS Support**: Configured for cross-origin requests
+- **Error Handling**: Graceful fallbacks for API failures
 
 ## 🎨 Game Configuration
 
@@ -130,7 +147,24 @@ const commentary = await announcer.getCommentary('Wave starting in section 3!');
 
 ## 🚢 Deployment
 
-The project automatically deploys to GitHub Pages when changes are pushed to the `main` branch:
+### Vercel (Recommended)
+
+The project is configured for Vercel deployment with serverless functions:
+
+```bash
+npm run vercel:deploy
+```
+
+Or link and deploy automatically:
+1. Install Vercel CLI: `npm install -g vercel`
+2. Run `vercel` in the project directory
+3. Set environment variables in Vercel dashboard:
+   - `ANTHROPIC_API_KEY`
+   - `ANTHROPIC_API_URL` (optional)
+
+### GitHub Pages
+
+The project can also deploy to GitHub Pages (static assets only, no serverless functions):
 
 - **Live URL**: `https://<username>.github.io/stadium-simulator/`
 - **Workflow**: `.github/workflows/deploy.yml`
@@ -138,9 +172,11 @@ The project automatically deploys to GitHub Pages when changes are pushed to the
 
 ## 🔒 Security
 
-- Uses Axios 1.12.0 to patch known vulnerabilities
-- API keys stored in environment variables (not committed to git)
-- Vite environment variable prefix: `VITE_`
+- **Serverless API Proxy**: Claude API keys never exposed to client-side code
+- **Rate Limiting**: Built-in protection against API abuse (10 req/min per IP)
+- **Input Validation**: All requests validated and sanitized
+- **Environment Variables**: API keys stored securely server-side
+- **CORS Protection**: Configured for secure cross-origin requests
 
 ## 📝 Development Status
 

@@ -1,38 +1,25 @@
 import axios from 'axios';
 
 export class AnnouncerService {
-  private apiUrl: string;
-  private apiKey: string;
+  private apiEndpoint: string;
 
   constructor() {
-    this.apiUrl = import.meta.env.VITE_ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';
-    this.apiKey = import.meta.env.VITE_CLAUDE_API_KEY || '';
+    // Use serverless function endpoint (local dev or production)
+    this.apiEndpoint = import.meta.env.VITE_API_ENDPOINT || '/api/announcer';
   }
 
   public async getCommentary(gameContext: string): Promise<string> {
-    // TODO: Implement API call error handling
     try {
       const response = await axios.post(
-        this.apiUrl,
-        {
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 150,
-          messages: [
-            {
-              role: 'user',
-              content: `You are an energetic 8-bit stadium announcer. Give exciting commentary for: ${gameContext}`,
-            },
-          ],
-        },
+        this.apiEndpoint,
+        { gameContext },
         {
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': this.apiKey,
-            'anthropic-version': '2023-06-01',
           },
         }
       );
-      return response.data.content[0].text;
+      return response.data.commentary;
     } catch (error) {
       console.error('Failed to fetch announcer commentary:', error);
       return 'The crowd goes wild!';
