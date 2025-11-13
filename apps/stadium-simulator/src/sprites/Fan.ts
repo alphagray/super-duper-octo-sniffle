@@ -177,16 +177,15 @@ export class Fan extends Phaser.GameObjects.Container {
   }
 
   public playWave(delayMs = 0): Promise<void> {
-    // Fast-in, ease-out wave: quick start upward, then gentle settle back
-    // increase jump and make the up portion snappier so the motion is visible
-    const up = -24;
+    // More dramatic wave: higher jump and slower return
+    const up = -50; // was -24
     const originalY = this.y;
     return new Promise((resolve) => {
       // Up tween (fast-in)
       this.scene.tweens.add({
         targets: this,
         y: originalY + up,
-        duration: 50,
+        duration: 60, // slightly longer up
         ease: 'Quad.easeIn',
         delay: delayMs,
         onComplete: () => {
@@ -194,7 +193,7 @@ export class Fan extends Phaser.GameObjects.Container {
           this.scene.tweens.add({
             targets: this,
             y: originalY,
-            duration: 200,
+            duration: 460, // slower return
             ease: 'Cubic.easeOut',
             onComplete: () => {
               resolve();

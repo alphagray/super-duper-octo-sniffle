@@ -1,5 +1,6 @@
 import type { GameStateManager } from './GameStateManager';
 import type { VendorManager } from './VendorManager';
+import type { SeatManager } from './SeatManager';
 
 /**
  * Manages wave mechanics including countdown, section propagation, scoring and events
@@ -15,13 +16,15 @@ export class WaveManager {
   private vendorManager?: VendorManager;
   private eventListeners: Map<string, Array<Function>>;
   private propagating: boolean;
+  private seatManager?: SeatManager;
 
   /**
    * Creates a new WaveManager instance
    * @param gameState - The GameStateManager instance to use for wave calculations
    * @param vendorManager - Optional VendorManager instance to check for vendor interference
+   * @param seatManager - Optional SeatManager instance for seat logic
    */
-  constructor(gameState: GameStateManager, vendorManager?: VendorManager) {
+  constructor(gameState: GameStateManager, vendorManager?: VendorManager, seatManager?: SeatManager) {
     this.countdown = 10;
     this.active = false;
     this.currentSection = 0;
@@ -30,6 +33,7 @@ export class WaveManager {
     this.waveResults = [];
     this.gameState = gameState;
     this.vendorManager = vendorManager;
+    this.seatManager = seatManager;
     this.eventListeners = new Map();
     this.propagating = false;
   }
