@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GameStateManager } from '@/managers/GameStateManager';
 import { WaveManager } from '@/managers/WaveManager';
 import { VendorManager } from '@/managers/VendorManager';
+import { Fan } from '@/sprites/Fan';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -17,6 +18,8 @@ export class StadiumScene extends Phaser.Scene {
   private scoreText?: Phaser.GameObjects.Text;
   private countdownText?: Phaser.GameObjects.Text;
   private sectionRects!: Phaser.GameObjects.Rectangle[];
+  private sectionFans: Fan[][] = [];
+  private demoMode: boolean = false;
   private successStreak: number = 0;
 
   constructor() {
@@ -70,8 +73,8 @@ export class StadiumScene extends Phaser.Scene {
       color: '#ffffff',
     }).setOrigin(0.5, 0);
 
-    // Section B - Green
-    const rectB = this.add.rectangle(500, 300, 250, 200, 0x50c878);
+    // Section B - Blue (match A)
+    const rectB = this.add.rectangle(500, 300, 250, 200, 0x4a90e2);
     this.sectionRects.push(rectB);
     this.add.text(500, 250, 'Section B', {
       fontSize: '24px',
@@ -84,8 +87,8 @@ export class StadiumScene extends Phaser.Scene {
       color: '#ffffff',
     }).setOrigin(0.5, 0);
 
-    // Section C - Red
-    const rectC = this.add.rectangle(800, 300, 250, 200, 0xe74c3c);
+    // Section C - Blue (match A)
+    const rectC = this.add.rectangle(800, 300, 250, 200, 0x4a90e2);
     this.sectionRects.push(rectC);
     this.add.text(800, 250, 'Section C', {
       fontSize: '24px',
@@ -100,6 +103,43 @@ export class StadiumScene extends Phaser.Scene {
 
     // Initial update of text displays
     this.updateDisplay();
+
+    // Populate fans for each section (4 rows x 8 cols)
+    this.populateSection(0, rectA, 'A');
+    this.populateSection(1, rectB, 'B');
+    this.populateSection(2, rectC, 'C');
+
+    // Demo mode: read from URL param `?demo=true` so you can start with stable stats
+    try {
+      this.demoMode = new URL(window.location.href).searchParams.get('demo') === 'true';
+    } catch (e) {
+      this.demoMode = false;
+    }
+
+    // If demo mode, set sections to ideal values (max happiness, zero thirst)
+    if (this.demoMode) {
+      ['A', 'B', 'C'].forEach((id) => {
+        // set happiness to max (100) and thirst to 0
+        this.gameState.updateSectionStat(id, 'happiness', 100);
+        this.gameState.updateSectionStat(id, 'thirst', 0);
+      });
+      // refresh display after forcing values
+      this.updateDisplay();
+    }
+
+    // Add a small DOM button to toggle demo mode at runtime for quick testing
+    const demoBtn = document.createElement('button');
+    demoBtn.id = 'demo-mode-btn';
+    demoBtn.textContent = this.demoMode ? 'Demo Mode: ON' : 'Demo Mode: OFF';
+    demoBtn.style.position = 'absolute';
+    demoBtn.style.top = '12px';
+    demoBtn.style.left = '12px';
+    demoBtn.style.zIndex = '9999';
+    demoBtn.addEventListener('click', () => {
+      this.demoMode = !this.demoMode;
+      demoBtn.textContent = this.demoMode ? 'Demo Mode: ON' : 'Demo Mode: OFF';
+    });
+    document.body.appendChild(demoBtn);
 
     // Setup wave button listener
     const waveBtn = document.getElementById('wave-btn') as HTMLButtonElement;
@@ -144,13 +184,13 @@ export class StadiumScene extends Phaser.Scene {
       this.successStreak = 0;
     });
 
-    this.waveManager.on('sectionSuccess', (data: { section: string; chance: number }) => {
+    this.waveManager.on('sectionSuccess', async (data: { section: string; chance: number }) => {
       const sectionIndex = this.getSectionIndex(data.section);
       const rect = this.sectionRects[sectionIndex];
-      
+
       // Increment success streak
       this.successStreak++;
-      
+
       // Flash green with alpha tween
       this.tweens.add({
         targets: rect,
@@ -162,23 +202,29 @@ export class StadiumScene extends Phaser.Scene {
           rect.alpha = 1;
         }
       });
-      
+
       // Add particle burst using simple circles
       this.createParticleBurst(rect.x, rect.y, 0x00ff00);
-      
+
       // Add screen shake on success streak (3 or more)
       if (this.successStreak >= 3) {
         this.cameras.main.shake(200, 0.005);
       }
+
+      // Play the visual wave for fans in this section and await completion,
+      // then trigger an immediate per-section poke jiggle.
+      await this.playSectionWave(sectionIndex);
+      const fans = this.sectionFans[sectionIndex] || [];
+      fans.forEach((f) => f.pokeJiggle(0.9, 900));
     });
 
-    this.waveManager.on('sectionFail', (data: { section: string; chance: number }) => {
+    this.waveManager.on('sectionFail', async (data: { section: string; chance: number }) => {
       const sectionIndex = this.getSectionIndex(data.section);
       const rect = this.sectionRects[sectionIndex];
-      
+
       // Reset success streak
       this.successStreak = 0;
-      
+
       // Flash red with fill color change
       const originalColor = rect.fillColor;
       this.tweens.add({
@@ -194,6 +240,12 @@ export class StadiumScene extends Phaser.Scene {
           rect.alpha = 1;
         }
       });
+
+      // Also animate fans on section fail so the crowd still reacts,
+      // await their completion and then poke-jiggle the section.
+      await this.playSectionWave(sectionIndex);
+      const fansFail = this.sectionFans[sectionIndex] || [];
+      fansFail.forEach((f) => f.pokeJiggle(0.45, 700));
     });
 
     this.waveManager.on('waveComplete', () => {
@@ -207,7 +259,9 @@ export class StadiumScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     // Update game state with elapsed time
-    this.gameState.updateStats(delta);
+    if (!this.demoMode) {
+      this.gameState.updateStats(delta);
+    }
 
     // Update vendor manager
     this.vendorManager.update(delta);
@@ -234,6 +288,59 @@ export class StadiumScene extends Phaser.Scene {
 
     // Update visual displays
     this.updateDisplay();
+
+    // Update fans visuals according to section stats
+    const sectionIds = ['A', 'B', 'C'];
+    for (let si = 0; si < 3; si++) {
+      const fans = this.sectionFans[si] || [];
+      const sectionId = sectionIds[si];
+      const section = this.gameState.getSection(sectionId);
+      // intensity: thirsty OR distracted (low attention)
+      const thirstNorm = Phaser.Math.Clamp(section.thirst / 100, 0, 1);
+      const distractNorm = Phaser.Math.Clamp((100 - section.attention) / 100, 0, 1);
+      const intensity = Math.max(thirstNorm, distractNorm);
+
+      fans.forEach((fan) => {
+        fan.setIntensity(intensity);
+      });
+    }
+  }
+
+  private populateSection(sectionIndex: number, rect: Phaser.GameObjects.Rectangle, sectionId: string): void {
+    const rows = 4;
+    const cols = 8;
+    const fans: Fan[] = [];
+
+    const width = rect.width || 250;
+    const height = rect.height || 200;
+    const startX = rect.x - width / 2;
+    const startY = rect.y - height / 2;
+    const cellW = width / cols;
+    const cellH = height / rows;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = startX + cellW * c + cellW / 2;
+        const y = startY + cellH * r + cellH / 2;
+        const fan = new Fan(this, x, y, 26);
+        fans.push(fan);
+      }
+    }
+
+    this.sectionFans[sectionIndex] = fans;
+  }
+
+  private playSectionWave(sectionIndex: number): Promise<void> {
+    const fans = this.sectionFans[sectionIndex] || [];
+    const cols = 8;
+    const promises: Promise<void>[] = [];
+    fans.forEach((fan, idx) => {
+      const r = Math.floor(idx / cols);
+      const c = idx % cols;
+      const delay = c * 45 + r * 10;
+      promises.push(fan.playWave(delay));
+    });
+    return Promise.all(promises).then(() => undefined);
   }
 
   /**

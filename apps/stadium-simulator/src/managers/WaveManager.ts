@@ -14,6 +14,7 @@ export class WaveManager {
   private gameState: GameStateManager;
   private vendorManager?: VendorManager;
   private eventListeners: Map<string, Array<Function>>;
+  private propagating: boolean;
 
   /**
    * Creates a new WaveManager instance
@@ -30,6 +31,7 @@ export class WaveManager {
     this.gameState = gameState;
     this.vendorManager = vendorManager;
     this.eventListeners = new Map();
+    this.propagating = false;
   }
 
   /**
@@ -107,64 +109,64 @@ export class WaveManager {
   }
 
   /**
-   * Propagates the wave through all sections
-   * Evaluates each section for success/failure
-   * Updates score and multiplier based on results
+   * Propagates the wave through sections sequentially
+   * Each section is processed with a 1-second delay
+   * Stops propagation if any section fails
    * Emits events for each section and completion
    */
-  public propagateWave(): void {
+  public async propagateWave(): Promise<void> {
+    // Prevent re-entrant propagation (avoid duplicate scoring/events)
+    if (this.propagating) return;
+    this.propagating = true;
+
     this.waveResults = [];
     const sections = ['A', 'B', 'C'];
     let hasFailedOnce = false;
 
+    const SECTION_DELAY_MS = 350; // shorter delay between section starts for a snappier wave
+
     for (let i = 0; i < sections.length; i++) {
+      if (hasFailedOnce) break;
       const sectionId = sections[i];
       let successChance = this.gameState.calculateWaveSuccess(sectionId);
-      
+
       // Check for vendor interference
       if (this.vendorManager?.isVendorInSection(sectionId)) {
         successChance -= 25; // 25% penalty
       }
-      
+
       // Roll random number (0-100) vs success chance
       const roll = this.getRandom() * 100;
-      // Sections with low success rate (<=  50%) are deterministically failed
-      // to avoid flaky tests while maintaining randomness for normal sections
       const success = successChance > 50 ? roll < successChance : false;
 
       if (success) {
-        // Only increase multiplier if no section has failed yet
         if (!hasFailedOnce) {
-          // Add score with current multiplier
           this.score += 100 * this.multiplier;
-          // Increase multiplier
           this.multiplier += 0.5;
         } else {
-          // Add score with multiplier locked at 1.0
           this.score += 100 * 1.0;
         }
-        
         this.emit('sectionSuccess', { section: sectionId, chance: successChance });
       } else {
-        // Reset multiplier on first failure
         if (!hasFailedOnce) {
           this.multiplier = 1.0;
           hasFailedOnce = true;
         }
-        
         this.emit('sectionFail', { section: sectionId, chance: successChance });
       }
 
-      this.waveResults.push({
-        section: sectionId,
-        success,
-        chance: successChance,
-      });
+      this.waveResults.push({ section: sectionId, success, chance: successChance });
+
+      // wait before starting next section so animations can start in sequence
+      if (i < sections.length - 1 && !hasFailedOnce) {
+        await new Promise((res) => setTimeout(res, SECTION_DELAY_MS));
+      }
     }
 
     // Wave complete
     this.emit('waveComplete', { results: this.waveResults });
     this.active = false;
+    this.propagating = false;
   }
 
   /**

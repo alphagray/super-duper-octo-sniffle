@@ -9,9 +9,9 @@ export class GameStateManager {
   constructor() {
     // Initialize 3 sections (A, B, C) with default values
     this.sections = [
-      { id: 'A', happiness: 70, thirst: 20, attention: 50 },
-      { id: 'B', happiness: 70, thirst: 20, attention: 50 },
-      { id: 'C', happiness: 70, thirst: 20, attention: 50 },
+      { id: 'A', happiness: 70, thirst: 0, attention: 50 },
+      { id: 'B', happiness: 70, thirst: 0, attention: 50 },
+      { id: 'C', happiness: 70, thirst: 0, attention: 50 },
     ];
   }
 
