@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
-import { GameStateManager } from '@/managers/GameStateManager';
+import { GameStateManager, GameMode } from '@/managers/GameStateManager';
 import { WaveManager } from '@/managers/WaveManager';
 import { VendorManager } from '@/managers/VendorManager';
 import { StadiumSection } from '@/sprites/StadiumSection';
 import { SectionConfig } from '@/types/GameTypes';
 import { SeatManager } from '@/managers/SeatManager';
+import { gameBalance } from '@/config/gameBalance';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -20,16 +21,34 @@ export class StadiumScene extends Phaser.Scene {
   private sectionCText?: Phaser.GameObjects.Text;
   private scoreText?: Phaser.GameObjects.Text;
   private countdownText?: Phaser.GameObjects.Text;
+  private sessionTimerText?: Phaser.GameObjects.Text;
   private sections: StadiumSection[] = [];
   private demoMode: boolean = false;
+  private debugMode: boolean = false;
   private successStreak: number = 0;
+  private gameMode: GameMode = 'eternal';
+  private sessionCountdownOverlay?: Phaser.GameObjects.Container;
+  private waveStrengthMeter?: Phaser.GameObjects.Container;
 
   constructor() {
     super({ key: 'StadiumScene' });
     this.gameState = new GameStateManager();
   }
 
+  init(data: any): void {
+    // Get game mode and debug mode from scene data
+    this.gameMode = data?.gameMode || 'eternal';
+    this.debugMode = data?.debugMode || false;
+
+    if (this.debugMode) {
+      console.log('StadiumScene initialized with mode:', this.gameMode);
+    }
+  }
+
   create(): void {
+    // Initialize GameStateManager with the selected mode
+    this.gameState.startSession(this.gameMode);
+
     // Initialize VendorManager first
     this.vendorManager = new VendorManager(this.gameState, 2);
 
@@ -77,12 +96,25 @@ export class StadiumScene extends Phaser.Scene {
       color: '#ffffff',
     }).setOrigin(1, 0.5);
 
+    // Session timer display (run mode only)
+    if (this.gameMode === 'run') {
+      this.sessionTimerText = this.add.text(512, 20, '100s', {
+        fontSize: '28px',
+        fontFamily: 'Arial',
+        color: '#ffff00',
+        fontStyle: 'bold',
+      }).setOrigin(0.5, 0);
+    }
+
     // Countdown display at top-left
     this.countdownText = this.add.text(100, 50, '', {
       fontSize: '24px',
       fontFamily: 'Arial',
       color: '#ffffff',
     }).setOrigin(0, 0.5);
+
+    // Create wave strength meter (will be shown on wave start)
+    this.createWaveStrengthMeter();
 
     // Section labels
     this.add.text(200, 250, 'Section A', {
@@ -153,11 +185,19 @@ export class StadiumScene extends Phaser.Scene {
     });
     document.body.appendChild(demoBtn);
 
+    // Show session countdown overlay before game starts (3 second countdown)
+    if (this.gameMode === 'run') {
+      this.showSessionCountdownOverlay();
+    } else {
+      // In eternal mode, start immediately
+      this.gameState.activateSession();
+    }
+
     // Setup wave button listener
     const waveBtn = document.getElementById('wave-btn') as HTMLButtonElement;
     if (waveBtn) {
       waveBtn.addEventListener('click', () => {
-        if (!this.waveManager.isActive()) {
+        if (!this.waveManager.isActive() && this.gameState.getSessionState() === 'active') {
           this.waveManager.startWave();
           waveBtn.disabled = true;
           waveBtn.textContent = 'WAVE IN PROGRESS...';
@@ -192,9 +232,25 @@ export class StadiumScene extends Phaser.Scene {
       indicator?.destroy();
     });
 
+    // Listen to GameStateManager events
+    this.gameState.on('sessionStateChanged', (data: { state: string }) => {
+      if (data.state === 'complete') {
+        this.endSession();
+      }
+    });
+
     // Listen to WaveManager events for visual feedback
     this.waveManager.on('waveStart', () => {
       this.successStreak = 0;
+      // Show wave strength meter
+      if (this.waveStrengthMeter) {
+        this.waveStrengthMeter.setVisible(true);
+      }
+    });
+
+    // Listen to wave strength changes
+    this.waveManager.on('waveStrengthChanged', (data: { strength: number }) => {
+      this.updateWaveStrengthMeter(data.strength);
     });
 
     this.waveManager.on('sectionSuccess', async (data: { section: string; chance: number }) => {
@@ -203,13 +259,16 @@ export class StadiumScene extends Phaser.Scene {
 
       // Increment success streak
       this.successStreak++;
+      this.gameState.incrementSectionSuccesses();
 
       // Play the visual wave with individual fan participation tracking
       const result = await section.playWave();
       
       // Check for wave sputter
       if (this.waveManager.checkWaveSputter(result.participationRate)) {
-        console.log(`Wave sputter activated! Participation: ${Math.round(result.participationRate * 100)}%`);
+        if (this.debugMode) {
+          console.log(`Wave sputter activated! Participation: ${Math.round(result.participationRate * 100)}%`);
+        }
       }
 
       // Trigger per-section poke jiggle for participating fans only
@@ -237,7 +296,9 @@ export class StadiumScene extends Phaser.Scene {
       
       // Check for wave sputter
       if (this.waveManager.checkWaveSputter(result.participationRate)) {
-        console.log(`Wave sputter activated! Participation: ${Math.round(result.participationRate * 100)}%`);
+        if (this.debugMode) {
+          console.log(`Wave sputter activated! Participation: ${Math.round(result.participationRate * 100)}%`);
+        }
       }
 
       // Trigger per-section poke jiggle
@@ -249,15 +310,33 @@ export class StadiumScene extends Phaser.Scene {
     });
 
     this.waveManager.on('waveComplete', () => {
+      this.gameState.incrementCompletedWaves();
       if (waveBtn) {
         waveBtn.disabled = false;
         waveBtn.textContent = 'START WAVE';
       }
       this.successStreak = 0;
+      // Hide wave strength meter
+      if (this.waveStrengthMeter) {
+        this.waveStrengthMeter.setVisible(false);
+      }
     });
   }
 
+
   update(time: number, delta: number): void {
+    // Update session timer if active
+    if (this.gameState.getSessionState() === 'active') {
+      this.gameState.updateSession(delta);
+      
+      // Update session timer display
+      if (this.sessionTimerText && this.gameMode === 'run') {
+        const timeRemaining = this.gameState.getSessionTimeRemaining();
+        const seconds = Math.max(0, Math.ceil(timeRemaining / 1000));
+        this.sessionTimerText.setText(`${seconds}s`);
+      }
+    }
+
     // Update fan stats (thirst decay, happiness, attention)
     if (!this.demoMode) {
       this.sections.forEach(section => {
@@ -352,4 +431,199 @@ export class StadiumScene extends Phaser.Scene {
     const map: { [key: string]: number } = { 'A': 0, 'B': 1, 'C': 2 };
     return map[sectionId] || 0;
   }
+
+  /**
+   * Shows the session countdown overlay (3-2-1-GO!)
+   * Only used for run mode before session starts
+   */
+  private showSessionCountdownOverlay(): void {
+    const { width, height } = this.cameras.main;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    // Create overlay container with semi-transparent background
+    this.sessionCountdownOverlay = this.add.container(0, 0);
+    const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
+    this.sessionCountdownOverlay.add(bg);
+
+    const countdownText = this.add.text(centerX, centerY, '3', {
+      fontSize: `${gameBalance.ui.countdownFontSize}px`,
+      fontFamily: 'Arial',
+      color: '#ffffff',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.sessionCountdownOverlay.add(countdownText);
+
+    // Animate countdown
+    let countdown = 3;
+    const countdownLoop = this.time.addEvent({
+      delay: 1000,
+      repeat: 2,
+      callback: () => {
+        countdown--;
+        countdownText.setText(countdown > 0 ? countdown.toString() : 'GO!');
+        countdownText.setAlpha(1);
+
+        // Flash effect
+        this.tweens.add({
+          targets: countdownText,
+          alpha: 0,
+          duration: 800,
+          ease: 'Power2.easeOut',
+        });
+
+        // Scale effect
+        this.tweens.add({
+          targets: countdownText,
+          scale: 0.5,
+          duration: 1000,
+          ease: 'Back.easeOut',
+        });
+
+        if (countdown === 0) {
+          // After final countdown, hide overlay and activate session
+          this.time.delayedCall(500, () => {
+            this.sessionCountdownOverlay?.setVisible(false);
+            this.gameState.activateSession();
+          });
+        }
+      },
+    });
+  }
+
+  /**
+   * Create the wave strength meter in bottom-left corner
+   * Styled like a tiny pixel art version of the Great Wave off Kanagawa
+   */
+  private createWaveStrengthMeter(): void {
+    const padding = 20;
+    const meterWidth = 24;
+    const meterHeight = 60;
+    const panelWidth = Math.ceil(meterWidth * 1.25); // 25% wider
+    const panelHeight = Math.ceil(meterHeight * 1.1); // 10% taller
+
+    const meterX = padding + panelWidth / 2;
+    const meterY = this.cameras.main.height - padding - panelHeight / 2;
+
+    this.waveStrengthMeter = this.add.container(meterX, meterY);
+    this.waveStrengthMeter.setVisible(false);
+    this.waveStrengthMeter.setDepth(1000);
+
+    // Background panel (dark with border)
+    const panelBg = this.add.rectangle(0, 0, panelWidth, panelHeight, 0x001a33);
+    panelBg.setStrokeStyle(1, 0x0066ff);
+    this.waveStrengthMeter.add(panelBg);
+
+    // Create gradient background for meter (dark blue to lighter blue)
+    const baseColor = 0x003366; // Dark blue
+    const lightColor = 0x0055aa; // ~20% lighter blue
+    
+    // Meter background with gradient effect (simulate with two rectangles)
+    const meterBgDark = this.add.rectangle(
+      0,
+      -meterHeight / 4,
+      meterWidth,
+      meterHeight / 2,
+      baseColor
+    );
+    const meterBgLight = this.add.rectangle(
+      0,
+      meterHeight / 4,
+      meterWidth,
+      meterHeight / 2,
+      lightColor
+    );
+    this.waveStrengthMeter.add(meterBgDark);
+    this.waveStrengthMeter.add(meterBgLight);
+
+    // Meter fill (white, will be updated in height)
+    const meterFill = this.add.rectangle(
+      0,
+      0,
+      meterWidth - 2,
+      0,
+      0xffffff
+    );
+    meterFill.setOrigin(0.5, 0.5);
+    meterFill.setName('meter-fill');
+    this.waveStrengthMeter.add(meterFill);
+
+    // Add speckled foam effect on top (random white/light blue pixels)
+    this.addWaveFoamEffect();
+
+    // Numeric display to the right of meter
+    const strengthText = this.add.text(meterWidth / 2 + 15, 0, '70', {
+      fontSize: '12px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      align: 'center',
+    }).setOrigin(0, 0.5);
+    strengthText.setName('strength-value');
+    this.waveStrengthMeter.add(strengthText);
+  }
+
+  /**
+   * Add speckled foam effect to wave meter (pixel art foam)
+   */
+  private addWaveFoamEffect(): void {
+    const foamColors = [0xffffff, 0xccddff]; // White and light blue
+    const meterWidth = 24;
+    const meterHeight = 60;
+    const foamDensity = 0.15; // 15% of pixels are foam
+
+    for (let y = -meterHeight / 2; y < meterHeight / 2; y += 2) {
+      for (let x = -meterWidth / 2; x < meterWidth / 2; x += 2) {
+        if (Math.random() < foamDensity) {
+          const foamColor = foamColors[Math.floor(Math.random() * foamColors.length)];
+          const foamSpeck = this.add.rectangle(x, y, 2, 2, foamColor);
+          foamSpeck.setOrigin(0, 0);
+          if (this.waveStrengthMeter) {
+            this.waveStrengthMeter.add(foamSpeck);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Update the wave strength meter visual
+   */
+  private updateWaveStrengthMeter(strength: number): void {
+    if (!this.waveStrengthMeter) return;
+
+    const meterFill = this.waveStrengthMeter.getByName('meter-fill') as Phaser.GameObjects.Rectangle;
+    const strengthText = this.waveStrengthMeter.getByName('strength-value') as Phaser.GameObjects.Text;
+
+    if (meterFill && strengthText) {
+      const meterHeight = 60;
+      const fillHeight = (strength / 100) * meterHeight;
+      const newY = meterHeight / 2 - (meterHeight - fillHeight) / 2;
+
+      this.tweens.add({
+        targets: meterFill,
+        height: fillHeight,
+        y: newY,
+        duration: 200,
+        ease: 'Power2.easeOut',
+      });
+
+      strengthText.setText(Math.round(strength).toString());
+    }
+  }
+
+  /**
+   * End the session and transition to score report
+   */
+  private endSession(): void {
+    const sessionScore = this.gameState.calculateSessionScore();
+
+    if (this.debugMode) {
+      console.log('Session ended with score:', sessionScore);
+    }
+
+    // Transition to ScoreReportScene
+    this.scene.start('ScoreReportScene', { sessionScore });
+  }
 }
+

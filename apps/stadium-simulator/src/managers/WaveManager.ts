@@ -1,6 +1,15 @@
 import type { GameStateManager } from './GameStateManager';
 import type { VendorManager } from './VendorManager';
 import type { SeatManager } from './SeatManager';
+import { gameBalance } from '@/config/gameBalance';
+
+interface WaveCalculationResult {
+  sectionId: string;
+  columnIndex: number;
+  participationRate: number;
+  strength: number;
+  columnState: 'full' | 'sputter' | 'death';
+}
 
 /**
  * Manages wave mechanics including countdown, section propagation, scoring and events
@@ -21,6 +30,9 @@ export class WaveManager {
     active: boolean;
     columnsRemaining: number;
   };
+  private currentWaveStrength: number;
+  private waveCalculationResults: WaveCalculationResult[];
+  private consecutiveFailedColumns: number;
 
   /**
    * Creates a new WaveManager instance
@@ -29,7 +41,7 @@ export class WaveManager {
    * @param seatManager - Optional SeatManager instance for seat logic
    */
   constructor(gameState: GameStateManager, vendorManager?: VendorManager, seatManager?: SeatManager) {
-    this.countdown = 10;
+    this.countdown = gameBalance.waveTiming.triggerCountdown / 1000; // Convert ms to seconds
     this.active = false;
     this.currentSection = 0;
     this.score = 0;
@@ -44,6 +56,9 @@ export class WaveManager {
       active: false,
       columnsRemaining: 0
     };
+    this.currentWaveStrength = gameBalance.waveStrength.starting;
+    this.waveCalculationResults = [];
+    this.consecutiveFailedColumns = 0;
   }
 
   /**
@@ -117,6 +132,72 @@ export class WaveManager {
   }
 
   /**
+   * Get the current wave strength
+   */
+  public getCurrentWaveStrength(): number {
+    return this.currentWaveStrength;
+  }
+
+  /**
+   * Get the current wave calculation results
+   */
+  public getWaveCalculationResults(): WaveCalculationResult[] {
+    return [...this.waveCalculationResults];
+  }
+
+  /**
+   * Update wave strength based on column participation rate
+   * @param participationRate - Participation rate for the column (0-1)
+   * @param wasFailureRecovery - Whether this column succeeded after previous failures
+   */
+  private updateWaveStrength(participationRate: number, wasFailureRecovery: boolean = false): void {
+    const config = gameBalance.waveStrength;
+    const previousFailures = this.consecutiveFailedColumns;
+
+    if (participationRate >= config.columnSuccessThreshold) {
+      // Column succeeded
+      this.currentWaveStrength += config.successBonus;
+      this.consecutiveFailedColumns = 0;
+
+      // Recovery bonus if succeeding after failures
+      if (wasFailureRecovery && previousFailures > 0 && previousFailures <= config.recoveryMaximumFailures) {
+        this.currentWaveStrength += config.recoveryBonus;
+      }
+    } else {
+      // Column failed
+      this.currentWaveStrength += config.failurePenalty;
+      this.consecutiveFailedColumns++;
+    }
+
+    // Clamp strength to reasonable bounds
+    this.currentWaveStrength = Math.max(0, Math.min(100, this.currentWaveStrength));
+  }
+
+  /**
+   * Check if wave is dead (strength too low or too many consecutive failures)
+   */
+  private isWaveDead(): boolean {
+    const config = gameBalance.waveStrength;
+    return (
+      this.currentWaveStrength < config.deathThreshold ||
+      this.consecutiveFailedColumns >= config.consecutiveFailureThreshold
+    );
+  }
+
+  /**
+   * Determine visual state of column animation based on wave state
+   */
+  private getColumnVisualState(isSputtering: boolean = false): 'full' | 'sputter' | 'death' {
+    if (this.isWaveDead()) {
+      return 'death';
+    }
+    if (isSputtering) {
+      return 'sputter';
+    }
+    return 'full';
+  }
+
+  /**
    * Decrement sputter columns and check if sputter is still active
    */
   public decrementSputter(): void {
@@ -135,10 +216,14 @@ export class WaveManager {
    */
   public startWave(): void {
     this.active = true;
-    this.countdown = 10;
+    this.countdown = gameBalance.waveTiming.triggerCountdown / 1000; // Convert ms to seconds
     this.currentSection = 0;
+    this.currentWaveStrength = gameBalance.waveStrength.starting;
+    this.waveCalculationResults = [];
+    this.consecutiveFailedColumns = 0;
     this.waveSputter = { active: false, columnsRemaining: 0 };
     this.emit('waveStart', {});
+    this.emit('waveStrengthChanged', { strength: this.currentWaveStrength });
   }
 
   /**
@@ -167,6 +252,7 @@ export class WaveManager {
     this.propagating = true;
 
     this.waveResults = [];
+    this.waveCalculationResults = [];
     const sections = ['A', 'B', 'C'];
     let hasFailedOnce = false;
 
@@ -187,6 +273,7 @@ export class WaveManager {
       if (success) {
         if (!hasFailedOnce) {
           this.score += 100;
+          this.gameState.incrementSectionSuccesses();
         }
         await this.emitAsync('sectionSuccess', { section: sectionId, chance: successChance });
       } else {

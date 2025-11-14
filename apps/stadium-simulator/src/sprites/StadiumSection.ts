@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { SectionRow } from './SectionRow';
 import { SectionConfig } from '../types/GameTypes';
+import { gameBalance } from '@/config/gameBalance';
+import type { Fan } from './Fan';
 
 /**
  * StadiumSection is a container sprite that manages:
@@ -167,12 +169,113 @@ export class StadiumSection extends Phaser.GameObjects.Container {
   }
 
   /**
+   * Calculate participation for a specific column with peer pressure logic
+   * @param columnIndex - The column index (0-7)
+   * @param waveStrength - Current wave strength for strength modifier
+   * @returns Array of fan objects with their participation state and intensity
+   */
+  public calculateColumnParticipation(
+    columnIndex: number,
+    waveStrength: number
+  ): Array<{ fan: Fan; willParticipate: boolean; intensity: number }> {
+    const sectionBonus = this.getSectionWaveBonus();
+    const strengthModifier = (waveStrength - 50) * gameBalance.waveStrength.strengthModifier;
+    const rows = this.getRows();
+    const result: Array<{ fan: Fan; willParticipate: boolean; intensity: number }> = [];
+
+    // First pass: roll participation for all fans in column
+    let participatingCount = 0;
+    const fanStates: Array<{ fan: Fan; willParticipate: boolean }> = [];
+
+    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+      const row = rows[rowIdx];
+      const seats = row.getSeats();
+      if (columnIndex < seats.length) {
+        const seat = seats[columnIndex];
+        if (!seat.isEmpty()) {
+          const fan = seat.getFan();
+          if (fan) {
+            // Apply wave strength modifier
+            fan.setWaveStrengthModifier(strengthModifier);
+            // Roll for participation
+            const willParticipate = fan.rollForWaveParticipation(sectionBonus);
+            fanStates.push({ fan, willParticipate });
+            if (willParticipate) {
+              participatingCount++;
+            }
+          }
+        }
+      }
+    }
+
+    // Second pass: apply peer pressure if threshold met
+    const columnSize = fanStates.length;
+    const peerPressureThreshold = gameBalance.waveStrength.peerPressureThreshold;
+    const participationRate = columnSize > 0 ? participatingCount / columnSize : 0;
+
+    if (participationRate >= peerPressureThreshold) {
+      // This column succeeded, non-participating fans join at reduced effort
+      for (const state of fanStates) {
+        if (!state.willParticipate) {
+          state.willParticipate = true;
+          state.fan.reducedEffort = true;
+        }
+      }
+    }
+
+    // Build result with intensity
+    for (const state of fanStates) {
+      result.push({
+        fan: state.fan,
+        willParticipate: state.willParticipate,
+        intensity: state.fan.reducedEffort ? 0.5 : 1.0,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Plays wave animation for a specific column with fan participation states
+   * @param columnIndex - The column index
+   * @param fanStates - Array of fans with participation info
+   * @param visualState - Visual state for animation ('full', 'sputter', 'death')
+   */
+  public async playColumnAnimation(
+    columnIndex: number,
+    fanStates: Array<{ fan: Fan; willParticipate: boolean; intensity: number }>,
+    visualState: 'full' | 'sputter' | 'death' = 'full'
+  ): Promise<void> {
+    const baseRowDelay = gameBalance.waveTiming.rowDelay;
+    const columnPromises: Promise<void>[] = [];
+
+    // Get row count for proper staggering
+    const rows = this.getRows();
+
+    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+      const state = fanStates[rowIdx];
+      if (state && state.willParticipate && state.fan) {
+        const delayMs = rowIdx * baseRowDelay;
+        columnPromises.push(state.fan.playWave(delayMs, state.intensity));
+
+        // Call onWaveParticipation after animation completes
+        this.scene.time.delayedCall(delayMs + 350, () => {
+          state.fan.onWaveParticipation(state.willParticipate);
+        });
+      }
+    }
+
+    // Start all fans in this column
+    Promise.all(columnPromises); // Don't await - let them run
+  }
+
+  /**
    * Plays wave animation for all fans with column-based stagger
-   * Now tracks individual fan participation
+   * Now tracks individual fan participation (kept for backwards compatibility)
    */
   public async playWave(): Promise<{ participatingFans: number; totalFans: number; participationRate: number }> {
-    const baseColumnDelay = 22; // slightly slower start (≈20% slower than before)
-    const baseRowDelay = 6; // match column pacing for smoother ascent/descent
+    const baseColumnDelay = gameBalance.waveTiming.columnDelay;
+    const baseRowDelay = gameBalance.waveTiming.rowDelay;
     const columnDelay = baseColumnDelay;
     const rowDelay = baseRowDelay;
 

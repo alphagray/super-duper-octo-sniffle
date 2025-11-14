@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { gameBalance } from '@/config/gameBalance';
 
 /**
  * Fan is a small container composed of two rectangles:
@@ -8,7 +9,7 @@ import Phaser from 'phaser';
  * The Fan supports:
  * - setIntensity(value) where value is 0..1 (driven by thirst/distracted)
  * - jiggle when intensity > 0
- * - playWave(delay) to perform the quick up/down motion
+ * - playWave(delay, intensity) to perform the quick up/down motion with variable intensity
  */
 export class Fan extends Phaser.GameObjects.Container {
   private top: Phaser.GameObjects.Rectangle;
@@ -24,12 +25,10 @@ export class Fan extends Phaser.GameObjects.Container {
 
   public _lastWaveParticipated: boolean = false;
 
-  // Configurable rates (can be set from outside for environmental effects)
-  public static thirstGrowthRate: number = 2; // points per second
-  public static happinessDecayRate: number = 1.25; // points per second when thirsty
-  public static thirstFreezeDuration: number = 4000; // ms
-
-  private thirstFrozenUntil: number = 0;
+  // Wave participation properties
+  private waveStrengthModifier: number = 0;
+  private attentionFreezeUntil: number = 0;
+  public reducedEffort: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, size = 28) {
     // We'll shift the container origin so local (0,0) sits at the bottom extremity
@@ -58,9 +57,9 @@ export class Fan extends Phaser.GameObjects.Container {
     scene.add.existing(this);
 
     // Initialize stats with fixed values for more reliable participation
-    this.happiness = 70;
-    this.thirst = Math.random() * 30; // 0-30 range (start mostly satisfied)
-    this.attention = 70;
+    this.happiness = gameBalance.fanStats.initialHappiness;
+    this.thirst = Math.random() * (gameBalance.fanStats.initialThirstMax - gameBalance.fanStats.initialThirstMin) + gameBalance.fanStats.initialThirstMin;
+    this.attention = gameBalance.fanStats.initialAttention;
   }
 
   public setIntensity(v?: number) {
@@ -196,15 +195,15 @@ export class Fan extends Phaser.GameObjects.Container {
     });
   }
 
-  public playWave(delayMs = 0): Promise<void> {
-    // Fast, dramatic wave motion
-    const up = -50;
+  public playWave(delayMs = 0, intensity: number = 1.0): Promise<void> {
+    // Scale wave motion based on intensity (reduced effort fans jump less)
+    const jumpHeight = -50 * intensity;
     const originalY = this.y;
     return new Promise((resolve) => {
       // Up tween (fast)
       this.scene.tweens.add({
         targets: this,
-        y: originalY + up,
+        y: originalY + jumpHeight,
         duration: 50, // faster up
         ease: 'Quad.easeIn',
         delay: delayMs,
@@ -282,7 +281,18 @@ export class Fan extends Phaser.GameObjects.Container {
     this.thirst = 0;
     this.happiness = Math.min(100, this.happiness + 15);
     // Freeze thirst growth for a short duration
-    this.thirstFrozenUntil = this.scene.time.now + Fan.thirstFreezeDuration;
+    this.attentionFreezeUntil = this.scene.time.now + gameBalance.fanStats.thirstFreezeDuration;
+  }
+
+  /**
+   * Fan successfully participates in a wave
+   * Resets attention and freezes attention decay temporarily
+   */
+  public onWaveParticipation(success: boolean): void {
+    if (success) {
+      this.attention = 100;
+      this.attentionFreezeUntil = this.scene.time.now + gameBalance.fanStats.attentionFreezeDuration;
+    }
   }
 
   /**
@@ -291,20 +301,30 @@ export class Fan extends Phaser.GameObjects.Container {
   public updateStats(deltaTime: number): void {
     // Convert ms to seconds for easier rate calculations
     const deltaSeconds = deltaTime / 1000;
+
+    // Attention freeze logic
+    if (this.attentionFreezeUntil && this.scene.time.now < this.attentionFreezeUntil) {
+      // Do not decrease attention while frozen
+    } else {
+      // Attention decays slightly over time (configurable)
+      this.attention = Math.max(
+        gameBalance.fanStats.attentionMinimum,
+        this.attention - deltaSeconds * gameBalance.fanStats.attentionDecayRate
+      );
+    }
+
     // Thirst freeze logic
-    if (this.thirstFrozenUntil && this.scene.time.now < this.thirstFrozenUntil) {
-      // Do not increase thirst while frozen
+    if (this.attentionFreezeUntil && this.scene.time.now < this.attentionFreezeUntil) {
+      // Do not increase thirst while frozen (reusing attention freeze for thirst)
     } else {
       // Fans get thirstier over time (configurable)
-      this.thirst = Math.min(100, this.thirst + deltaSeconds * Fan.thirstGrowthRate);
+      this.thirst = Math.min(100, this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate);
     }
+
     // Thirsty fans get less happy (configurable rate)
     if (this.thirst > 50) {
-      this.happiness = Math.max(0, this.happiness - deltaSeconds * Fan.happinessDecayRate);
+      this.happiness = Math.max(0, this.happiness - deltaSeconds * gameBalance.fanStats.happinessDecayRate);
     }
-    // Attention decays slightly over time (1.5 points per second)
-    const attentionDecayRate = 1.5;
-    this.attention = Math.max(30, this.attention - deltaSeconds * attentionDecayRate);
   }
 
   /**
@@ -315,15 +335,26 @@ export class Fan extends Phaser.GameObjects.Container {
   public calculateWaveChance(sectionBonus: number): number {
     // Base chance from personal stats
     // Happiness and attention help, thirst hurts
-    const baseChance = (this.happiness * 0.5 + this.attention * 0.5) - (this.thirst * 0.3);
+    const baseChance =
+      this.happiness * gameBalance.fanStats.waveChanceHappinessWeight +
+      this.attention * gameBalance.fanStats.waveChanceAttentionWeight -
+      this.thirst * gameBalance.fanStats.waveChanceThirstPenalty;
 
-    // Apply section bonus (happier sections help individual fans participate)
-    let totalChance = baseChance + sectionBonus;
+    // Apply section bonus and wave strength modifier
+    let totalChance = baseChance + sectionBonus + this.waveStrengthModifier;
 
     // Flat bonus to make success more likely
-    totalChance += 10;
+    totalChance += gameBalance.fanStats.waveChanceFlatBonus;
 
     return Math.max(0, Math.min(100, totalChance));
+  }
+
+  /**
+   * Set the wave strength modifier (applied to participation chance)
+   * @param modifier - The modifier value
+   */
+  public setWaveStrengthModifier(modifier: number): void {
+    this.waveStrengthModifier = modifier;
   }
 
   /**
