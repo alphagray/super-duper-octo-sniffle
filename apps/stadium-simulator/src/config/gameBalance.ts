@@ -50,13 +50,46 @@ export const gameBalance = {
   },
 
   /**
+   * Wave classification & debug / booster configuration (new)
+   * Centralizes thresholds and tunables for per-column + per-section logic.
+   */
+  waveClassification: {
+    // Column-level participation thresholds (0-1 range)
+    columnSuccessThreshold: 0.60, // >= success
+    columnSputterThreshold: 0.40, // >= sputter (else death)
+    columnDeathThreshold: 0.25, // optional lower band (used for stronger visual death)
+    // Section aggregation thresholds (simple majority outcome guidance)
+    sectionSuccessThreshold: 0.60,
+    sectionSputterThreshold: 0.40,
+    // Enhanced recovery power multiplier (applied when sputter -> clean success)
+    recoveryPowerMultiplier: 0.50, // 50% extra over base recovery
+    // Forced event parameters
+    forcedSputterDegradationMin: 30,
+    forcedSputterDegradationMax: 50,
+    forcedDeathStrength: 5,
+    // Booster percentage multipliers (wave-only, non-stacking; override replaces prior)
+    boosterPercents: {
+      momentum: 0.15, // +15% to strength adjustments
+      recovery: 0.25, // +25% to recovery bonuses
+      participation: 0.20, // +20% effective participation probability
+    },
+    // Debug panel event log max entries
+    maxDebugEvents: 20,
+    // Enable column state text grid in debug mode
+    enableColumnGrid: true,
+    // Composite threshold factor (strength + last2Avg) can be compared against (0-100 basis)
+    compositeStrengthWeight: 1.0, // weight multiplier for raw wave strength
+    compositeAvgParticipationWeight: 100, // multiply average (0-1) by weight for composite comparison
+  },
+
+  /**
    * Wave timing configuration (all in milliseconds, converted to seconds where needed)
    */
   waveTiming: {
     triggerCountdown: 3000, // 3 seconds before wave fires
     baseCooldown: 10000, // 10 seconds between waves
     successRefund: 5000, // refund this much if all sections succeed
-    columnDelay: 22, // ms between column animations
+    columnDelay: 44, // ms between column animations
     rowDelay: 6, // ms between row animations within column
   },
 

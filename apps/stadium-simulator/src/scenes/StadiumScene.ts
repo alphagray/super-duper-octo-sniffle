@@ -29,6 +29,8 @@ export class StadiumScene extends Phaser.Scene {
   private gameMode: GameMode = 'eternal';
   private sessionCountdownOverlay?: Phaser.GameObjects.Container;
   private waveStrengthMeter?: Phaser.GameObjects.Container;
+  private forceSputterNextSection: boolean = false;
+  private debugEventLog: string[] = [];
 
   constructor() {
     super({ key: 'StadiumScene' });
@@ -205,6 +207,22 @@ export class StadiumScene extends Phaser.Scene {
       });
     }
 
+    // Setup Force Sputter button
+    const forceSputter = () => {
+      if (!this.waveManager.isActive() && this.gameState.getSessionState() === 'active') {
+        this.forceSputterNextSection = true;
+        this.waveManager.startWave();
+        if (waveBtn) {
+          waveBtn.disabled = true;
+          waveBtn.textContent = 'WAVE IN PROGRESS...';
+        }
+        console.log('[DEBUG] Force Sputter initiated - will degrade strength on section B');
+      }
+    };
+
+    // Add keyboard shortcut for force sputter (press 'S')
+    this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S).on('down', forceSputter);
+
     // Setup vendor button listeners
     ['A', 'B', 'C'].forEach(section => {
       document.getElementById(`v1-${section.toLowerCase()}`)?.addEventListener('click', () => {
@@ -253,59 +271,103 @@ export class StadiumScene extends Phaser.Scene {
       this.updateWaveStrengthMeter(data.strength);
     });
 
-    this.waveManager.on('sectionSuccess', async (data: { section: string; chance: number }) => {
+    this.waveManager.on('sectionWave', async (data: { section: string; strength: number }) => {
       const sectionIndex = this.getSectionIndex(data.section);
       const section = this.sections[sectionIndex];
+      section.resetFanWaveState();
 
-      // Increment success streak
-      this.successStreak++;
+      const forced = this.waveManager.consumeForcedFlags();
+      let waveStrength = data.strength;
+      const cfg = gameBalance.waveClassification;
+      const baseRecoveryBonus = gameBalance.waveStrength.recoveryBonus;
+      const boosterType = this.waveManager.getLastBoosterType();
+      const participationMultiplier = boosterType === 'participation' ? this.waveManager.getWaveBoosterMultiplier() : 1;
 
-      // Play the visual wave with individual fan participation tracking
-      const result = await section.playWave();
-      
-      // Check for wave sputter
-      if (this.waveManager.checkWaveSputter(result.participationRate)) {
-        if (this.debugMode) {
-          console.log(`Wave sputter activated! Participation: ${Math.round(result.participationRate * 100)}%`);
+      if (forced.sputter) {
+        const degr = cfg.forcedSputterDegradationMin + Math.random() * (cfg.forcedSputterDegradationMax - cfg.forcedSputterDegradationMin);
+        waveStrength = Math.max(0, waveStrength - degr);
+        this.addDebugEvent(`[${data.section}] FORCED SPUTTER degrade=${Math.round(degr)}`);
+      }
+      if (forced.death) {
+        waveStrength = cfg.forcedDeathStrength;
+        this.addDebugEvent(`[${data.section}] FORCED DEATH strength=${waveStrength}`);
+      }
+
+      const rows = section.getRows();
+      const maxColumns = rows[0]?.getSeats().length ?? 8;
+      let totalFans = 0;
+      let totalParticipatingFans = 0;
+      let successCount = 0;
+      let sputterCount = 0;
+      let deathCount = 0;
+      let previousColumnState: 'success' | 'sputter' | 'death' = 'success';
+
+      for (let col = 0; col < maxColumns; col++) {
+        const fanStates = section.calculateColumnParticipation(col, waveStrength * participationMultiplier);
+        let columnParticipating = 0;
+        for (const st of fanStates) {
+          totalFans++;
+          if (st.willParticipate) {
+            totalParticipatingFans++;
+            columnParticipating++;
+          }
+        }
+        const columnRate = fanStates.length > 0 ? columnParticipating / fanStates.length : 0;
+        const columnState = this.waveManager.classifyColumn(columnRate);
+        this.waveManager.recordColumnState(data.section, col, columnRate, columnState);
+        this.waveManager.pushColumnParticipation(columnRate);
+
+        // Enhanced recovery (previous sputter -> current success)
+        if (previousColumnState === 'sputter' && columnState === 'success') {
+          const enhanced = this.waveManager.calculateEnhancedRecovery(previousColumnState, columnState); // returns recoveryPowerMultiplier or 0
+          if (enhanced > 0) {
+            const recoveryMultiplier = 1 + enhanced + (boosterType === 'recovery' ? (this.waveManager.getWaveBoosterMultiplier() - 1) : 0);
+            const bonus = baseRecoveryBonus * recoveryMultiplier;
+            waveStrength = Math.min(100, waveStrength + bonus);
+            this.waveManager.setWaveStrength(waveStrength);
+            this.addDebugEvent(`[${data.section}] Enhanced Recovery +${Math.round(bonus)} → ${Math.round(waveStrength)}`);
+          }
+        }
+
+        if (columnState === 'success') successCount++; else if (columnState === 'sputter') sputterCount++; else deathCount++;
+        previousColumnState = columnState;
+
+        let visualState: 'full' | 'sputter' | 'death' = columnState === 'success' ? 'full' : (columnState === 'sputter' ? 'sputter' : 'death');
+        await section.playColumnAnimation(col, fanStates, visualState, waveStrength);
+
+        if (col < maxColumns - 1) {
+          await new Promise(res => this.time.delayedCall(gameBalance.waveTiming.columnDelay, res));
         }
       }
 
-      // Trigger per-section poke jiggle for participating fans only
+      const participationRate = totalFans > 0 ? totalParticipatingFans / totalFans : 0;
+      let sectionState: 'success' | 'sputter' | 'death' = 'death';
+      if (successCount >= sputterCount && successCount >= deathCount) sectionState = 'success';
+      else if (sputterCount >= deathCount) sectionState = 'sputter';
+      else sectionState = 'death';
+      if (forced.death) sectionState = 'death';
+
+      if (sectionState === 'success') this.successStreak++; else this.successStreak = 0;
+
+      this.addDebugEvent(`[${data.section}] ${sectionState.toUpperCase()} cols S:${successCount} SP:${sputterCount} D:${deathCount} rate=${Math.round(participationRate*100)}%`);
+      this.waveManager.adjustWaveStrength(sectionState, participationRate);
+      this.waveManager.setLastSectionWaveState(sectionState);
+
       const fans = section.getFans();
-      fans.forEach((f) => f.pokeJiggle(0.9, 900));
-
-      // Flash green effect after wave animation (no await so next section keeps flowing)
-      section.flashSuccess();
-
-      // Add screen shake on success streak (3 or more)
-      if (this.successStreak >= 3) {
-        this.cameras.main.shake(200, 0.005);
-      }
-    });
-
-    this.waveManager.on('sectionFail', async (data: { section: string; chance: number }) => {
-      const sectionIndex = this.getSectionIndex(data.section);
-      const section = this.sections[sectionIndex];
-
-      // Reset success streak
-      this.successStreak = 0;
-
-      // Play the visual wave with individual fan participation tracking
-      const result = await section.playWave();
-      
-      // Check for wave sputter
-      if (this.waveManager.checkWaveSputter(result.participationRate)) {
-        if (this.debugMode) {
-          console.log(`Wave sputter activated! Participation: ${Math.round(result.participationRate * 100)}%`);
+      fans.forEach(f => {
+        if (f._lastWaveParticipated) {
+          f.pokeJiggle(sectionState === 'success' ? 0.9 : 0.45, sectionState === 'success' ? 900 : 700);
         }
+      });
+
+      if (sectionState === 'success') {
+        section.flashSuccess();
+        if (this.successStreak >= 3) this.cameras.main.shake(200, 0.005);
+      } else {
+        section.flashFail();
       }
 
-      // Trigger per-section poke jiggle
-      const fans = section.getFans();
-      fans.forEach((f) => f.pokeJiggle(0.45, 700));
-
-      // Flash red effect after wave animation (non-blocking)
-      section.flashFail();
+      this.updateDebugStats();
     });
 
     this.waveManager.on('waveComplete', () => {
@@ -320,6 +382,9 @@ export class StadiumScene extends Phaser.Scene {
         this.waveStrengthMeter.setVisible(false);
       }
     });
+
+    // Create debug panel
+    this.createDebugPanel();
   }
 
 
@@ -386,6 +451,9 @@ export class StadiumScene extends Phaser.Scene {
     this.sections.forEach(section => {
       section.updateFanIntensity(); // No parameter = use personal thirst
     });
+
+    // Update debug panel stats
+    this.updateDebugStats();
   }
 
   /**
@@ -623,6 +691,245 @@ export class StadiumScene extends Phaser.Scene {
 
     // Transition to ScoreReportScene
     this.scene.start('ScoreReportScene', { sessionScore });
+  }
+
+  /**
+   * Create DOM-based debug panel for wave testing
+   */
+  private createDebugPanel(): void {
+    // Create debug panel container
+    const debugPanel = document.createElement('div');
+    debugPanel.id = 'wave-debug-panel';
+    debugPanel.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 300px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ff00;
+      border-radius: 8px;
+      padding: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #00ff00;
+      z-index: 1000;
+      display: none;
+    `;
+
+    // Title
+    const title = document.createElement('h3');
+    title.textContent = 'Wave Debug';
+    title.style.cssText = 'margin: 0 0 10px 0; color: #00ff00; font-size: 16px;';
+    debugPanel.appendChild(title);
+
+    // Controls container
+    const controlsDiv = document.createElement('div');
+    controlsDiv.style.cssText = 'margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px;';
+
+    // Wave strength override
+    const strengthRow = document.createElement('div');
+    strengthRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    const strengthInput = document.createElement('input');
+    strengthInput.type = 'number';
+    strengthInput.min = '0';
+    strengthInput.max = '100';
+    strengthInput.placeholder = 'Strength';
+    strengthInput.style.cssText = 'flex:1;background:#000;border:1px solid #0f0;color:#0f0;padding:2px 4px;font-size:11px;';
+    const applyStrengthBtn = document.createElement('button');
+    applyStrengthBtn.textContent = 'APPLY';
+    applyStrengthBtn.style.cssText = 'background:#020;border:1px solid #0f0;color:#0f0;font-size:11px;padding:2px 6px;cursor:pointer;';
+    applyStrengthBtn.onclick = () => {
+      const val = parseFloat(strengthInput.value);
+      if (!isNaN(val)) {
+        this.waveManager.setWaveStrength(val);
+        this.addDebugEvent(`[DEBUG] Override strength=${val}`);
+        this.updateDebugStats();
+      }
+    };
+    const clearStrengthBtn = document.createElement('button');
+    clearStrengthBtn.textContent = 'CLR';
+    clearStrengthBtn.style.cssText = 'background:#200;border:1px solid #f00;color:#f00;font-size:11px;padding:2px 6px;cursor:pointer;';
+    clearStrengthBtn.onclick = () => {
+      strengthInput.value = '';
+    };
+    strengthRow.appendChild(strengthInput);
+    strengthRow.appendChild(applyStrengthBtn);
+    strengthRow.appendChild(clearStrengthBtn);
+    controlsDiv.appendChild(strengthRow);
+
+    // Force Sputter + Auto-Recover
+    const sputterRow = document.createElement('div');
+    sputterRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    const forceSputterBtn = document.createElement('button');
+    forceSputterBtn.textContent = 'Force Sputter';
+    forceSputterBtn.style.cssText = 'background:#222;border:1px solid #ff0;color:#ff0;font-size:11px;padding:2px 6px;cursor:pointer;flex:1;';
+    const autoRecoverChk = document.createElement('input');
+    autoRecoverChk.type = 'checkbox';
+    const autoRecoverLbl = document.createElement('label');
+    autoRecoverLbl.textContent = 'Auto-Recover';
+    autoRecoverLbl.style.cssText = 'font-size:11px;';
+    autoRecoverLbl.prepend(autoRecoverChk);
+    forceSputterBtn.onclick = () => {
+      this.waveManager.setForceSputter(true);
+      if (autoRecoverChk.checked) {
+        this.waveManager.applyWaveBooster('recovery');
+        this.addDebugEvent('[DEBUG] Recovery booster applied');
+      }
+      this.startWaveWithDisable(forceSputterBtn);
+      this.addDebugEvent('[DEBUG] Forced sputter requested');
+      this.updateDebugStats();
+    };
+    sputterRow.appendChild(forceSputterBtn);
+    sputterRow.appendChild(autoRecoverLbl);
+    controlsDiv.appendChild(sputterRow);
+
+    // Force Death
+    const deathRow = document.createElement('div');
+    deathRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    const forceDeathBtn = document.createElement('button');
+    forceDeathBtn.textContent = 'Force Death';
+    forceDeathBtn.style.cssText = 'background:#400;border:1px solid #f00;color:#f00;font-size:11px;padding:2px 6px;cursor:pointer;flex:1;';
+    forceDeathBtn.onclick = () => {
+      this.waveManager.setForceDeath(true);
+      this.startWaveWithDisable(forceDeathBtn);
+      this.addDebugEvent('[DEBUG] Forced death requested');
+      this.updateDebugStats();
+    };
+    deathRow.appendChild(forceDeathBtn);
+    controlsDiv.appendChild(deathRow);
+
+    // Booster buttons (momentum, recovery, participation)
+    const boosterRow = document.createElement('div');
+    boosterRow.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;';
+    const boosterTypes: Array<{ key: 'momentum'|'recovery'|'participation'; label: string; color: string }> = [
+      { key: 'momentum', label: 'Momentum +%', color: '#0af' },
+      { key: 'recovery', label: 'Recovery +%', color: '#0f8' },
+      { key: 'participation', label: 'Participation +%', color: '#fa0' },
+    ];
+    boosterTypes.forEach(b => {
+      const btn = document.createElement('button');
+      btn.textContent = b.label;
+      btn.style.cssText = `background:#111;border:1px solid ${b.color};color:${b.color};font-size:11px;padding:2px 6px;cursor:pointer;flex:1;`;
+      btn.onclick = () => {
+        this.waveManager.applyWaveBooster(b.key);
+        this.addDebugEvent(`[DEBUG] Booster applied: ${b.key}`);
+        this.updateDebugStats();
+      };
+      boosterRow.appendChild(btn);
+    });
+    controlsDiv.appendChild(boosterRow);
+
+    debugPanel.appendChild(controlsDiv);
+
+    // Stats / events display
+    const statsDiv = document.createElement('div');
+    statsDiv.id = 'debug-stats';
+    statsDiv.style.cssText = `
+      border: 1px solid #00ff00;
+      padding: 10px;
+      font-size: 11px;
+      line-height: 1.6;
+      max-height: 400px;
+      overflow-y: auto;
+    `;
+    debugPanel.appendChild(statsDiv);
+
+    // Append to body
+    document.body.appendChild(debugPanel);
+
+    // Store reference for keyboard toggle
+    let debugPanelVisible = false;
+
+    // Add keyboard key for toggling debug panel
+    const dKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    if (dKey) {
+      dKey.on('down', () => {
+        debugPanelVisible = !debugPanelVisible;
+        debugPanel.style.display = debugPanelVisible ? 'block' : 'none';
+        console.log('[DEBUG PANEL]', debugPanelVisible ? 'VISIBLE' : 'HIDDEN');
+      });
+    }
+
+    console.log('[DEBUG PANEL] Created. Press D to toggle. Press S to force sputter.');
+
+    // Clean up on scene shutdown
+    this.events.on('shutdown', () => {
+      debugPanel.remove();
+    });
+  }
+
+  /**
+   * Update debug panel statistics display
+   */
+  private updateDebugStats(): void {
+    const statsDiv = document.getElementById('debug-stats');
+    if (!statsDiv) return;
+
+    const score = this.waveManager.getScore();
+    const recentEvents = this.debugEventLog.slice(-8).reverse();
+    const eventsHtml = recentEvents.length > 0 
+      ? recentEvents.map(e => `<div>${e}</div>`).join('')
+      : '<div style="color: #666;">No events yet</div>';
+
+    // Column state grid (only in debug mode)
+    let columnGridHtml = '';
+    if (this.debugMode && gameBalance.waveClassification.enableColumnGrid) {
+      const records = this.waveManager.getColumnStateRecords();
+      const grouped: Record<string, Array<{ col: number; state: string; part: number }>> = {};
+      records.forEach(r => {
+        if (!grouped[r.sectionId]) grouped[r.sectionId] = [];
+        grouped[r.sectionId].push({ col: r.columnIndex, state: r.state, part: r.participation });
+      });
+      columnGridHtml = Object.keys(grouped).map(sectionId => {
+        const cols = grouped[sectionId]
+          .sort((a,b)=>a.col-b.col)
+          .map(c => `<span style='display:inline-block;width:32px;'>${c.col}:${c.state[0].toUpperCase()}(${Math.round(c.part*100)}%)</span>`)
+          .join('');
+        return `<div><strong>${sectionId}</strong> ${cols}</div>`;
+      }).join('');
+      if (!columnGridHtml) {
+        columnGridHtml = '<div style="color:#333;">No columns yet</div>';
+      }
+      columnGridHtml = `<div style='margin-top:8px;border-top:1px solid #00ff00;padding-top:6px;'>
+        <strong>Column States:</strong>
+        <div style='margin-top:4px;'>${columnGridHtml}</div>
+      </div>`;
+    }
+
+    statsDiv.innerHTML = `
+      <div><strong>Score:</strong> ${score}</div>
+      <div style="margin-top: 10px; border-top: 1px solid #00ff00; padding-top: 10px;">
+        <strong>Recent Events:</strong>
+        <div style="margin-top: 5px;">
+          ${eventsHtml}
+        </div>
+      </div>
+      ${columnGridHtml}
+    `;
+  }
+
+  /** Helper to start wave from debug control and disable source button briefly */
+  private startWaveWithDisable(btn: HTMLButtonElement): void {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    this.waveManager.startWave();
+    setTimeout(()=>{ btn.disabled = false; }, 1500);
+  }
+
+  /**
+   * Add event to debug log
+   */
+  private addDebugEvent(message: string): void {
+    this.debugEventLog.push(message);
+    // Keep only last 20 events
+    if (this.debugEventLog.length > 20) {
+      this.debugEventLog.shift();
+    }
+    // Mirror to console for scrollable history
+    if (this.debugMode) {
+      // Unified prefix for easier grep
+      console.log(`[DBG] ${message}`);
+    }
   }
 }
 

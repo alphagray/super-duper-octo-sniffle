@@ -252,14 +252,31 @@ export class StadiumSection extends Phaser.GameObjects.Container {
    * @param columnIndex - The column index
    * @param fanStates - Array of fans with participation info
    * @param visualState - Visual state for animation ('full', 'sputter', 'death')
+   * @param waveStrength - Current wave strength (0-100) for height scaling
    */
   public async playColumnAnimation(
     columnIndex: number,
     fanStates: Array<{ fan: Fan; willParticipate: boolean; intensity: number }>,
-    visualState: 'full' | 'sputter' | 'death' = 'full'
+    visualState: 'full' | 'sputter' | 'death' = 'full',
+    waveStrength: number = 70
   ): Promise<void> {
     const baseRowDelay = gameBalance.waveTiming.rowDelay;
     const columnPromises: Promise<void>[] = [];
+
+    // Determine animation completion time based on visual state
+    let animationDuration: number;
+    switch (visualState) {
+      case 'sputter':
+        animationDuration = 378; // 108ms up + 270ms down
+        break;
+      case 'death':
+        animationDuration = 252; // 72ms up + 180ms down
+        break;
+      case 'full':
+      default:
+        animationDuration = 420; // 120ms up + 300ms down
+        break;
+    }
 
     // Get row count for proper staggering
     const rows = this.getRows();
@@ -268,10 +285,10 @@ export class StadiumSection extends Phaser.GameObjects.Container {
       const state = fanStates[rowIdx];
       if (state && state.willParticipate && state.fan) {
         const delayMs = rowIdx * baseRowDelay;
-        columnPromises.push(state.fan.playWave(delayMs, state.intensity));
+        columnPromises.push(state.fan.playWave(delayMs, state.intensity, visualState, waveStrength));
 
         // Call onWaveParticipation after animation completes
-        this.scene.time.delayedCall(delayMs + 350, () => {
+        this.scene.time.delayedCall(delayMs + animationDuration, () => {
           state.fan.onWaveParticipation(state.willParticipate);
         });
       }

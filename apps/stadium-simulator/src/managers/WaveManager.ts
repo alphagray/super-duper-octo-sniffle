@@ -33,6 +33,15 @@ export class WaveManager {
   private currentWaveStrength: number;
   private waveCalculationResults: WaveCalculationResult[];
   private consecutiveFailedColumns: number;
+  private lastSectionWaveState: 'success' | 'sputter' | 'death' | null;
+  private lastColumnParticipationRate: number;
+  private lastBoosterType: 'momentum' | 'recovery' | 'participation' | 'none';
+  // New debug / forced event & booster flags
+  private forceSputterNextSection: boolean;
+  private forceDeathNextSection: boolean;
+  private waveBoosterMultiplier: number; // overall participation multiplier for this wave (temporary)
+  private lastTwoColumnParticipation: number[]; // rolling store of last 2 column participation rates
+  private columnStateRecords: Array<{ sectionId: string; columnIndex: number; participation: number; state: 'success' | 'sputter' | 'death' }>; // debug/analytics
 
   /**
    * Creates a new WaveManager instance
@@ -59,6 +68,14 @@ export class WaveManager {
     this.currentWaveStrength = gameBalance.waveStrength.starting;
     this.waveCalculationResults = [];
     this.consecutiveFailedColumns = 0;
+    this.lastSectionWaveState = null;
+    this.lastColumnParticipationRate = 0;
+    this.lastBoosterType = 'none';
+    this.forceSputterNextSection = false;
+    this.forceDeathNextSection = false;
+    this.waveBoosterMultiplier = 1.0;
+    this.lastTwoColumnParticipation = [];
+    this.columnStateRecords = [];
   }
 
   /**
@@ -110,6 +127,126 @@ export class WaveManager {
   }
 
   /**
+   * Get the last section wave state
+   */
+  public getLastSectionWaveState(): 'success' | 'sputter' | 'death' | null {
+    return this.lastSectionWaveState;
+  }
+
+  /**
+   * Set the last section wave state
+   */
+  public setLastSectionWaveState(state: 'success' | 'sputter' | 'death' | null): void {
+    this.lastSectionWaveState = state;
+  }
+
+  /**
+   * Get the last column participation rate
+   */
+  public getLastColumnParticipationRate(): number {
+    return this.lastColumnParticipationRate;
+  }
+
+  /**
+   * Set the last column participation rate
+   */
+  public setLastColumnParticipationRate(rate: number): void {
+    this.lastColumnParticipationRate = rate;
+  }
+
+  /** Force next section to start as sputter (debug) */
+  public setForceSputter(flag: boolean): void {
+    this.forceSputterNextSection = flag;
+  }
+
+  /** Force next section to start effectively dead (debug) */
+  public setForceDeath(flag: boolean): void {
+    this.forceDeathNextSection = flag;
+  }
+
+  /** Returns and clears forced flags for consumption at section start */
+  public consumeForcedFlags(): { sputter: boolean; death: boolean } {
+    const payload = { sputter: this.forceSputterNextSection, death: this.forceDeathNextSection };
+    this.forceSputterNextSection = false;
+    this.forceDeathNextSection = false;
+    return payload;
+  }
+
+  /** Override current wave strength (debug panel) */
+  public setWaveStrength(value: number): void {
+    this.currentWaveStrength = Math.max(0, Math.min(100, value));
+    this.emit('waveStrengthChanged', { strength: this.currentWaveStrength });
+  }
+
+  /** Apply a wave-only booster (non-stacking). Types map to config boosterPercents. */
+  public applyWaveBooster(type: keyof typeof gameBalance.waveClassification.boosterPercents): void {
+    const percent = gameBalance.waveClassification.boosterPercents[type] ?? 0;
+    // Booster affects participation probability & recovery bonuses implicitly via multiplier
+    this.waveBoosterMultiplier = 1 + percent;
+    this.lastBoosterType = type as any;
+    this.emit('waveBoosterApplied', { type, multiplier: this.waveBoosterMultiplier });
+  }
+
+  /** Clear booster after wave completes */
+  public clearWaveBooster(): void {
+    this.waveBoosterMultiplier = 1.0;
+    this.lastBoosterType = 'none';
+  }
+
+  /** Get current booster multiplier */
+  public getWaveBoosterMultiplier(): number {
+    return this.waveBoosterMultiplier;
+  }
+
+  public getLastBoosterType(): 'momentum' | 'recovery' | 'participation' | 'none' {
+    return this.lastBoosterType;
+  }
+
+  /** Classify a column participation rate */
+  public classifyColumn(participation: number): 'success' | 'sputter' | 'death' {
+    const cfg = gameBalance.waveClassification;
+    if (participation >= cfg.columnSuccessThreshold) return 'success';
+    if (participation >= cfg.columnSputterThreshold) return 'sputter';
+    return 'death';
+  }
+
+  /** Record column state (for debug panel grid) */
+  public recordColumnState(sectionId: string, columnIndex: number, participation: number, state: 'success' | 'sputter' | 'death'): void {
+    this.columnStateRecords.push({ sectionId, columnIndex, participation, state });
+    // Keep size bounded (24 max for 3 sections * 8 columns)
+    if (this.columnStateRecords.length > 32) {
+      this.columnStateRecords.splice(0, this.columnStateRecords.length - 32);
+    }
+    this.emit('columnStateRecorded', { sectionId, columnIndex, participation, state });
+  }
+
+  /** Retrieve column states for current wave */
+  public getColumnStateRecords(): Array<{ sectionId: string; columnIndex: number; participation: number; state: 'success' | 'sputter' | 'death' }> {
+    return this.columnStateRecords.slice();
+  }
+
+  /** Update rolling last-two participation average */
+  public pushColumnParticipation(participation: number): void {
+    this.lastTwoColumnParticipation.push(participation);
+    if (this.lastTwoColumnParticipation.length > 2) {
+      this.lastTwoColumnParticipation.shift();
+    }
+  }
+
+  public getLastTwoAvgParticipation(): number {
+    if (this.lastTwoColumnParticipation.length === 0) return 0;
+    return this.lastTwoColumnParticipation.reduce((a, b) => a + b, 0) / this.lastTwoColumnParticipation.length;
+  }
+
+  /** Enhanced recovery check: sputter -> clean success triggers amplified bonus before next column */
+  public calculateEnhancedRecovery(previousColumnState: 'success' | 'sputter' | 'death', currentColumnState: 'success' | 'sputter' | 'death'): number {
+    if (previousColumnState === 'sputter' && currentColumnState === 'success') {
+      return gameBalance.waveClassification.recoveryPowerMultiplier;
+    }
+    return 0;
+  }
+
+  /**
    * Check if wave participation rate triggers sputter mechanic
    * @param participationRate - Percentage of fans participating (0-1)
    * @returns true if sputter should activate
@@ -143,6 +280,66 @@ export class WaveManager {
    */
   public getWaveCalculationResults(): WaveCalculationResult[] {
     return [...this.waveCalculationResults];
+  }
+
+  /**
+   * Adjust wave strength based on section result and participation
+   * 
+   * Logic:
+   * - if lastState was 'success' (clean roll):
+   *   - if success: increase strength slightly
+   *   - if sputter: reduce strength
+   * 
+   * - if lastState was 'sputter':
+   *   - if participation 40-60% (still sputtering): reduce strength
+   *   - if participation < 40% (death range): greatly reduce strength
+   *   - if participation > 60% (recovery): increase strength
+   * 
+   * - if lastState was 'death': keep strength very low
+   */
+  public adjustWaveStrength(currentState: 'success' | 'sputter' | 'death', participationRate: number): void {
+    const lastState = this.lastSectionWaveState;
+    const momentumBoost = this.waveBoosterMultiplier && this.waveBoosterMultiplier > 1 ? this.waveBoosterMultiplier : 1;
+    
+    if (lastState === 'success') {
+      // Coming from a clean success
+      if (currentState === 'success') {
+        // Continue success: slight increase
+        this.currentWaveStrength = Math.min(100, this.currentWaveStrength + 5 * momentumBoost);
+      } else if (currentState === 'sputter') {
+        // Dropped to sputter: reduce significantly
+        this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 15);
+      } else if (currentState === 'death') {
+        // Dropped to death: massive reduction
+        this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 30);
+      }
+    } else if (lastState === 'sputter') {
+      // Coming from a sputter state - check participation
+      if (participationRate >= 0.6) {
+        // Recovered above sputter range: increase strength
+        this.currentWaveStrength = Math.min(100, this.currentWaveStrength + 10 * momentumBoost);
+      } else if (participationRate >= 0.4 && participationRate < 0.6) {
+        // Still in sputter range: reduce slightly
+        this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 8);
+      } else if (participationRate < 0.4) {
+        // Dropped to death range: greatly reduce
+        this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 25);
+      }
+    } else if (lastState === 'death') {
+      // Coming from death: if somehow above 60%, treat as sputter recovery
+      if (participationRate >= 0.6) {
+        this.currentWaveStrength = Math.min(100, this.currentWaveStrength + 15 * momentumBoost);
+      } else if (participationRate >= 0.4) {
+        // Treat as sputter if 40-60%
+        this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 10);
+      } else {
+        // Still in death: keep it low
+        this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 5);
+      }
+    }
+    
+    // Clamp strength to 0-100 range
+    this.currentWaveStrength = Math.max(0, Math.min(100, this.currentWaveStrength));
   }
 
   /**
@@ -263,32 +460,42 @@ export class WaveManager {
     for (let i = 0; i < sections.length; i++) {
       if (hasFailedOnce) break;
       const sectionId = sections[i];
-      let successChance = this.gameState.calculateWaveSuccess(sectionId);
 
-      // Check for vendor interference
-      if (this.vendorManager?.isVendorInSection(sectionId)) {
-        successChance -= 25; // 25% penalty
-      }
+      // Emit sectionWave event and wait for scene to determine actual participation
+      // Scene will:
+      // 1. Calculate per-fan participation using current wave strength
+      // 2. Aggregate column participation to get section participation rate
+      // 3. Determine state (success ≥60%, sputter 40-59%, death <40%)
+      // 4. Call setLastSectionWaveState() and adjustWaveStrength() as needed
+      // 5. Emit visual animations based on state
+      await this.emitAsync('sectionWave', {
+        section: sectionId,
+        strength: this.getCurrentWaveStrength()
+      });
 
-      // Roll random number (0-100) vs success chance
-      const roll = this.getRandom() * 100;
-      const success = successChance > 50 ? roll < successChance : false;
+      // Get the state that the scene determined and recorded
+      const sectionState = this.getLastSectionWaveState();
+      
+      // Track results for wave completion
+      this.waveResults.push({
+        section: sectionId,
+        success: sectionState === 'success',
+        chance: 0 // Chance no longer pre-calculated
+      });
 
-      if (success) {
-        if (!hasFailedOnce) {
-          this.score += 100;
-          this.gameState.incrementSectionSuccesses();
-        }
-        await this.emitAsync('sectionSuccess', { section: sectionId, chance: successChance });
-      } else {
+      // Handle failure propagation (stop wave if failure occurs)
+      if (sectionState === 'death') {
         if (!hasFailedOnce) {
           this.multiplier = 1.0;
           hasFailedOnce = true;
         }
-        await this.emitAsync('sectionFail', { section: sectionId, chance: successChance });
       }
 
-      this.waveResults.push({ section: sectionId, success, chance: successChance });
+      // Award points for successful sections
+      if (sectionState === 'success' && !hasFailedOnce) {
+        this.score += 100;
+        this.gameState.incrementSectionSuccesses();
+      }
     }
 
     // Wave complete
