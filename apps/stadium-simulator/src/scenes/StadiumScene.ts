@@ -3,6 +3,7 @@ import { GameStateManager } from '@/managers/GameStateManager';
 import { WaveManager } from '@/managers/WaveManager';
 import { VendorManager } from '@/managers/VendorManager';
 import { StadiumSection } from '@/sprites/StadiumSection';
+import { AnnouncerService } from '@/managers/AnnouncerService';
 import { SectionConfig } from '@/types/GameTypes';
 import { SeatManager } from '@/managers/SeatManager';
 
@@ -62,6 +63,16 @@ export class StadiumScene extends Phaser.Scene {
     // Initialize WaveManager with VendorManager and SeatManager
     this.waveManager = new WaveManager(this.gameState, this.vendorManager, this.seatManager);
     this.successStreak = 0;
+
+    const announcerService = new AnnouncerService();
+    announcerService
+      .getCommentary(JSON.stringify({ event: 'waveStart' }))
+      .then((result) => {
+        console.log('[AnnouncerService test] raw result:', result);
+      })
+      .catch((error) => {
+        console.error('[AnnouncerService test] request failed:', error);
+      });
 
     // Title at top center
     this.add.text(this.cameras.main.centerX, 50, 'STADIUM SIMULATOR', {
