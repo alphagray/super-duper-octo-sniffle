@@ -1,25 +1,158 @@
-# Wave Calculation Architecture (Updated Column Logic & Debug Enhancements)
+# Wave Architecture (Autonomous Triggering, Directional Path & Column Classification)
 
 ## Overview
-Refactored wave propagation to use actual fan participation instead of pre-rolled probability.
+The wave system has evolved from manual button starts to a fully autonomous mechanic driven by crowd happiness, position weights, and cooldowns. Waves now:
+1. Trigger probabilistically per section (weighted edges) after global & per-section cooldowns.
+2. Instantiate a `Wave` object with a calculated directional path (longest side; tie favors left→right).
+3. Run a 10s trigger countdown (configurable) before propagation.
+4. Propagate section-by-section along the path, emitting `sectionWave` events; the scene classifies each column in that section based on real fan participation.
+5. Adjust wave strength & record outcomes (success / sputter / death) using transitional logic informed by the previous section state.
+6. Apply scoring, cooldown durations (success vs failure), boosts, and store wave history.
 
-## Data Flow (Updated)
+## High-Level Data Flow
 
-### 1. Wave Propagation (WaveManager)
+### 1. Autonomous Wave Initiation
 ```
-User clicks "START WAVE"
+Session active & startup delay (5s) elapsed
     ↓
-WaveManager.startWave() → countdown starts
+Global cooldown check (success/failure cooldown window)
     ↓
-Countdown reaches 0
+Weighted section ordering (position weights from config)
     ↓
-WaveManager.propagateWave()
-    ├─ For each section (A → B → C):
-    │  └─ emit 'sectionWave' with { section, strength }
-    │     (Wait for scene to process)
-    │
-    └─ Check previous state: getLastSectionWaveState()
+For each candidate section:
+  ├─ Per-section cooldown check
+  ├─ Average happiness → probability band:
+  │     <20 → 40% | 20-60 → 60% | >60 → 90%
+  ├─ Roll vs band probability
+  └─ On success: createWave(origin) → startWave()
 ```
+
+### 2. Wave Creation & Countdown
+```
+Wave.calculatePath(allSections, origin)
+  → Determine direction (first vs last alphabetical)
+Wave object created (id, origin, path, direction, timestamps)
+Emit 'waveCreated' (incoming cue visuals)
+Set active = true; countdown = triggerCountdown (10s)
+```
+
+### 3. Section Propagation (WaveManager.propagateWave)
+```
+Countdown hits 0
+    ↓
+For each section in wave.path (directional order):
+  ├─ Emit 'sectionWave' { section, strength, direction }
+  ├─ StadiumScene processes columns (see next)
+  ├─ Scene calls setLastSectionWaveState(state)
+  ├─ Scene calls adjustWaveStrength(state, participationRate)
+  ├─ Strength & results recorded
+  └─ Death state short-circuits remaining sections
+Finalize (waveComplete + cooldown)
+```
+
+### 4. Column Classification (Scene Layer)
+```
+On 'sectionWave':
+  reset fan wave sprites
+  consume forced flags (sputter/death) if debug
+  For each column (direction determines iteration order):
+    ├─ Compute per-fan participation probability from currentWaveStrength × booster multiplier
+    ├─ Count participating fans → participationRate (0-1)
+    ├─ Classify column:
+    │     ≥0.60 success | ≥0.40 sputter | else death (config-driven)
+    ├─ Record column state (debug grid) + pushColumnParticipation()
+    ├─ Enhanced recovery check (prev sputter → current success) → bonus multiplier
+    ├─ Update visuals (success/sputter/death animation variant)
+  Aggregate section participation & majority outcome → section state
+  Set lastSectionWaveState(section state) & adjustWaveStrength(section state, participationRate)
+```
+
+### 5. Strength Adjustment Logic (WaveManager.adjustWaveStrength)
+```
+Transition rules:
+From success:
+  success: +5 (momentum) | sputter: -15 | death: -30
+From sputter:
+  participation ≥0.60: +10 (recovery)
+  0.40–0.60: -8 (maintain sputter)
+  <0.40: -25 (collapse)
+From death:
+  participation ≥0.60: +15 (miraculous recovery)
+  0.40–0.60: -10 (still weak)
+  <0.40: -5 (stays dead)
+All adjustments scaled by active booster multiplier (momentum/recovery/participation).
+```
+
+### 6. Wave Completion & Cooldowns
+```
+All sections processed OR death encountered
+    ↓
+Compute waveSuccess (no deaths) → finalizeWave(success)
+    ↓
+Emit 'waveFinalized', 'waveComplete'
+    ↓
+Start successCooldown (5s) OR failureCooldown (9s)
+    ↓
+Per-section start timestamp recorded for origin (8s cooldown)
+```
+
+### 7. GameState Interactions
+```
+updateStats(deltaTime): thirst +2/sec always; happiness decays only if thirst > threshold (50)
+Peer pressure: happiness ≥75 boosts attention +0.5/sec
+Wave completion success: +15 happiness & +20 attention temporary boost (5s)
+Session scoring uses completed wave count + aggregate stat deltas
+```
+
+## Key Components
+- WaveManager: Autonomous triggering, countdown, propagation, strength transitions, cooldown tracking.
+- Wave: Immutable metadata (id, origin, path, direction, timestamps) + section results & JSON export.
+- GameStateManager: Section stats, conditional decay, peer pressure, wave completion boosts, scoring.
+- Config (`gameBalance`): Single source for thresholds, timings, boosters, position weights, decay parameters.
+- StadiumScene: Visual column iteration, per-column participation calculation, classification, animations, state callbacks.
+
+## Booster & Forced Flags
+- Boosters (momentum | recovery | participation) are non-stacking; applying one overrides previous.
+- Booster percent modifies participation probability and strength adjustments (via multiplier).
+- Forced sputter/death flags (debug) consumed at section start; they influence initial classification path.
+
+## Directional Path & Animation
+- Path chosen by longest side from origin; tie favors rightward (A→B→C style) for natural reading order.
+- Direction (`left` | `right`) passed to scene and used to reverse column iteration.
+
+## Events
+- waveCreated, waveStart, sectionWave, waveStrengthChanged, columnStateRecorded, waveComplete, waveCooldownStarted, waveFinalized.
+
+## Scoring Snapshot
+- Per successful or sputter section: +100 points.
+- Wave history tracks maxPossible contributions for normalization.
+- Session grade uses configurable thresholds & estimated max waves.
+
+## Debug Panel Features
+- Strength override, booster buttons, forced sputter/death toggles.
+- Column grid (bounded size) showing S / SP / D & participation percent.
+- Event log capped by config.
+
+## Configuration Highlights (gameBalance.ts)
+- `waveTiming.triggerCountdown`: 10000ms (10s)
+- `waveAutonomous.successCooldown`: 5000ms | `failureCooldown`: 9000ms
+- `waveAutonomous.sectionStartCooldown`: 8000ms
+- Happiness decay only when thirst > 50 (rate 1.0/sec)
+- Peer pressure threshold: happiness ≥75; attention boost 0.5/sec
+- Column thresholds: success ≥0.60, sputter ≥0.40
+
+## Future Extension Hooks
+- Special wave types (SUPER / DOUBLE_DOWN) placeholder fields (speedMultiplier, reverseAfterComplete).
+- Column-level momentum integration during animation (updateWaveStrength / isWaveDead hooks).
+- Vendor interference penalty & seat-level granularity.
+
+## Testing Alignment
+- Tests reference config (no magic numbers for countdown).
+- WaveManager tests mock propagation by calling `updateCountdown(triggerCountdownMs)`.
+- GameStateManager tests verify conditional happiness decay & thirst growth.
+
+## Summary
+The architecture now cleanly separates autonomous triggering, deterministic path/direction, and column-based classification while centralizing all tunables in `gameBalance.ts`. Strength evolution is transparent and event-driven, enabling future visual and scoring enhancements without changing propagation logic.
 
 ### 2. Section Processing (StadiumScene) – Column-Oriented
 ```
