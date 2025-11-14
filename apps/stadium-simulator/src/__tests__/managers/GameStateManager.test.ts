@@ -62,9 +62,9 @@ describe('GameStateManager', () => {
   });
 
   describe('updateStats', () => {
-    it('should decay happiness over time', () => {
-      gameState.updateStats(1000); // 1 second
-      expect(gameState.getSection('A').happiness).toBe(69); // 70 - 1
+    it('should NOT decay happiness if thirst below threshold', () => {
+      gameState.updateStats(1000); // 1 second (thirst becomes 2)
+      expect(gameState.getSection('A').happiness).toBe(70); // unchanged because thirst < decay threshold
     });
 
     it('should increase thirst over time', () => {
@@ -72,10 +72,10 @@ describe('GameStateManager', () => {
       expect(gameState.getSection('A').thirst).toBe(2); // 0 + 2
     });
 
-    it('should handle fractional time correctly', () => {
+    it('should accumulate thirst fractionally without early happiness decay', () => {
       gameState.updateStats(500); // 0.5 seconds
-      expect(gameState.getSection('A').happiness).toBeCloseTo(69.5);
-      expect(gameState.getSection('A').thirst).toBeCloseTo(1); // 0 + 1
+      expect(gameState.getSection('A').happiness).toBe(70); // still unchanged
+      expect(gameState.getSection('A').thirst).toBeCloseTo(1); // 0 + (2 * 0.5)
     });
   });
 });

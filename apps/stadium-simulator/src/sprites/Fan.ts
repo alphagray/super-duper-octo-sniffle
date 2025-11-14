@@ -28,6 +28,7 @@ export class Fan extends Phaser.GameObjects.Container {
   // Wave participation properties
   private waveStrengthModifier: number = 0;
   private attentionFreezeUntil: number = 0;
+  private thirstFreezeUntil: number = 0;
   public reducedEffort: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, size = 28) {
@@ -195,26 +196,74 @@ export class Fan extends Phaser.GameObjects.Container {
     });
   }
 
-  public playWave(delayMs = 0, intensity: number = 1.0): Promise<void> {
-    // Scale wave motion based on intensity (reduced effort fans jump less)
-    const jumpHeight = -50 * intensity;
+  public playWave(delayMs = 0, intensity: number = 1.0, visualState: 'full' | 'sputter' | 'death' = 'full', waveStrength: number = 70): Promise<void> {
+    // Adjust intensity for reduced-effort fans based on wave strength
+    // Higher wave strength brings reduced-effort fans closer to full intensity
+    let adjustedIntensity = intensity;
+    if (intensity < 1.0) {
+      adjustedIntensity = intensity + (1.0 - intensity) * (waveStrength / 100);
+    }
+
+    // Scale wave height based on wave strength (80% at strength 20, 130% at strength 100)
+    const strengthMultiplier = 0.8 + (waveStrength / 100) * 0.5;
+    const jumpHeight = -50 * adjustedIntensity * strengthMultiplier;
     const originalY = this.y;
+
+    // Determine animation timing and easing based on visual state
+    let upDuration: number;
+    let downDuration: number;
+    let upEase: string;
+    let downEase: string;
+
+    switch (visualState) {
+      case 'sputter':
+        // 90% duration, less energetic easing
+        upDuration = 108; // 120ms * 0.9
+        downDuration = 270; // 300ms * 0.9
+        upEase = 'Sine.easeInOut';
+        downEase = 'Sine.easeInOut';
+        break;
+      case 'death':
+        // 60% duration, lifeless linear motion
+        upDuration = 72; // 120ms * 0.6
+        downDuration = 180; // 300ms * 0.6
+        upEase = 'Linear';
+        downEase = 'Linear';
+        break;
+      case 'full':
+      default:
+        // Normal duration and easing
+        upDuration = 120;
+        downDuration = 300;
+        upEase = 'Sine.easeOut';
+        downEase = 'Cubic.easeOut';
+        break;
+    }
+
     return new Promise((resolve) => {
-      // Up tween (fast)
+      // Kill any existing tweens on this fan to prevent conflicts
+      this.scene.tweens.killTweensOf(this);
+      
+      // Store the original Y position to ensure we return to correct spot
+      const targetY = originalY;
+      
+      // Up tween (gradual rise with peak behind leading edge)
       this.scene.tweens.add({
         targets: this,
-        y: originalY + jumpHeight,
-        duration: 50, // faster up
-        ease: 'Quad.easeIn',
+        y: targetY + jumpHeight,
+        duration: upDuration,
+        ease: upEase,
         delay: delayMs,
         onComplete: () => {
           // Down tween (smooth return)
           this.scene.tweens.add({
             targets: this,
-            y: originalY,
-            duration: 300, // faster return
-            ease: 'Cubic.easeOut',
+            y: targetY,
+            duration: downDuration,
+            ease: downEase,
             onComplete: () => {
+              // Ensure we're exactly at the target position
+              this.y = targetY;
               resolve();
             }
           });
@@ -281,17 +330,20 @@ export class Fan extends Phaser.GameObjects.Container {
     this.thirst = 0;
     this.happiness = Math.min(100, this.happiness + 15);
     // Freeze thirst growth for a short duration
-    this.attentionFreezeUntil = this.scene.time.now + gameBalance.fanStats.thirstFreezeDuration;
+    this.thirstFreezeUntil = this.scene.time.now + gameBalance.fanStats.thirstFreezeDuration;
   }
 
   /**
    * Fan successfully participates in a wave
    * Resets attention and freezes attention decay temporarily
+   * Also resets reducedEffort flag to clean up peer-pressure state
    */
   public onWaveParticipation(success: boolean): void {
     if (success) {
       this.attention = 100;
       this.attentionFreezeUntil = this.scene.time.now + gameBalance.fanStats.attentionFreezeDuration;
+      // Reset reduced effort flag after wave participation
+      this.reducedEffort = false;
     }
   }
 
@@ -313,9 +365,9 @@ export class Fan extends Phaser.GameObjects.Container {
       );
     }
 
-    // Thirst freeze logic
-    if (this.attentionFreezeUntil && this.scene.time.now < this.attentionFreezeUntil) {
-      // Do not increase thirst while frozen (reusing attention freeze for thirst)
+    // Thirst freeze logic (separate timer from attention freeze)
+    if (this.thirstFreezeUntil && this.scene.time.now < this.thirstFreezeUntil) {
+      // Do not increase thirst while frozen
     } else {
       // Fans get thirstier over time (configurable)
       this.thirst = Math.min(100, this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate);

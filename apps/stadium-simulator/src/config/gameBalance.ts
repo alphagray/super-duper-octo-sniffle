@@ -50,13 +50,102 @@ export const gameBalance = {
   },
 
   /**
+   * Wave classification & debug / booster configuration (new)
+   * Centralizes thresholds and tunables for per-column + per-section logic.
+   */
+  waveClassification: {
+    // Column-level participation thresholds (0-1 range)
+    columnSuccessThreshold: 0.60, // >= success
+    columnSputterThreshold: 0.40, // >= sputter (else death)
+    columnDeathThreshold: 0.25, // optional lower band (used for stronger visual death)
+    // Section aggregation thresholds (simple majority outcome guidance)
+    sectionSuccessThreshold: 0.60,
+    sectionSputterThreshold: 0.40,
+    // Enhanced recovery power multiplier (applied when sputter -> clean success)
+    recoveryPowerMultiplier: 0.50, // 50% extra over base recovery
+    // Forced event parameters
+    forcedSputterDegradationMin: 30,
+    forcedSputterDegradationMax: 50,
+    forcedDeathStrength: 5,
+    // Booster percentage multipliers (wave-only, non-stacking; override replaces prior)
+    boosterPercents: {
+      momentum: 0.15, // +15% to strength adjustments
+      recovery: 0.25, // +25% to recovery bonuses
+      participation: 0.20, // +20% effective participation probability
+    },
+    // Debug panel event log max entries
+    maxDebugEvents: 20,
+    // Enable column state text grid in debug mode
+    enableColumnGrid: true,
+    // Composite threshold factor (strength + last2Avg) can be compared against (0-100 basis)
+    compositeStrengthWeight: 1.0, // weight multiplier for raw wave strength
+    compositeAvgParticipationWeight: 100, // multiply average (0-1) by weight for composite comparison
+  },
+
+  /**
+   * Autonomous wave triggering system configuration
+   * Controls how the crowd initiates waves based on section happiness
+   */
+  waveAutonomous: {
+    // Master toggle for autonomous wave system
+    enabled: true,
+
+    // Triggering thresholds
+    waveStartHappinessThreshold: 0.60, // section avg happiness (0-100) must be >= this (60%) to trigger wave
+    
+    // Cooldown durations (milliseconds)
+    successCooldown: 5000, // 5 seconds after successful wave completes
+    failureCooldown: 9000, // 9 seconds after failed wave (5s base + 4s penalty)
+    sectionStartCooldown: 8000, // 8 seconds before same section can initiate another wave
+    
+    // Happiness decay configuration (replaces linear decay)
+    thirstHappinessDecayThreshold: 50, // happiness only decays when thirst > this value
+    thirstHappinessDecayRate: 1.0, // happiness decay rate (points per second) when thirsty
+    
+    // Peer pressure mechanics (section aggregate behavior)
+    peerPressureHappinessThreshold: 75, // section avg happiness must be >= this for peer pressure boost
+    peerPressureAttentionBoost: 0.5, // attention boost (points per second) for all fans in section
+    
+    // Wave completion rewards
+    waveCompletionHappinessBoost: 15, // temporary happiness boost when wave completes successfully
+    waveCompletionAttentionBoost: 20, // temporary attention boost when wave completes successfully
+    waveBoostDuration: 5000, // duration (ms) of temporary boosts
+    
+    // Section position weights (edge sections more likely to start waves)
+    // Keys represent total section count, values are arrays of weights by position
+    sectionPositionWeights: {
+      3: [1.5, 0.5, 1.5], // edges favored, center suppressed
+      4: [1.3, 1.0, 1.0, 1.3], // edges slightly favored
+      5: [1.5, 1.2, 0.5, 1.2, 1.5], // edges favored, center suppressed
+    },
+    
+    // Visual configuration
+    incomingCueDuration: 3000, // duration (ms) of incoming wave cue animation
+    sectionStatOffsetY: 20, // vertical offset (px) for section stat overlays below section sprites
+    
+    // Special wave types (currently stubbed for future implementation)
+    specialWaveTypes: {
+      SUPER: {
+        enabled: false, // disabled until implemented
+        speedMultiplier: 2.0, // waves travel twice as fast
+        scoreMultiplier: 1.5, // 50% bonus points
+      },
+      DOUBLE_DOWN: {
+        enabled: false, // disabled until implemented
+        reverseAfterComplete: true, // wave reverses direction after completing
+        scoreMultiplier: 2.0, // double points
+      },
+    },
+  },
+
+  /**
    * Wave timing configuration (all in milliseconds, converted to seconds where needed)
    */
   waveTiming: {
-    triggerCountdown: 3000, // 3 seconds before wave fires
+    triggerCountdown: 10000, // 10 seconds before wave fires
     baseCooldown: 10000, // 10 seconds between waves
     successRefund: 5000, // refund this much if all sections succeed
-    columnDelay: 22, // ms between column animations
+    columnDelay: 44, // ms between column animations
     rowDelay: 6, // ms between row animations within column
   },
 
@@ -117,18 +206,21 @@ export const gameBalance = {
     // Points awarded for various achievements
     basePointsPerWave: 100,
     participationBonus: 10, // per percentage point of participation
+    // Estimated max waves based on session duration and wave timing
+    // Calculated as: Math.ceil(runModeDuration / (baseCooldown + triggerCountdown))
+    maxWavesEstimate: 8, // ~100s session / ~12.5s per wave cycle
   },
 
   /**
    * UI configuration
    */
   ui: {
-    // Wave strength meter
-    meterWidth: 40,
-    meterHeight: 250,
-    meterPanelWidth: 100,
-    meterPanelHeight: 300,
-    meterCornerRadius: 8,
+    // Wave strength meter (used in StadiumScene for creating/updating meter display)
+    meterWidth: 24,
+    meterHeight: 60,
+    meterPanelWidth: 30,
+    meterPanelHeight: 66,
+    meterCornerRadius: 4,
     // Countdown display
     countdownFontSize: 120,
     waveCountdownFontSize: 48,

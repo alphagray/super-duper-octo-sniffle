@@ -21,6 +21,12 @@ interface SessionScore {
   scorePercentage: number;
 }
 
+interface WaveBoost {
+  happiness: number;
+  attention: number;
+  expiresAt: number;
+}
+
 /**
  * Manages the game state including sections, wave mechanics, and scoring
  */
@@ -35,6 +41,7 @@ export class GameStateManager {
   private totalSectionSuccesses: number = 0;
   private initialAggregateStats: AggregateStats | null = null;
   private eventListeners: Map<string, Array<Function>>;
+  private waveBoosts: Map<string, WaveBoost> = new Map(); // Track temporary boosts per section
 
   constructor() {
     // Initialize 3 sections (A, B, C) with default values
@@ -90,15 +97,93 @@ export class GameStateManager {
 
   /**
    * Updates all section stats based on time elapsed
-   * Happiness decreases 1 per second, thirst increases 2 per second
+   * - Thirst always increases (2 pts/sec)
+   * - Happiness only decays when thirst > threshold (conditional decay)
+   * - Peer pressure: section avg happiness ≥ threshold boosts all fans' attention in that section
+   * - Wave completion boosts: temporary happiness/attention boosts with expiry
    * @param deltaTime - Time elapsed in milliseconds
    */
   public updateStats(deltaTime: number): void {
     const seconds = deltaTime / 1000;
+    const now = Date.now();
+
     this.sections.forEach((section) => {
-      section.happiness = this.clamp(section.happiness - (1 * seconds), 0, 100);
+      // Always increase thirst
       section.thirst = this.clamp(section.thirst + (2 * seconds), 0, 100);
+
+      // Conditional happiness decay (only when thirsty)
+      if (section.thirst > gameBalance.waveAutonomous.thirstHappinessDecayThreshold) {
+        const decayRate = gameBalance.waveAutonomous.thirstHappinessDecayRate;
+        section.happiness = this.clamp(section.happiness - (decayRate * seconds), 0, 100);
+      }
+
+      // Apply wave completion boosts if active
+      const boost = this.waveBoosts.get(section.id);
+      if (boost) {
+        if (now < boost.expiresAt) {
+          // Boost is active - no additional stat change needed (boost applied at creation)
+          // Just let it expire naturally
+        } else {
+          // Boost expired - remove from tracking
+          this.waveBoosts.delete(section.id);
+        }
+      }
     });
+
+    // Apply peer pressure mechanics (per section)
+    this.updatePeerPressure(seconds);
+  }
+
+  /**
+   * Apply peer pressure mechanics
+   * When section avg happiness ≥ threshold, all fans in that section get attention boost
+   * @param seconds - Time delta in seconds
+   */
+  private updatePeerPressure(seconds: number): void {
+    const threshold = gameBalance.waveAutonomous.peerPressureHappinessThreshold;
+    const attentionBoost = gameBalance.waveAutonomous.peerPressureAttentionBoost;
+
+    this.sections.forEach((section) => {
+      // Check if section avg happiness meets threshold
+      // For now, section.happiness IS the section average (when we add individual fans, this will aggregate)
+      if (section.happiness >= threshold) {
+        section.attention = this.clamp(section.attention + (attentionBoost * seconds), 0, 100);
+      }
+    });
+  }
+
+  /**
+   * Apply wave completion boost to a section
+   * @param sectionId - The section to boost
+   */
+  public applyWaveCompletionBoost(sectionId: string): void {
+    const section = this.getSection(sectionId);
+    const happinessBoost = gameBalance.waveAutonomous.waveCompletionHappinessBoost;
+    const attentionBoost = gameBalance.waveAutonomous.waveCompletionAttentionBoost;
+    const duration = gameBalance.waveAutonomous.waveBoostDuration;
+
+    // Apply instant boost
+    section.happiness = this.clamp(section.happiness + happinessBoost, 0, 100);
+    section.attention = this.clamp(section.attention + attentionBoost, 0, 100);
+
+    // Track boost expiry
+    this.waveBoosts.set(sectionId, {
+      happiness: happinessBoost,
+      attention: attentionBoost,
+      expiresAt: Date.now() + duration,
+    });
+  }
+
+  /**
+   * Get section average happiness (for wave triggering probability)
+   * @param sectionId - The section to check
+   * @returns Average happiness (0-100)
+   */
+  public getSectionAverageHappiness(sectionId: string): number {
+    const section = this.getSection(sectionId);
+    // For now, section.happiness IS the average
+    // When we add individual fans, this will aggregate fan happiness
+    return section.happiness;
   }
 
   /**
@@ -277,13 +362,14 @@ export class GameStateManager {
     } else if (this.completedWaves >= waveThresholds['S-']) {
       grade = 'S-';
     } else {
-      // Fall back to percentage-based grading
-      // Estimate max possible waves: with 100s session and ~10s per wave cycle
-      const maxPossibleWaves = Math.max(15, Math.ceil(this.gameMode === 'run' ? 100 / 10 : 15));
+      // Fall back to percentage-based grading using dynamic max waves estimate
+      const maxPossibleWaves = gameBalance.scoring.maxWavesEstimate;
       const percentage = this.completedWaves / maxPossibleWaves;
 
+      // Sort thresholds in descending order to ensure deterministic grade assignment
       const percentThresholds = gameBalance.scoring.percentageThresholds;
-      for (const [gradeKey, threshold] of Object.entries(percentThresholds)) {
+      const sortedThresholds = Object.entries(percentThresholds).sort((a, b) => b[1] - a[1]);
+      for (const [gradeKey, threshold] of sortedThresholds) {
         if (percentage >= threshold) {
           grade = gradeKey;
           break;
@@ -291,8 +377,8 @@ export class GameStateManager {
       }
     }
 
-    // Calculate final score
-    const maxPossibleScore = gameBalance.scoring.basePointsPerWave * maxPossibleWaves; // use consistent max waves
+  // Calculate final score using dynamic max waves estimate
+  const maxPossibleScore = gameBalance.scoring.basePointsPerWave * gameBalance.scoring.maxWavesEstimate;
     const finalScore = Math.round(this.completedWaves * gameBalance.scoring.basePointsPerWave);
     const scorePercentage = finalScore / maxPossibleScore;
 
