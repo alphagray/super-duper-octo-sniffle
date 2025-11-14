@@ -16,7 +16,7 @@ describe('GameStateManager', () => {
     it('should initialize sections with correct starting values', () => {
       const sectionA = gameState.getSection('A');
       expect(sectionA.happiness).toBe(70);
-      expect(sectionA.thirst).toBe(20);
+      expect(sectionA.thirst).toBe(0); // Fans start with low thirst
       expect(sectionA.attention).toBe(50);
     });
   });
@@ -24,15 +24,15 @@ describe('GameStateManager', () => {
   describe('calculateWaveSuccess', () => {
     it('should calculate base success rate correctly', () => {
       const chance = gameState.calculateWaveSuccess('A');
-      // 80 + (70 * 0.2) - (20 * 0.3) = 80 + 14 - 6 = 88%
-      expect(chance).toBe(88);
+      // 80 + (70 * 0.2) - (0 * 0.3) = 80 + 14 - 0 = 94%
+      expect(chance).toBe(94);
     });
 
     it('should increase success with higher happiness', () => {
       gameState.updateSectionStat('A', 'happiness', 90);
       const chance = gameState.calculateWaveSuccess('A');
-      // 80 + (90 * 0.2) - (20 * 0.3) = 80 + 18 - 6 = 92%
-      expect(chance).toBe(92);
+      // 80 + (90 * 0.2) - (0 * 0.3) = 80 + 18 - 0 = 98%
+      expect(chance).toBe(98);
     });
 
     it('should decrease success with higher thirst', () => {
@@ -69,13 +69,13 @@ describe('GameStateManager', () => {
 
     it('should increase thirst over time', () => {
       gameState.updateStats(1000); // 1 second
-      expect(gameState.getSection('A').thirst).toBe(22); // 20 + 2
+      expect(gameState.getSection('A').thirst).toBe(2); // 0 + 2
     });
 
     it('should handle fractional time correctly', () => {
       gameState.updateStats(500); // 0.5 seconds
       expect(gameState.getSection('A').happiness).toBeCloseTo(69.5);
-      expect(gameState.getSection('A').thirst).toBeCloseTo(21);
+      expect(gameState.getSection('A').thirst).toBeCloseTo(1); // 0 + 1
     });
   });
 });

@@ -17,6 +17,20 @@ export class Fan extends Phaser.GameObjects.Container {
   private jiggleTimer?: Phaser.Time.TimerEvent;
   private baseIntensity: number = 0;
 
+  // Fan-level stats
+  private happiness: number;
+  private thirst: number;
+  private attention: number;
+
+  public _lastWaveParticipated: boolean = false;
+
+  // Configurable rates (can be set from outside for environmental effects)
+  public static thirstGrowthRate: number = 2; // points per second
+  public static happinessDecayRate: number = 1.25; // points per second when thirsty
+  public static thirstFreezeDuration: number = 4000; // ms
+
+  private thirstFrozenUntil: number = 0;
+
   constructor(scene: Phaser.Scene, x: number, y: number, size = 28) {
     // We'll shift the container origin so local (0,0) sits at the bottom extremity
     // of the fan's body. That makes rotating the container rotate around that point.
@@ -42,11 +56,17 @@ export class Fan extends Phaser.GameObjects.Container {
 
     this.add([this.top, this.bottom]);
     scene.add.existing(this);
+
+    // Initialize stats with fixed values for more reliable participation
+    this.happiness = 70;
+    this.thirst = Math.random() * 30; // 0-30 range (start mostly satisfied)
+    this.attention = 70;
   }
 
-  public setIntensity(v: number) {
-    // v: 0..1, determines both color shift and jiggle amplitude
-    const t = Phaser.Math.Clamp(v, 0, 1);
+  public setIntensity(v?: number) {
+    // If no value provided, use personal thirst as intensity
+    const intensity = v !== undefined ? v : this.thirst / 100;
+    const t = Phaser.Math.Clamp(intensity, 0, 1);
 
     // Bottom color: interpolate from white -> orange -> red
     const color = Fan.lerpColor(0xffffff, 0xff8c00, t <= 0.6 ? t / 0.6 : 1);
@@ -177,24 +197,23 @@ export class Fan extends Phaser.GameObjects.Container {
   }
 
   public playWave(delayMs = 0): Promise<void> {
-    // Fast-in, ease-out wave: quick start upward, then gentle settle back
-    // increase jump and make the up portion snappier so the motion is visible
-    const up = -24;
+    // Fast, dramatic wave motion
+    const up = -50;
     const originalY = this.y;
     return new Promise((resolve) => {
-      // Up tween (fast-in)
+      // Up tween (fast)
       this.scene.tweens.add({
         targets: this,
         y: originalY + up,
-        duration: 50,
+        duration: 50, // faster up
         ease: 'Quad.easeIn',
         delay: delayMs,
         onComplete: () => {
-          // Down tween (ease-out)
+          // Down tween (smooth return)
           this.scene.tweens.add({
             targets: this,
             y: originalY,
-            duration: 200,
+            duration: 300, // faster return
             ease: 'Cubic.easeOut',
             onComplete: () => {
               resolve();
@@ -226,5 +245,96 @@ export class Fan extends Phaser.GameObjects.Container {
     const b = 0xa67c52;
     const t = Math.random();
     return Fan.lerpColor(a, b, t);
+  }
+
+  // === Fan Stat Methods ===
+
+  /**
+   * Get all fan stats
+   */
+  public getStats(): { happiness: number; thirst: number; attention: number } {
+    return {
+      happiness: this.happiness,
+      thirst: this.thirst,
+      attention: this.attention
+    };
+  }
+
+  /**
+   * Get individual stat values
+   */
+  public getThirst(): number {
+    return this.thirst;
+  }
+
+  public getHappiness(): number {
+    return this.happiness;
+  }
+
+  public getAttention(): number {
+    return this.attention;
+  }
+
+  /**
+   * Vendor serves this fan a drink
+   */
+  public drinkServed(): void {
+    this.thirst = 0;
+    this.happiness = Math.min(100, this.happiness + 15);
+    // Freeze thirst growth for a short duration
+    this.thirstFrozenUntil = this.scene.time.now + Fan.thirstFreezeDuration;
+  }
+
+  /**
+   * Update fan stats over time
+   */
+  public updateStats(deltaTime: number): void {
+    // Convert ms to seconds for easier rate calculations
+    const deltaSeconds = deltaTime / 1000;
+    // Thirst freeze logic
+    if (this.thirstFrozenUntil && this.scene.time.now < this.thirstFrozenUntil) {
+      // Do not increase thirst while frozen
+    } else {
+      // Fans get thirstier over time (configurable)
+      this.thirst = Math.min(100, this.thirst + deltaSeconds * Fan.thirstGrowthRate);
+    }
+    // Thirsty fans get less happy (configurable rate)
+    if (this.thirst > 50) {
+      this.happiness = Math.max(0, this.happiness - deltaSeconds * Fan.happinessDecayRate);
+    }
+    // Attention decays slightly over time (1.5 points per second)
+    const attentionDecayRate = 1.5;
+    this.attention = Math.max(30, this.attention - deltaSeconds * attentionDecayRate);
+  }
+
+  /**
+   * Calculate this fan's chance to participate in the wave
+   * @param sectionBonus - Bonus from section aggregate stats
+   * @returns Success chance as percentage (0-100)
+   */
+  public calculateWaveChance(sectionBonus: number): number {
+    // Base chance from personal stats
+    // Happiness and attention help, thirst hurts
+    const baseChance = (this.happiness * 0.5 + this.attention * 0.5) - (this.thirst * 0.3);
+
+    // Apply section bonus (happier sections help individual fans participate)
+    let totalChance = baseChance + sectionBonus;
+
+    // Flat bonus to make success more likely
+    totalChance += 10;
+
+    return Math.max(0, Math.min(100, totalChance));
+  }
+
+  /**
+   * Roll to see if this fan participates in the wave
+   * @param sectionBonus - Bonus from section aggregate stats
+   * @returns true if fan participates, false otherwise
+   */
+  public rollForWaveParticipation(sectionBonus: number): boolean {
+    const chance = this.calculateWaveChance(sectionBonus);
+    const result = Math.random() * 100 < chance;
+    this._lastWaveParticipated = result;
+    return result;
   }
 }

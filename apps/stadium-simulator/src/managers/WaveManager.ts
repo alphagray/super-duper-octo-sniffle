@@ -1,5 +1,6 @@
 import type { GameStateManager } from './GameStateManager';
 import type { VendorManager } from './VendorManager';
+import type { SeatManager } from './SeatManager';
 
 /**
  * Manages wave mechanics including countdown, section propagation, scoring and events
@@ -15,13 +16,19 @@ export class WaveManager {
   private vendorManager?: VendorManager;
   private eventListeners: Map<string, Array<Function>>;
   private propagating: boolean;
+  private seatManager?: SeatManager;
+  private waveSputter: {
+    active: boolean;
+    columnsRemaining: number;
+  };
 
   /**
    * Creates a new WaveManager instance
    * @param gameState - The GameStateManager instance to use for wave calculations
    * @param vendorManager - Optional VendorManager instance to check for vendor interference
+   * @param seatManager - Optional SeatManager instance for seat logic
    */
-  constructor(gameState: GameStateManager, vendorManager?: VendorManager) {
+  constructor(gameState: GameStateManager, vendorManager?: VendorManager, seatManager?: SeatManager) {
     this.countdown = 10;
     this.active = false;
     this.currentSection = 0;
@@ -30,8 +37,13 @@ export class WaveManager {
     this.waveResults = [];
     this.gameState = gameState;
     this.vendorManager = vendorManager;
+    this.seatManager = seatManager;
     this.eventListeners = new Map();
     this.propagating = false;
+    this.waveSputter = {
+      active: false,
+      columnsRemaining: 0
+    };
   }
 
   /**
@@ -83,6 +95,40 @@ export class WaveManager {
   }
 
   /**
+   * Check if wave participation rate triggers sputter mechanic
+   * @param participationRate - Percentage of fans participating (0-1)
+   * @returns true if sputter should activate
+   */
+  public checkWaveSputter(participationRate: number): boolean {
+    // Sputter activates if participation drops below 40%
+    if (participationRate < 0.40 && !this.waveSputter.active) {
+      this.waveSputter.active = true;
+      this.waveSputter.columnsRemaining = 3 + Math.floor(Math.random() * 3); // 3-5 columns
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get the current wave sputter state
+   */
+  public getWaveSputter(): { active: boolean; columnsRemaining: number } {
+    return { ...this.waveSputter };
+  }
+
+  /**
+   * Decrement sputter columns and check if sputter is still active
+   */
+  public decrementSputter(): void {
+    if (this.waveSputter.active) {
+      this.waveSputter.columnsRemaining--;
+      if (this.waveSputter.columnsRemaining <= 0) {
+        this.waveSputter.active = false;
+      }
+    }
+  }
+
+  /**
    * Starts a new wave
    * Sets the wave to active, resets countdown and current section
    * Emits 'waveStart' event
@@ -91,6 +137,7 @@ export class WaveManager {
     this.active = true;
     this.countdown = 10;
     this.currentSection = 0;
+    this.waveSputter = { active: false, columnsRemaining: 0 };
     this.emit('waveStart', {});
   }
 
@@ -99,12 +146,12 @@ export class WaveManager {
    * When countdown reaches 0, triggers wave propagation
    * @param deltaTime - Time elapsed in milliseconds
    */
-  public updateCountdown(deltaTime: number): void {
+  public async updateCountdown(deltaTime: number): Promise<void> {
     const seconds = deltaTime / 1000;
     this.countdown -= seconds;
     
     if (this.countdown <= 0) {
-      this.propagateWave();
+      await this.propagateWave();
     }
   }
 
@@ -123,8 +170,6 @@ export class WaveManager {
     const sections = ['A', 'B', 'C'];
     let hasFailedOnce = false;
 
-    const SECTION_DELAY_MS = 350; // shorter delay between section starts for a snappier wave
-
     for (let i = 0; i < sections.length; i++) {
       if (hasFailedOnce) break;
       const sectionId = sections[i];
@@ -141,26 +186,18 @@ export class WaveManager {
 
       if (success) {
         if (!hasFailedOnce) {
-          this.score += 100 * this.multiplier;
-          this.multiplier += 0.5;
-        } else {
-          this.score += 100 * 1.0;
+          this.score += 100;
         }
-        this.emit('sectionSuccess', { section: sectionId, chance: successChance });
+        await this.emitAsync('sectionSuccess', { section: sectionId, chance: successChance });
       } else {
         if (!hasFailedOnce) {
           this.multiplier = 1.0;
           hasFailedOnce = true;
         }
-        this.emit('sectionFail', { section: sectionId, chance: successChance });
+        await this.emitAsync('sectionFail', { section: sectionId, chance: successChance });
       }
 
       this.waveResults.push({ section: sectionId, success, chance: successChance });
-
-      // wait before starting next section so animations can start in sequence
-      if (i < sections.length - 1 && !hasFailedOnce) {
-        await new Promise((res) => setTimeout(res, SECTION_DELAY_MS));
-      }
     }
 
     // Wave complete
@@ -190,6 +227,18 @@ export class WaveManager {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
       listeners.forEach((callback) => callback(data));
+    }
+  }
+
+  /**
+   * Emits an event and waits for all async listeners to complete
+   * @param event - The event name
+   * @param data - The event data to pass to listeners
+   */
+  private async emitAsync(event: string, data: any): Promise<void> {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      await Promise.all(listeners.map((callback) => callback(data)));
     }
   }
 

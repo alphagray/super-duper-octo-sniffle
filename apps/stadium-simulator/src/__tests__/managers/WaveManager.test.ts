@@ -2,13 +2,22 @@ import { WaveManager } from '@/managers/WaveManager';
 import { GameStateManager } from '@/managers/GameStateManager';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+// Test subclass that allows us to control random rolls
+class TestWaveManager extends WaveManager {
+  public mockRandom: number = 0.5;
+  protected getRandom(): number {
+    return this.mockRandom;
+  }
+}
+
 describe('WaveManager', () => {
-  let waveManager: WaveManager;
+  let waveManager: TestWaveManager;
   let mockGameState: GameStateManager;
 
   beforeEach(() => {
     mockGameState = new GameStateManager();
-    waveManager = new WaveManager(mockGameState);
+    waveManager = new TestWaveManager(mockGameState);
+    waveManager.mockRandom = 0.1; // Low value ensures success (roll < successChance)
   });
 
   describe('Wave Initialization', () => {
@@ -50,19 +59,31 @@ describe('WaveManager', () => {
   });
 
   describe('propagateWave', () => {
-    it('should evaluate each section sequentially', () => {
+    it('should evaluate each section sequentially', async () => {
+      // Set up ideal conditions for all sections to succeed
+      ['A', 'B', 'C'].forEach(id => {
+        mockGameState.updateSectionStat(id, 'happiness', 100);
+        mockGameState.updateSectionStat(id, 'thirst', 0);
+      });
+      
       waveManager.startWave();
-      waveManager.updateCountdown(10000); // Start propagation
+      await waveManager.updateCountdown(10000); // Start propagation (async)
       
       // After propagation, should have results for all 3 sections
       const results = waveManager.getWaveResults();
       expect(results).toHaveLength(3);
     });
 
-    it('should use GameStateManager to calculate success', () => {
+    it('should use GameStateManager to calculate success', async () => {
+      // Set up ideal conditions
+      ['A', 'B', 'C'].forEach(id => {
+        mockGameState.updateSectionStat(id, 'happiness', 100);
+        mockGameState.updateSectionStat(id, 'thirst', 0);
+      });
+      
       const calcSpy = vi.spyOn(mockGameState, 'calculateWaveSuccess');
       waveManager.startWave();
-      waveManager.updateCountdown(10000);
+      await waveManager.updateCountdown(10000);
       
       expect(calcSpy).toHaveBeenCalledTimes(3); // Once per section
     });
@@ -97,19 +118,31 @@ describe('WaveManager', () => {
       expect(callback).toHaveBeenCalled();
     });
 
-    it('should emit sectionSuccess event for successful sections', () => {
+    it('should emit sectionSuccess event for successful sections', async () => {
+      // Ensure success
+      ['A', 'B', 'C'].forEach(id => {
+        mockGameState.updateSectionStat(id, 'happiness', 100);
+        mockGameState.updateSectionStat(id, 'thirst', 0);
+      });
+      
       const callback = vi.fn();
       waveManager.on('sectionSuccess', callback);
       waveManager.startWave();
-      waveManager.updateCountdown(10000);
+      await waveManager.updateCountdown(10000);
       expect(callback).toHaveBeenCalled();
     });
 
-    it('should emit waveComplete event after all sections', () => {
+    it('should emit waveComplete event after all sections', async () => {
+      // Ensure success
+      ['A', 'B', 'C'].forEach(id => {
+        mockGameState.updateSectionStat(id, 'happiness', 100);
+        mockGameState.updateSectionStat(id, 'thirst', 0);
+      });
+      
       const callback = vi.fn();
       waveManager.on('waveComplete', callback);
       waveManager.startWave();
-      waveManager.updateCountdown(10000);
+      await waveManager.updateCountdown(10000);
       expect(callback).toHaveBeenCalled();
     });
   });
