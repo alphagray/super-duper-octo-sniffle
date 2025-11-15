@@ -117,6 +117,21 @@ const commentary = await announcer.getCommentary('Wave starting in section 3!');
 // Returns: "Ladies and gentlemen, here it comes! Section 3 is ready to GO!"
 ```
 
+### AI Configuration System
+
+The game includes a comprehensive AI configuration system for managing AI-generated content:
+
+- **Epoch-based Content Rotation**: Deterministic content generation based on timestamps
+- **Cost Tracking & Budget Enforcement**: Prevents runaway API costs with configurable limits
+- **Personality Types**: Complete TypeScript interfaces for vendors, mascots, and announcers
+- **Content Caching**: Efficient reuse of AI-generated content within epochs
+
+📖 **[Read the AI Configuration Guide](docs/AI_CONFIGURATION.md)** for detailed documentation on:
+- Epoch system configuration and usage
+- Cost management best practices
+- Personality type system reference
+- Content generation workflow examples
+
 ### Serverless API
 
 The `/api/announcer` endpoint provides secure proxy access to Claude API with:
