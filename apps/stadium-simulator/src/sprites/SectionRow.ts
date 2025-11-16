@@ -65,8 +65,12 @@ export class SectionRow {
    * Create evenly spaced seats for this row
    */
   private initializeSeats(): void {
+    // Place seats so each is centered in its grid cell, row fills full width
+    // Each cell: width/seatCount, seat at center of cell
+    const cellWidth = this.width / this.seatCount;
     for (let i = 0; i < this.seatCount; i++) {
-      const x = (-this.width / 2) + (this.width / this.seatCount) * i + (this.width / this.seatCount) / 2;
+      // Center of cell: left edge + (i + 0.5) * cellWidth
+      const x = -this.width / 2 + (i + 0.5) * cellWidth;
       const y = this.y + this.height * 0.85; // Position at divider top
       this.seats.push(new Seat(i, x, y));
     }

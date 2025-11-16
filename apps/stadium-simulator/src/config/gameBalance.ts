@@ -243,7 +243,9 @@ export const gameBalance = {
     // Defines the row treated as ground-level; top edges lock unless overridden
     groundLine: {
       enabled: true,
-      rowsFromBottom: 0, // 0 = bottom-most row, 1 = one row above, etc.
+      // Move ground just under halfway up the grid
+      // For a 24-row grid (32px cells on 768px), this places ground near midline
+      rowsFromBottom: 11, // 0 = bottom-most row, higher = higher ground
     },
     // Directional wall defaults ensure outside-the-stadium cells are non-traversable
     defaultExteriorWall: true,
@@ -266,7 +268,7 @@ export const gameBalance = {
    */
   waveSprite: {
     visible: false, // Set to true to show wave sprite by default.
-    speed: 266, // pixels per second (increased by 33%)
+    speed: 266, // pixels per second (baseline; runtime may multiply)
     debugColor: 0x00ffff, // cyan
     debugAlpha: 0.8,
     debugRadius: 12,

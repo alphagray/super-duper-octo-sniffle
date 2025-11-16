@@ -3,6 +3,7 @@ import { UtilityActor } from './BaseActor';
 import { GridManager } from '@/managers/GridManager';
 import { gameBalance } from '@/config/gameBalance';
 
+// ...existing code...
 export type WaveMovementState = 'idle' | 'moving' | 'complete';
 
 export interface WaveSpriteConfig {
@@ -47,6 +48,26 @@ export class WaveSprite extends UtilityActor {
 
   // Event callbacks
   private eventListeners: Map<string, Array<Function>> = new Map();
+
+    /**
+   * Reset all state for reuse in a new wave
+   */
+  public resetState(): void {
+    this.movementState = 'idle';
+    this.currentSectionIndex = -1;
+    this.hasEnteredSection.clear();
+    this.sections = [];
+    this.lineTop = 0;
+    this.lineBottom = 0;
+    this.targetX = 0;
+    this.direction = 'right';
+    this.config.waveStrength = 70;
+    if (this.debugGraphics) {
+      this.debugGraphics.setVisible(false);
+      this.debugGraphics.clear();
+    }
+  }
+
 
   constructor(
     scene: Phaser.Scene,

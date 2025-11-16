@@ -485,4 +485,15 @@ export class Fan extends BaseActorContainer {
   public getDisappointment(): number {
     return this.disappointment;
   }
+
+  /**
+   * Cleanup resources when fan is destroyed
+   */
+  public override destroy(fromScene?: boolean): void {
+    this.stopJiggleTimer();
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.killTweensOf(this.top);
+    this.scene.tweens.killTweensOf(this.bottom);
+    super.destroy(fromScene);
+  }
 }

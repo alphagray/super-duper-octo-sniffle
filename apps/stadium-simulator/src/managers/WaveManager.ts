@@ -32,6 +32,7 @@ export class WaveManager {
   private propagating: boolean;
   private seatManager?: SeatManager;
   private waveSprite?: any; // WaveSprite instance (any to avoid circular import)
+  private waveSpriteCreated: boolean = false;
   private pathSectionIds: string[] = []; // Track current path for jump logic
   private gridColumnSequence: Array<{ sectionId: string; col: number; worldX: number }> = []; // Grid columns to traverse
   private currentGridColumnIndex: number = 0; // Current position in sequence
@@ -112,31 +113,31 @@ export class WaveManager {
     this.waveSprite.update(delta);
     // Sprite may have completed and been destroyed during update()
     if (!this.waveSprite) return;
-    
+
     // Snap sprite to grid columns for discrete column-by-column movement
     if (this.gridColumnSequence.length > 0 && this.currentGridColumnIndex < this.gridColumnSequence.length) {
-      const targetCol = this.gridColumnSequence[this.currentGridColumnIndex];
-      const direction = this.activeWave ? this.activeWave.direction : 'right';
-      
-      // Check if sprite has passed or reached the current target column
-      const hasReachedColumn = direction === 'right' 
-        ? this.waveSprite.x >= targetCol.worldX
-        : this.waveSprite.x <= targetCol.worldX;
-      
-      if (hasReachedColumn) {
-        // Snap to exact grid column position
-        this.waveSprite.x = targetCol.worldX;
-        
-        // Trigger wave participation for seats in this grid column
-        this.triggerColumnWaveParticipation(targetCol);
-        
-        // Advance to next column
-        this.currentGridColumnIndex++;
-        
-        // Log grid column progression
-        if (this.currentGridColumnIndex % 3 === 0) { // Log every 3rd column to reduce spam
-          console.log(`[WaveManager] Grid column ${this.currentGridColumnIndex}/${this.gridColumnSequence.length}: section ${targetCol.sectionId} col ${targetCol.col} x=${targetCol.worldX}`);
+      let triggered = false;
+      while (this.currentGridColumnIndex < this.gridColumnSequence.length) {
+        const targetCol = this.gridColumnSequence[this.currentGridColumnIndex];
+        const direction = this.activeWave ? this.activeWave.direction : 'right';
+        // Check if sprite has passed or reached the current target column
+        const hasReachedColumn = direction === 'right'
+          ? this.waveSprite.x >= targetCol.worldX
+          : this.waveSprite.x <= targetCol.worldX;
+        if (hasReachedColumn) {
+          // Snap to exact grid column position
+          this.waveSprite.x = targetCol.worldX;
+          // Trigger wave participation for seats in this grid column
+          this.triggerColumnWaveParticipation(targetCol);
+          this.currentGridColumnIndex++;
+          triggered = true;
+        } else {
+          break;
         }
+      }
+      // If we just finished the last column, and the sprite is at the end, ensure last column triggers
+      if (this.currentGridColumnIndex === this.gridColumnSequence.length && triggered) {
+        // Already triggered in loop above, nothing more needed
       }
     }
   }
@@ -816,8 +817,8 @@ export class WaveManager {
     this.countdown -= seconds;
     
     if (this.countdown <= 0) {
-      // Spawn WaveSprite once when countdown completes
-      if (!this.propagating && !this.waveSprite && this.scene && this.activeWave && this.gridManager) {
+      // Spawn/reuse WaveSprite when countdown completes
+      if (!this.propagating && this.scene && this.activeWave && this.gridManager) {
         console.log('[WaveManager] Countdown complete, spawning WaveSprite');
         this.spawnWaveSprite(this.scene, this.activeWave.path);
       }
@@ -893,86 +894,61 @@ export class WaveManager {
     
     console.log('[WaveManager] Start X:', startX, 'Target X:', targetX, 'Direction:', direction);
     
-    // Import and create WaveSprite dynamically
-    import('@/sprites/WaveSprite').then(module => {
-      console.log('[WaveManager] WaveSprite module imported successfully');
-      const WaveSpriteClass = module.WaveSprite;
-      const spriteConfig = gameBalance.waveSprite;
-      
-      this.waveSprite = new WaveSpriteClass(
-        scene,
-        `wave-${Date.now()}`,
-        this.gridManager!,
-        startX,
-        (lineTop + lineBottom) / 2, // center Y position
-        {
-          baseSpeed: spriteConfig.speed,
-          waveStrength: this.getCurrentWaveStrength(),
-          debugVisible: spriteConfig.visible,
-          debugColor: spriteConfig.debugColor,
-          debugAlpha: spriteConfig.debugAlpha,
-          lineWidth: 3,
-        }
-      );
-      
-      console.log('[WaveManager] WaveSprite created:', this.waveSprite);
-      
-      if (!this.waveSprite) {
-        console.error('WaveManager: Failed to create WaveSprite');
-        return;
-      }
-      
-      // Configure sprite
+    // Only create WaveSprite once, then re-use
+    if (!this.waveSpriteCreated) {
+      import('@/sprites/WaveSprite').then(module => {
+        const WaveSpriteClass = module.WaveSprite;
+        const spriteConfig = gameBalance.waveSprite;
+        this.waveSprite = new WaveSpriteClass(
+          scene,
+          `wave-shared`,
+          this.gridManager!,
+          startX,
+          (lineTop + lineBottom) / 2,
+          {
+            baseSpeed: spriteConfig.speed * 3, // triple speed for runtime effect
+            waveStrength: this.getCurrentWaveStrength(),
+            debugVisible: spriteConfig.visible,
+            debugColor: spriteConfig.debugColor,
+            debugAlpha: spriteConfig.debugAlpha,
+            lineWidth: 3,
+          }
+        );
+        this.waveSpriteCreated = true;
+        // Set up event listeners for sprite-driven wave propagation
+        this.waveSprite.on('waveSpriteEntersSection', (data: { sectionId: string; x: number }) => {
+          this.handleSpriteExitsSection(data.sectionId);
+        });
+        this.waveSprite.on('waveSpriteExitsSection', (data: { sectionId: string; x: number }) => {
+          this.handleSpriteExitsSection(data.sectionId);
+        });
+        this.waveSprite.on('pathComplete', () => {
+          this.handleWaveComplete();
+        });
+        // Configure and start
+        this.waveSprite.setSections(sectionBounds);
+        this.waveSprite.setLineBounds(lineTop, lineBottom);
+        this.waveSprite.setTarget(direction, targetX);
+        this.waveSprite.setWaveStrength(this.getCurrentWaveStrength());
+        this.waveSprite.x = startX;
+        this.waveSprite.startMovement();
+      }).catch(err => {
+        console.error('WaveManager: Failed to import WaveSprite', err);
+      });
+    } else {
+      // Re-use existing sprite: reset and reconfigure
       this.waveSprite.setSections(sectionBounds);
       this.waveSprite.setLineBounds(lineTop, lineBottom);
       this.waveSprite.setTarget(direction, targetX);
-      
-      // Set up event listeners for sprite-driven wave propagation
-      this.waveSprite.on('waveSpriteEntersSection', (data: { sectionId: string; x: number }) => {
-        console.log('[WaveManager] WaveSprite entered section:', data.sectionId);
-        // Trigger section wave calculations when sprite enters
-        this.handleSpriteEntersSection(data.sectionId);
-      });
-      
-      this.waveSprite.on('waveSpriteExitsSection', (data: { sectionId: string; x: number }) => {
-        console.log('[WaveManager] WaveSprite exited section:', data.sectionId);
-        // Finalize section results when sprite exits
-        this.handleSpriteExitsSection(data.sectionId);
-      });
-      
-      this.waveSprite.on('pathComplete', () => {
-        console.log('[WaveManager] WaveSprite pathComplete');
-        // Wave reached final destination
-        this.handleWaveComplete();
-      });
-      
-      // Start movement
+      this.waveSprite.setWaveStrength(this.getCurrentWaveStrength());
+      this.waveSprite.x = startX;
+      this.waveSprite.movementState = 'idle';
+      this.waveSprite.hasEnteredSection = new Set();
+      this.waveSprite.currentSectionIndex = -1;
       this.waveSprite.startMovement();
-      console.log('[WaveManager] WaveSprite movement started');
-    }).catch(err => {
-      console.error('WaveManager: Failed to import WaveSprite', err);
-    });
-  }
+    }
+          }
 
-  /**
-   * Handle WaveSprite entering a section
-   * For compatibility, still emits sectionWave; column-by-column triggering happens in update().
-   */
-  private async handleSpriteEntersSection(sectionId: string): Promise<void> {
-    console.log(`[WaveManager] handleSpriteEntersSection: ${sectionId}`);
-    
-    // Emit sectionWave event for compatibility with existing listeners/tests
-    await this.emitAsync('sectionWave', {
-      section: sectionId,
-      strength: this.getCurrentWaveStrength(),
-      direction: this.activeWave ? this.activeWave.direction : 'right'
-    });
-  }
-
-  /**
-   * Handle WaveSprite exiting a section
-   * Finalizes section results and awards points
-   */
   private handleSpriteExitsSection(sectionId: string): void {
     console.log(`[WaveManager] handleSpriteExitsSection: ${sectionId}`);
     
@@ -1047,12 +1023,11 @@ export class WaveManager {
     this.active = false;
     this.propagating = false;
 
-    // Fully despawn sprite visuals
-    if (this.waveSprite && typeof this.waveSprite.destroy === 'function') {
-      try { this.waveSprite.destroy(); } catch {}
+    // Fully reset sprite state and hide debug visuals for reuse
+    if (this.waveSprite && typeof this.waveSprite.resetState === 'function') {
+      try { this.waveSprite.resetState(); } catch {}
     }
-    // Cleanup reference after completion
-    this.waveSprite = undefined;
+    // Do NOT set this.waveSprite = undefined; we re-use the instance
   }
 
   /**

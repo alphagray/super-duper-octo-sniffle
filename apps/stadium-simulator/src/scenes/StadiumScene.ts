@@ -37,6 +37,7 @@ export class StadiumScene extends Phaser.Scene {
   private sectionAText?: Phaser.GameObjects.Text;
   private sectionBText?: Phaser.GameObjects.Text;
   private sectionCText?: Phaser.GameObjects.Text;
+  private sectionLabels: Phaser.GameObjects.Text[] = [];
   private scoreText?: Phaser.GameObjects.Text;
   private countdownText?: Phaser.GameObjects.Text;
   private sessionTimerText?: Phaser.GameObjects.Text;
@@ -85,12 +86,15 @@ export class StadiumScene extends Phaser.Scene {
     this.rawSeatManager = new SeatManager(this, this.gridManager);
     this.seatManager = new SeatManagerWrapper(this.rawSeatManager);
 
-    // Section config defaults
+    // Section config defaults (width snapped to grid so seats align with columns)
+    const seatsPerRow = 8;
+    const { cellSize } = this.gridManager ? this.gridManager.getWorldSize() : { cellSize: 32 } as any;
+    const sectionWidthSnapped = seatsPerRow * cellSize;
     const sectionConfig: SectionConfig = {
-      width: 250,
+      width: sectionWidthSnapped,
       height: 200,
       rowCount: 4,
-      seatsPerRow: 8,
+      seatsPerRow,
       rowBaseHeightPercent: 0.15,
       startLightness: 62,
       autoPopulate: true,
@@ -99,12 +103,15 @@ export class StadiumScene extends Phaser.Scene {
     // Dynamic single-row section layout centered on screen, aligned to grid
     const gsSections = this.rawGameState.getSections();
     const sectionIdsDyn = gsSections.map(s => s.id);
-    const { cellSize } = this.gridManager ? this.gridManager.getWorldSize() : { cellSize: 32 } as any;
     const gapCells = 2; // configurable gap (cells) between sections
     const sectionGapPx = cellSize * gapCells;
     const n = sectionIdsDyn.length;
     const totalRowWidth = n * sectionConfig.width + Math.max(0, n - 1) * sectionGapPx;
-    const startX = Math.round(this.cameras.main.centerX - totalRowWidth / 2 + sectionConfig.width / 2);
+    // Compute left edge for first section, then snap to nearest grid boundary to eliminate outer gutters
+    const desiredLeftEdge = this.cameras.main.centerX - totalRowWidth / 2;
+    const origin = this.gridManager ? this.gridManager.getOrigin() : { x: 0, y: 0 };
+    const snappedLeftEdge = origin.x + Math.round((desiredLeftEdge - origin.x) / cellSize) * cellSize;
+    const startX = Math.round(snappedLeftEdge + sectionConfig.width / 2);
 
     // Compute ground-aligned Y so the bottom row's floor sits on a grid cell per groundLine
     const rowCountCfg = sectionConfig.rowCount ?? 4;
@@ -193,40 +200,39 @@ export class StadiumScene extends Phaser.Scene {
     // Create wave strength meter (will be shown on wave start)
     this.createWaveStrengthMeter();
 
-    // Section labels
-    this.add.text(200, 140, 'Section A', {
-      fontSize: '24px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
-    const statOffsetY = 300 + 100 + gameBalance.waveAutonomous.sectionStatOffsetY; // section Y + baseline offset + config offset
-    this.sectionAText = this.add.text(200, statOffsetY, '', {
-      fontSize: '16px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0);
+    // Section labels – anchored to section positions so they follow layout
+    const labelNames = ['Section A', 'Section B', 'Section C'];
+    this.sectionLabels = [];
+    for (let i = 0; i < this.sections.length && i < 3; i++) {
+      const sec = this.sections[i];
+      const labelY = sec.y - sectionConfig.height / 2 - 16;
+      const label = this.add.text(sec.x, labelY, labelNames[i], {
+        fontSize: '24px',
+        fontFamily: 'Arial',
+        color: '#ffffff',
+      }).setOrigin(0.5, 0.5);
+      this.sectionLabels.push(label);
+    }
 
-    this.add.text(500, 140, 'Section B', {
-      fontSize: '24px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
-    this.sectionBText = this.add.text(500, statOffsetY, '', {
+    // Section stat overlays – positioned just below each section
+    const statsOffset = gameBalance.waveAutonomous.sectionStatOffsetY;
+    const makeStatsText = (x: number, y: number) => this.add.text(x, y, '', {
       fontSize: '16px',
       fontFamily: 'Arial',
       color: '#ffffff',
     }).setOrigin(0.5, 0);
-
-    this.add.text(800, 140, 'Section C', {
-      fontSize: '24px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
-    this.sectionCText = this.add.text(800, statOffsetY, '', {
-      fontSize: '16px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0);
+    if (this.sections[0]) {
+      const y = this.sections[0].y + sectionConfig.height / 2 + statsOffset;
+      this.sectionAText = makeStatsText(this.sections[0].x, y);
+    }
+    if (this.sections[1]) {
+      const y = this.sections[1].y + sectionConfig.height / 2 + statsOffset;
+      this.sectionBText = makeStatsText(this.sections[1].x, y);
+    }
+    if (this.sections[2]) {
+      const y = this.sections[2].y + sectionConfig.height / 2 + statsOffset;
+      this.sectionCText = makeStatsText(this.sections[2].x, y);
+    }
 
     // Initial update of text displays
     this.updateDisplay();
@@ -509,6 +515,26 @@ export class StadiumScene extends Phaser.Scene {
 
     // Update visual displays
     this.updateDisplay();
+
+    // Keep labels and stats anchored to sections (in case layout shifts)
+    if (this.sections.length) {
+      const cfgHeight = 200; // matches sectionConfig.height
+      const statsOffset = gameBalance.waveAutonomous.sectionStatOffsetY;
+      for (let i = 0; i < this.sections.length && i < this.sectionLabels.length; i++) {
+        const sec = this.sections[i];
+        const label = this.sectionLabels[i];
+        label.setPosition(sec.x, sec.y - cfgHeight / 2 - 16);
+      }
+      if (this.sections[0] && this.sectionAText) {
+        this.sectionAText.setPosition(this.sections[0].x, this.sections[0].y + cfgHeight / 2 + statsOffset);
+      }
+      if (this.sections[1] && this.sectionBText) {
+        this.sectionBText.setPosition(this.sections[1].x, this.sections[1].y + cfgHeight / 2 + statsOffset);
+      }
+      if (this.sections[2] && this.sectionCText) {
+        this.sectionCText.setPosition(this.sections[2].x, this.sections[2].y + cfgHeight / 2 + statsOffset);
+      }
+    }
 
     // Update fans visuals based on their personal thirst
     this.sections.forEach(section => {
