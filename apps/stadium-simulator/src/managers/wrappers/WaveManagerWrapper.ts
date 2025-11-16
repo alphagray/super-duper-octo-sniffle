@@ -5,6 +5,7 @@ import type { WaveType } from '@/managers/Wave';
 import type { SeatManager } from '@/managers/SeatManager';
 import type { VendorManager } from '@/managers/VendorManager';
 import type { GameStateManager } from '@/managers/GameStateManager';
+import type { GridManager } from '@/managers/GridManager';
 
 // Events we bridge outward
 const BRIDGED_EVENTS = [
@@ -23,13 +24,19 @@ const BRIDGED_EVENTS = [
 export class WaveManagerWrapper extends BaseManager {
   private inner: WaveManager;
 
-  constructor(gameState: GameStateManager, vendorManager?: VendorManager, seatManager?: SeatManager) {
+  constructor(gameState: GameStateManager, vendorManager?: VendorManager, seatManager?: SeatManager, gridManager?: GridManager) {
     super({ name: 'Wave', category: 'manager:wave', logLevel: 'info' });
-    this.inner = new WaveManager(gameState, vendorManager, seatManager);
+    this.inner = new WaveManager(gameState, vendorManager, seatManager, gridManager);
 
     BRIDGED_EVENTS.forEach(evt => {
-      this.inner.on(evt, (payload: any) => {
-        this.emit(evt, payload);
+      this.inner.on(evt, async (payload: any) => {
+        // IMPORTANT: sectionWave must be awaited to preserve sequential propagation
+        if (evt === 'sectionWave') {
+          await this.emitAsync(evt, payload);
+        } else {
+          this.emit(evt, payload);
+        }
+
         switch (evt) {
           case 'waveStart':
             this.log('event', 'Wave started');
@@ -87,4 +94,8 @@ export class WaveManagerWrapper extends BaseManager {
 
   // Autonomous helpers (if needed later)
   setSessionStartTime(time: number) { this.inner.setSessionStartTime(time); }
+  
+  // Grid-based wave sprite methods
+  spawnWaveSprite(scene: Phaser.Scene, sections: string[]): void { this.inner.spawnWaveSprite(scene, sections); }
+  setScene(scene: Phaser.Scene): void { this.inner.setScene(scene); }
 }

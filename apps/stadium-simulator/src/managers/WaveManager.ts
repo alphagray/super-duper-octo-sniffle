@@ -1,6 +1,7 @@
 import type { GameStateManager } from './GameStateManager';
 import type { VendorManager } from './VendorManager';
 import type { SeatManager } from './SeatManager';
+import type { GridManager } from './GridManager';
 import { gameBalance } from '@/config/gameBalance';
 import { Wave } from './Wave';
 import type { WaveType } from './Wave';
@@ -25,9 +26,12 @@ export class WaveManager {
   private waveResults: Array<{ section: string; success: boolean; chance: number }>;
   private gameState: GameStateManager;
   private vendorManager?: VendorManager;
+  private gridManager?: GridManager;
+  private scene?: Phaser.Scene; // Scene reference for sprite spawning
   private eventListeners: Map<string, Array<Function>>;
   private propagating: boolean;
   private seatManager?: SeatManager;
+  private waveSprite?: any; // WaveSprite instance (any to avoid circular import)
   private waveSputter: {
     active: boolean;
     columnsRemaining: number;
@@ -61,8 +65,9 @@ export class WaveManager {
    * @param gameState - The GameStateManager instance to use for wave calculations
    * @param vendorManager - Optional VendorManager instance to check for vendor interference
    * @param seatManager - Optional SeatManager instance for seat logic
+   * @param gridManager - Optional GridManager instance for grid-based wave sprites
    */
-  constructor(gameState: GameStateManager, vendorManager?: VendorManager, seatManager?: SeatManager) {
+  constructor(gameState: GameStateManager, vendorManager?: VendorManager, seatManager?: SeatManager, gridManager?: GridManager) {
     this.countdown = gameBalance.waveTiming.triggerCountdown / 1000; // Convert ms to seconds
     this.active = false;
     this.currentSection = 0;
@@ -71,6 +76,7 @@ export class WaveManager {
     this.waveResults = [];
     this.gameState = gameState;
     this.vendorManager = vendorManager;
+    this.gridManager = gridManager;
     this.seatManager = seatManager;
     this.eventListeners = new Map();
     this.propagating = false;
@@ -715,6 +721,14 @@ export class WaveManager {
   }
 
   /**
+   * Set the scene reference for sprite spawning
+   * @param scene - The Phaser scene instance
+   */
+  public setScene(scene: Phaser.Scene): void {
+    this.scene = scene;
+  }
+
+  /**
    * Updates the countdown timer
    * When countdown reaches 0, triggers wave propagation
    * @param deltaTime - Time elapsed in milliseconds
@@ -724,87 +738,208 @@ export class WaveManager {
     this.countdown -= seconds;
     
     if (this.countdown <= 0) {
+      // Spawn WaveSprite now that countdown is complete
+      if (this.scene && this.activeWave && this.gridManager) {
+        console.log('[WaveManager] Countdown complete, spawning WaveSprite');
+        this.spawnWaveSprite(this.scene, this.activeWave.path);
+      }
+      
       await this.propagateWave();
     }
   }
 
   /**
-   * Propagates the wave through sections sequentially
-   * Uses the Wave instance's calculated path for direction
-   * Each section is processed with a 1-second delay
-   * Stops propagation if any section fails
-   * Emits events for each section and completion
+   * Spawns a WaveSprite for horizontal wave sweep movement
+   * Creates sprite with section bounds for collision detection
+   * Subscribes to sprite events for section enter/exit tracking
+   * @param scene - The Phaser scene to add sprite to
+   * @param sections - Array of section IDs for path generation
    */
-  public async propagateWave(): Promise<void> {
-    // Prevent re-entrant propagation (avoid duplicate scoring/events)
-    if (this.propagating) return;
-    this.propagating = true;
-
-    this.waveResults = [];
-    this.waveCalculationResults = [];
-    
-    // Use Wave instance path if available, otherwise default to A→B→C
-    const sections = this.activeWave ? this.activeWave.path : ['A', 'B', 'C'];
-    // suppressed wave propagation path logging
-    
-    let hasFailedOnce = false;
-
-    for (let i = 0; i < sections.length; i++) {
-      if (hasFailedOnce) break;
-      const sectionId = sections[i];
-
-      // Emit sectionWave event and wait for scene to determine actual participation
-      // Scene will:
-      // 1. Calculate per-fan participation using current wave strength
-      // 2. Aggregate column participation to get section participation rate
-      // 3. Determine state (success ≥60%, sputter 40-59%, death <40%)
-      // 4. Call setLastSectionWaveState() and adjustWaveStrength() as needed
-      // 5. Emit visual animations based on state
-      await this.emitAsync('sectionWave', {
-        section: sectionId,
-        strength: this.getCurrentWaveStrength(),
-        direction: this.activeWave ? this.activeWave.direction : 'right'
-      });
-
-      // Get the state that the scene determined and recorded
-      const sectionState = this.getLastSectionWaveState();
-      
-      // Track results for wave completion
-      this.waveResults.push({
-        section: sectionId,
-        success: sectionState === 'success',
-        chance: 0 // Chance no longer pre-calculated
-      });
-
-      // Handle failure propagation (stop wave if failure occurs)
-      if (sectionState === 'death') {
-        if (!hasFailedOnce) {
-          this.multiplier = 1.0;
-          hasFailedOnce = true;
-        }
-      }
-
-      // Award points for successful sections
-      if (sectionState === 'success' && !hasFailedOnce) {
-        this.score += 100;
-        this.gameState.incrementSectionSuccesses();
-      }
+  public spawnWaveSprite(scene: Phaser.Scene, sections: string[]): void {
+    if (!this.gridManager || !this.seatManager) {
+      console.warn('WaveManager: Cannot spawn WaveSprite without GridManager and SeatManager');
+      return;
     }
 
-    // Wave complete - determine success and record cooldown
-    const waveSuccess = !hasFailedOnce;
+    console.log('[WaveManager] spawnWaveSprite called with sections:', sections);
+
+    // Get section bounds for collision detection
+    const sectionBounds = sections.map(sectionId => {
+      const center = this.seatManager!.getSectionCenterPosition(sectionId);
+      if (!center) return null;
+      // Approximate section width (300px) and height (400px)
+      return {
+        id: sectionId,
+        left: center.x - 150,
+        right: center.x + 150,
+        top: center.y - 200,
+        bottom: center.y + 200
+      };
+    }).filter(b => b !== null) as any[];
+
+    if (sectionBounds.length === 0) {
+      console.warn('WaveManager: No valid section bounds');
+      return;
+    }
+
+    // Determine start and end positions
+    const direction = this.activeWave?.direction || 'right';
+    const firstSection = sectionBounds[0];
+    const lastSection = sectionBounds[sectionBounds.length - 1];
+    
+    const startX = direction === 'right' ? firstSection.left : lastSection.right;
+    const targetX = direction === 'right' ? lastSection.right : firstSection.left;
+    const lineTop = Math.min(...sectionBounds.map(s => s.top));
+    const lineBottom = Math.max(...sectionBounds.map(s => s.bottom));
+    
+    console.log('[WaveManager] Start X:', startX, 'Target X:', targetX, 'Direction:', direction);
+    
+    // Import and create WaveSprite dynamically
+    import('@/sprites/WaveSprite').then(module => {
+      console.log('[WaveManager] WaveSprite module imported successfully');
+      const WaveSpriteClass = module.WaveSprite;
+      const spriteConfig = gameBalance.waveSprite;
+      
+      this.waveSprite = new WaveSpriteClass(
+        scene,
+        `wave-${Date.now()}`,
+        this.gridManager!,
+        startX,
+        (lineTop + lineBottom) / 2, // center Y position
+        {
+          baseSpeed: spriteConfig.speed,
+          waveStrength: this.getCurrentWaveStrength(),
+          debugVisible: spriteConfig.visible,
+          debugColor: spriteConfig.debugColor,
+          debugAlpha: spriteConfig.debugAlpha,
+          lineWidth: 3,
+        }
+      );
+      
+      console.log('[WaveManager] WaveSprite created:', this.waveSprite);
+      
+      if (!this.waveSprite) {
+        console.error('WaveManager: Failed to create WaveSprite');
+        return;
+      }
+      
+      // Configure sprite
+      this.waveSprite.setSections(sectionBounds);
+      this.waveSprite.setLineBounds(lineTop, lineBottom);
+      this.waveSprite.setTarget(direction, targetX);
+      
+      // Set up event listeners for sprite-driven wave propagation
+      this.waveSprite.on('waveSpriteEntersSection', (data: { sectionId: string; x: number }) => {
+        console.log('[WaveManager] WaveSprite entered section:', data.sectionId);
+        // Trigger section wave calculations when sprite enters
+        this.handleSpriteEntersSection(data.sectionId);
+      });
+      
+      this.waveSprite.on('waveSpriteExitsSection', (data: { sectionId: string; x: number }) => {
+        console.log('[WaveManager] WaveSprite exited section:', data.sectionId);
+        // Finalize section results when sprite exits
+        this.handleSpriteExitsSection(data.sectionId);
+      });
+      
+      this.waveSprite.on('pathComplete', () => {
+        console.log('[WaveManager] WaveSprite pathComplete');
+        // Wave reached final destination
+        this.handleWaveComplete();
+      });
+      
+      // Start movement
+      this.waveSprite.startMovement();
+      console.log('[WaveManager] WaveSprite movement started');
+    }).catch(err => {
+      console.error('WaveManager: Failed to import WaveSprite', err);
+    });
+  }
+
+  /**
+   * Handle WaveSprite entering a section
+   * Triggers fan participation calculations via sectionWave event
+   */
+  private async handleSpriteEntersSection(sectionId: string): Promise<void> {
+    console.log(`[WaveManager] handleSpriteEntersSection: ${sectionId}`);
+    
+    // Emit sectionWave event for scene to calculate participation
+    // Scene will call setLastSectionWaveState() with the result
+    await this.emitAsync('sectionWave', {
+      section: sectionId,
+      strength: this.getCurrentWaveStrength(),
+      direction: this.activeWave ? this.activeWave.direction : 'right'
+    });
+  }
+
+  /**
+   * Handle WaveSprite exiting a section
+   * Finalizes section results and awards points
+   */
+  private handleSpriteExitsSection(sectionId: string): void {
+    console.log(`[WaveManager] handleSpriteExitsSection: ${sectionId}`);
+    
+    // Get the state that the scene determined
+    const sectionState = this.getLastSectionWaveState();
+    
+    // Track results
+    this.waveResults.push({
+      section: sectionId,
+      success: sectionState === 'success',
+      chance: 0
+    });
+
+    // Handle failure
+    if (sectionState === 'death') {
+      this.multiplier = 1.0;
+      // TODO: Stop wave sprite movement on death?
+    }
+
+    // Award points for successful sections
+    if (sectionState === 'success') {
+      this.score += 100;
+      this.gameState.incrementSectionSuccesses();
+    }
+  }
+
+  /**
+   * Handle WaveSprite completing its path
+   * Finalizes wave and emits completion event
+   */
+  private handleWaveComplete(): void {
+    console.log('[WaveManager] handleWaveComplete');
+    
+    // Determine if wave was successful (no deaths)
+    const waveSuccess = !this.waveResults.some(r => !r.success);
     
     // Finalize the Wave instance if we have one
     if (this.activeWave) {
       this.finalizeWave(waveSuccess);
     } else {
-      // Manual wave without Wave instance - just record cooldown
       this.recordWaveEnd(waveSuccess);
     }
     
     this.emit('waveComplete', { results: this.waveResults });
     this.active = false;
     this.propagating = false;
+  }
+
+  /**
+   * OLD METHOD - Keep for now as fallback
+   * Propagates the wave through sections sequentially (timer-based)
+   * TODO: Remove this once sprite-driven propagation is verified working
+   */
+  public async propagateWave(): Promise<void> {
+    // For now, just initialize wave state but don't do the loop
+    // The WaveSprite events will drive propagation instead
+    if (this.propagating) return;
+    this.propagating = true;
+
+    this.waveResults = [];
+    this.waveCalculationResults = [];
+    
+    console.log('[WaveManager] propagateWave called - wave is now sprite-driven');
+    // Note: Actual propagation now happens via WaveSprite events
+    // This method kept for initialization only
   }
 
   /**

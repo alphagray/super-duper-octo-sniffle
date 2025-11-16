@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { MenuScene } from './scenes/MenuScene';
+import { WorldScene } from './scenes/WorldScene';
 import { StadiumScene } from './scenes/StadiumScene';
 import { TestStadiumScene } from './scenes/TestStadiumScene';
 import { ScoreReportScene } from './scenes/ScoreReportScene';
@@ -8,7 +9,7 @@ import { TestSectionScene } from './scenes/TestSectionScene';
 import { TestSectionDebugScene } from './scenes/TestSectionDebugScene';
 
 // Detect debug/test mode from URL before exporting config
-let scenes: Phaser.Types.Scenes.SceneType[] = [MenuScene, StadiumScene, ScoreReportScene, GameOverScene, TestSectionScene, TestStadiumScene];
+let scenes: Phaser.Types.Scenes.SceneType[] = [MenuScene, WorldScene, StadiumScene, ScoreReportScene, GameOverScene, TestSectionScene, TestStadiumScene];
 try {
   const url = new URL(window.location.href);
   const testMode = url.searchParams.get('test');

@@ -2,6 +2,7 @@ import type { GameStateManager } from './GameStateManager';
 import type { VendorProfile, VendorState, VendorType, VendorQualityTier, VendorAbilities, PathSegment } from '@/types/GameTypes';
 import type { Fan } from '@/sprites/Fan';
 import type { StadiumSection } from '@/sprites/StadiumSection';
+import type { GridManager } from './GridManager';
 import { gameBalance } from '@/config/gameBalance';
 import { HybridPathResolver } from './HybridPathResolver';
 
@@ -52,15 +53,18 @@ export class VendorManager {
   private eventListeners: Map<string, Array<Function>>;
   private pathResolver?: HybridPathResolver;
   private sections: StadiumSection[];
+  private gridManager?: GridManager;
   private nextVendorId: number = 0;
 
   /**
    * Creates a new VendorManager instance
    * @param gameState - The GameStateManager instance to use for vendor actions
    * @param vendorCount - The number of legacy vendors to create (default: 2, deprecated)
+   * @param gridManager - Optional GridManager for grid-based pathfinding
    */
-  constructor(gameState: GameStateManager, vendorCount: number = 2) {
+  constructor(gameState: GameStateManager, vendorCount: number = 2, gridManager?: GridManager) {
     this.gameState = gameState;
+    this.gridManager = gridManager;
     this.eventListeners = new Map();
     this.vendors = new Map();
     this.legacyVendors = [];
@@ -82,12 +86,12 @@ export class VendorManager {
   }
 
   /**
-   * Initialize with stadium sections for pathfinding
+   * Initialize sections for vendor pathfinding
    * @param sections Array of StadiumSection objects
    */
   public initializeSections(sections: StadiumSection[]): void {
     this.sections = sections;
-    this.pathResolver = new HybridPathResolver(sections);
+    this.pathResolver = new HybridPathResolver(sections, this.gridManager);
   }
 
   /**

@@ -19,6 +19,7 @@ import { ActorRegistry } from '@/actors/ActorRegistry';
 import { ActorFactory } from '@/actors/ActorFactory';
 import { SectionActor } from '@/actors/adapters/SectionActor';
 import { FanActor } from '@/actors/adapters/FanActor';
+import { GridManager } from '@/managers/GridManager';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -32,6 +33,7 @@ export class StadiumScene extends Phaser.Scene {
   private rawSeatManager!: SeatManager;
   private seatManager!: SeatManagerWrapper; // wrapped
   private announcer!: AnnouncerServiceWrapper;
+  private gridManager?: GridManager;
   private sectionAText?: Phaser.GameObjects.Text;
   private sectionBText?: Phaser.GameObjects.Text;
   private sectionCText?: Phaser.GameObjects.Text;
@@ -63,9 +65,11 @@ export class StadiumScene extends Phaser.Scene {
     // Get game mode and debug mode from scene data
     this.gameMode = data?.gameMode || 'eternal';
     this.debugMode = data?.debugMode || false;
+    this.gridManager = data?.gridManager;
 
     if (this.debugMode) {
       console.log('StadiumScene initialized with mode:', this.gameMode);
+      console.log('GridManager received:', this.gridManager ? 'YES' : 'NO');
     }
   }
 
@@ -74,11 +78,11 @@ export class StadiumScene extends Phaser.Scene {
     this.gameState.startSession(this.gameMode);
 
     // Initialize VendorManager (inner) then wrap
-    const rawVendorManager = new VendorManager(this.rawGameState, 2);
+    const rawVendorManager = new VendorManager(this.rawGameState, 2, this.gridManager);
     this.vendorManager = new VendorManagerWrapper(rawVendorManager);
 
     // Initialize SeatManager
-    this.rawSeatManager = new SeatManager(this);
+    this.rawSeatManager = new SeatManager(this, this.gridManager);
     this.seatManager = new SeatManagerWrapper(this.rawSeatManager);
 
     // Section config defaults
@@ -123,7 +127,8 @@ export class StadiumScene extends Phaser.Scene {
     this.vendorManager.spawnInitialVendors();
 
     // Initialize WaveManager via wrapper for unified logging
-    this.waveManager = new WaveManagerWrapper(this.rawGameState, rawVendorManager, this.rawSeatManager);
+    this.waveManager = new WaveManagerWrapper(this.rawGameState, rawVendorManager, this.rawSeatManager, this.gridManager);
+    this.waveManager.setScene(this); // Set scene reference for WaveSprite spawning
     this.successStreak = 0;
 
     this.announcer = new AnnouncerServiceWrapper(new AnnouncerService());
@@ -320,6 +325,7 @@ export class StadiumScene extends Phaser.Scene {
       if (this.waveStrengthMeter) {
         this.waveStrengthMeter.setVisible(true);
       }
+      // Note: WaveSprite now spawns when countdown reaches zero, not here
     });
 
     // Listen to wave strength changes
@@ -624,6 +630,7 @@ export class StadiumScene extends Phaser.Scene {
     // Create overlay container with semi-transparent background
     this.sessionCountdownOverlay = this.add.container(0, 0);
     const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
+    bg.setOrigin(0, 0)
     this.sessionCountdownOverlay.add(bg);
 
     const countdownText = this.add.text(centerX, centerY, '3', {
@@ -1026,7 +1033,17 @@ export class StadiumScene extends Phaser.Scene {
       });
     }
 
-    console.log('[DEBUG PANEL] Created. Press D to toggle. Press S to force sputter.');
+    // Add keyboard key for toggling wave sprite visibility (W key)
+    const wKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    if (wKey) {
+      wKey.on('down', () => {
+        const newValue = !gameBalance.waveSprite.visible;
+        gameBalance.waveSprite.visible = newValue;
+        console.log('[WAVE SPRITE]', newValue ? 'VISIBLE' : 'HIDDEN');
+      });
+    }
+
+    console.log('[DEBUG PANEL] Created. Press D to toggle. Press S to force sputter. Press W to toggle wave sprite.');
 
     // Clean up on scene shutdown
     this.events.on('shutdown', () => {

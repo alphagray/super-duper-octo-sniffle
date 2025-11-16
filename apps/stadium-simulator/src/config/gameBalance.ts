@@ -227,6 +227,54 @@ export const gameBalance = {
   },
 
   /**
+   * World grid configuration (used by WorldScene & GridManager)
+   */
+  grid: {
+    enabled: true,
+    cellSize: 32, // pixels per cell (seat ~28px wide fits comfortably)
+    offsetX: 0, // world-space offset for grid origin (left edge)
+    offsetY: 0, // world-space offset for grid origin (top edge)
+    margins: {
+      top: 120,
+      right: 96,
+      bottom: 160,
+      left: 96,
+    },
+    // Defines the row treated as ground-level; top edges lock unless overridden
+    groundLine: {
+      enabled: true,
+      rowsFromBottom: 0, // 0 = bottom-most row, 1 = one row above, etc.
+    },
+    // Directional wall defaults ensure outside-the-stadium cells are non-traversable
+    defaultExteriorWall: true,
+    // Debug rendering options
+    debug: {
+      initialVisible: false,
+      gridColor: 0x00ffff,
+      gridAlpha: 0.2,
+      wallColor: 0xff5555,
+      wallAlpha: 0.85,
+      gridLineWidth: 1,
+      wallLineWidth: 3,
+      toggleKey: 'G',
+      depth: -50,
+    },
+  },
+
+  /**
+   * Wave sprite visualization configuration
+   */
+  waveSprite: {
+    visible: false, // Set to true to show wave sprite by default.
+    speed: 200, // pixels per second
+    debugColor: 0x00ffff, // cyan
+    debugAlpha: 0.8,
+    debugRadius: 12,
+    trailLength: 5, // number of trail points to show
+    trailFadeRate: 0.15, // how quickly trail points fade
+  },
+
+  /**
    * Vendor movement and pathfinding configuration
    */
   vendorMovement: {
@@ -245,6 +293,12 @@ export const gameBalance = {
     // Pathfinding parameters
     detourToleranceBase: 0.25, // penalty threshold to trigger local detour search
     pathRecalcInterval: 2000, // ms between path recalculations for dynamic updates
+    
+    // Navigation graph parameters
+    corridorWidth: 40, // pixels - spacing for corridor nodes above/below sections
+    stairTransitionCost: 60, // base cost for stair traversal between sections
+    rowEntryToCorridor: 50, // base cost for entering row from corridor
+    rowVerticalTransition: 30, // cost for moving between adjacent rows
   },
 
   /**

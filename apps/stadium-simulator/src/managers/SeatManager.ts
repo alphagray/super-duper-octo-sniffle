@@ -1,6 +1,7 @@
 import { StadiumSection } from '../sprites/StadiumSection';
 import { SectionConfig, SeatAssignment } from '../types/GameTypes';
 import { Fan } from '../sprites/Fan';
+import type { GridManager } from './GridManager';
 
 /**
  * Manages seat population and assignment for all stadium sections
@@ -9,9 +10,11 @@ import { Fan } from '../sprites/Fan';
 export class SeatManager {
   private sections: StadiumSection[] = [];
   private scene: Phaser.Scene;
+  private gridManager?: GridManager;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, gridManager?: GridManager) {
     this.scene = scene;
+    this.gridManager = gridManager;
   }
 
   /**
@@ -19,6 +22,92 @@ export class SeatManager {
    */
   initializeSections(sections: StadiumSection[]): void {
     this.sections = sections;
+    
+    // Register seats and row walls with grid if available
+    if (this.gridManager) {
+      this.registerSeatsAndWalls();
+    }
+  }
+
+  /**
+   * Register all seat positions and row boundary walls with GridManager
+   */
+  private registerSeatsAndWalls(): void {
+    if (!this.gridManager) return;
+
+    this.sections.forEach(section => {
+      const sectionWorldX = section.x;
+      const sectionWorldY = section.y;
+
+      section.getRows().forEach((row, rowIdx) => {
+        row.getSeats().forEach((seat, seatIdx) => {
+          const seatPos = seat.getPosition();
+          const worldX = sectionWorldX + seatPos.x;
+          const worldY = sectionWorldY + seatPos.y;
+
+          // Register seat occupant with grid
+          this.gridManager!.registerSeat(worldX, worldY, {
+            id: `seat-${section['sectionId']}-${rowIdx}-${seatIdx}`,
+            type: 'seat',
+            metadata: {
+              sectionId: section['sectionId'],
+              rowIdx,
+              seatIdx,
+            },
+          });
+        });
+
+        // Register top wall for each row to enforce row boundaries
+        const firstSeat = row.getSeats()[0];
+        const lastSeat = row.getSeats()[row.getSeats().length - 1];
+        if (firstSeat && lastSeat) {
+          const rowY = sectionWorldY + row.y;
+          const leftX = sectionWorldX + firstSeat.getPosition().x;
+          const rightX = sectionWorldX + lastSeat.getPosition().x;
+
+          // Convert to grid coordinates and register walls
+          const leftCell = this.gridManager!.worldToGrid(leftX, rowY);
+          const rightCell = this.gridManager!.worldToGrid(rightX, rowY);
+
+          if (leftCell && rightCell) {
+            for (let col = leftCell.col; col <= rightCell.col; col++) {
+              this.gridManager!.registerWall(leftCell.row, col, 'top', true);
+            }
+          }
+        }
+      });
+
+      // Mark stadium boundaries: register walls around section perimeter
+      const sectionBounds = {
+        left: sectionWorldX - section['sectionWidth'] / 2,
+        right: sectionWorldX + section['sectionWidth'] / 2,
+        top: sectionWorldY - section['sectionHeight'] / 2,
+        bottom: sectionWorldY + section['sectionHeight'] / 2,
+      };
+
+      // Register boundary walls for section perimeter
+      const topLeftCell = this.gridManager!.worldToGrid(sectionBounds.left, sectionBounds.top);
+      const bottomRightCell = this.gridManager!.worldToGrid(sectionBounds.right, sectionBounds.bottom);
+
+      if (topLeftCell && bottomRightCell) {
+        // Top boundary
+        for (let col = topLeftCell.col; col <= bottomRightCell.col; col++) {
+          this.gridManager!.registerWall(topLeftCell.row, col, 'top', true);
+        }
+        // Bottom boundary
+        for (let col = topLeftCell.col; col <= bottomRightCell.col; col++) {
+          this.gridManager!.registerWall(bottomRightCell.row, col, 'bottom', true);
+        }
+        // Left boundary
+        for (let row = topLeftCell.row; row <= bottomRightCell.row; row++) {
+          this.gridManager!.registerWall(row, topLeftCell.col, 'left', true);
+        }
+        // Right boundary
+        for (let row = topLeftCell.row; row <= bottomRightCell.row; row++) {
+          this.gridManager!.registerWall(row, bottomRightCell.col, 'right', true);
+        }
+      }
+    });
   }
 
   /**
@@ -163,5 +252,20 @@ export class SeatManager {
    */
   public getSections(): StadiumSection[] {
     return this.sections;
+  }
+
+  /**
+   * Get the center world position of a section
+   * @param sectionId - Section ID ('A', 'B', 'C')
+   * @returns Center position {x, y} or null if section not found
+   */
+  public getSectionCenterPosition(sectionId: string): { x: number; y: number } | null {
+    const section = this.sections.find(s => s['sectionId'] === sectionId);
+    if (!section) return null;
+    
+    return {
+      x: section.x,
+      y: section.y
+    };
   }
 }
