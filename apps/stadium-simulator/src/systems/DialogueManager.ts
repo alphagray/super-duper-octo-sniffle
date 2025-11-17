@@ -18,7 +18,6 @@ import type {
   DialogueLine,
   DialogueContext,
   GameEventType,
-  GameState,
 } from '@/types/personalities';
 import type { Section } from '@/types/GameTypes';
 
