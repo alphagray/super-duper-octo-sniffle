@@ -193,7 +193,12 @@ export class HybridPathResolver {
 
       rows.forEach((row, rowIdx) => {
         const seats = row.getSeats();
-        const rowY = sectionBounds.y + row.y + row.height / 2;
+        // Get row position from first seat's grid coordinates
+        const firstSeat = seats[0];
+        if (!firstSeat || !this.gridManager) return;
+        const gridPos = firstSeat.getGridPosition();
+        const worldPos = this.gridManager.gridToWorld(gridPos.row, gridPos.col);
+        const rowY = worldPos.y;
 
         // Create entry nodes at both ends of row
         const leftEntryId = `rowEntry_left_${sectionIdx}_${rowIdx}`;

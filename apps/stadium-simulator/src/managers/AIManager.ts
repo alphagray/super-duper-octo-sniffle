@@ -43,10 +43,11 @@ export interface VendorInstance {
 }
 
 /**
- * Manages vendors in the stadium including placement, service timing, pathfinding, and targeting
- * Supports profile-based vendor system with quality tiers and multiple vendor types
+ * AIManager: Manages all AI-driven actors in the stadium
+ * Handles vendors, mascots, and future AI entities
+ * Coordinates with GridManager for pathfinding and spatial queries
  */
-export class VendorManager {
+export class AIManager {
   private vendors: Map<number, VendorInstance>;
   private legacyVendors: Vendor[]; // backward compatibility
   private gameState: GameStateManager;
@@ -238,14 +239,18 @@ export class VendorManager {
           if (!seat.isEmpty()) {
             const fan = seat.getFan();
             if (fan && fan.getThirst() > thirstThreshold) {
-              const pos = seat.getPosition();
+              // Use grid position to get world coordinates
+              const gridPos = seat.getGridPosition();
+              const worldPos = this.gridManager 
+                ? this.gridManager.gridToWorld(gridPos.row, gridPos.col)
+                : { x: section.x, y: section.y };
               candidates.push({
                 fan,
                 sectionIdx: sIdx,
                 rowIdx: rIdx,
                 colIdx: cIdx,
-                x: pos.x + section.x,
-                y: pos.y + section.y,
+                x: worldPos.x,
+                y: worldPos.y,
               });
             }
           }

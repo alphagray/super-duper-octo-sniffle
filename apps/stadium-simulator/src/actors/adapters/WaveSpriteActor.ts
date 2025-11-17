@@ -7,12 +7,12 @@ import type { ActorCategory } from '@/actors/ActorTypes';
  * Bridges the sprite-based wave with the Actor registry system.
  */
 export class WaveSpriteActor extends UtilityActor {
-  private sprite: WaveSprite;
+  private waveSprite: WaveSprite; // Renamed to avoid conflict with Actor.sprite
 
   constructor(id: string, sprite: WaveSprite, category: ActorCategory = 'wave', enableLogging = false) {
-    const pos = sprite.getPosition();
-    super(id, 'wave', category, pos.x, pos.y, enableLogging);
-    this.sprite = sprite;
+    // WaveSprite doesn't use grid positioning currently, so pass 0,0
+    super(id, 'wave', category, 0, 0, enableLogging);
+    this.waveSprite = sprite;
     this.logger.debug('WaveSpriteActor adapter created');
   }
 
@@ -20,16 +20,15 @@ export class WaveSpriteActor extends UtilityActor {
    * Update delegates to the wrapped sprite
    */
   public update(delta: number): void {
-    this.sprite.update(delta);
-    const pos = this.sprite.getPosition();
-    this.setPosition(pos.x, pos.y);
+    this.waveSprite.update(delta);
+    // No position sync needed - WaveSprite manages its own position
   }
 
   /**
    * Get wrapped WaveSprite object
    */
   public getSprite(): WaveSprite {
-    return this.sprite;
+    return this.waveSprite;
   }
 
   /**
@@ -37,9 +36,9 @@ export class WaveSpriteActor extends UtilityActor {
    */
   public getState() {
     return {
-      state: this.sprite.getState(),
-      position: this.sprite.getPosition(),
-      isComplete: this.sprite.isComplete(),
+      state: this.waveSprite.getState(),
+      position: this.waveSprite.getPosition(),
+      isComplete: this.waveSprite.isComplete(),
     };
   }
 
@@ -47,6 +46,11 @@ export class WaveSpriteActor extends UtilityActor {
    * Cleanup
    */
   public destroy(): void {
-    this.sprite.destroy();
+    this.waveSprite.destroy();
+  }
+
+  // UtilityActor required method
+  public draw(): void {
+    // WaveSprite handles its own visual updates
   }
 }

@@ -1,23 +1,25 @@
 import Phaser from 'phaser';
 import { GameStateManager, GameMode } from '@/managers/GameStateManager';
 import { WaveManager } from '@/managers/WaveManager';
-import { VendorManager } from '@/managers/VendorManager';
+import { AIManager } from '@/managers/AIManager';
 import { StadiumSection } from '@/sprites/StadiumSection';
 import { AnnouncerService } from '@/managers/AnnouncerService';
 import { SectionConfig } from '@/types/GameTypes';
-import { SeatManager } from '@/managers/SeatManager';
+// import { SeatManager } from '@/managers/SeatManager'; // DELETED - TODO: Update this test scene
 import { gameBalance } from '@/config/gameBalance';
 
 /**
  * TestStadiumScene - Preserved version of original StadiumScene for testing
  * Access via URL parameter: ?test=stadium
- * Orchestrates GameStateManager, WaveManager, VendorManager, and StadiumSection objects
+ * Orchestrates GameStateManager, WaveManager, AIManager, and StadiumSection objects
+ * 
+ * NOTE: This test scene is outdated and needs refactoring after SeatManager deletion
  */
 export class TestStadiumScene extends Phaser.Scene {
   private gameState: GameStateManager;
   private waveManager!: WaveManager;
-  private vendorManager!: VendorManager;
-  private seatManager!: SeatManager;
+  private aiManager!: AIManager;
+  // private seatManager!: SeatManager; // DELETED
   private sectionAText?: Phaser.GameObjects.Text;
   private sectionBText?: Phaser.GameObjects.Text;
   private sectionCText?: Phaser.GameObjects.Text;
@@ -54,9 +56,13 @@ export class TestStadiumScene extends Phaser.Scene {
     // Initialize GameStateManager with the selected mode
     this.gameState.startSession(this.gameMode);
 
-    // Initialize VendorManager first
-    this.vendorManager = new VendorManager(this.gameState, 2);
+    // Initialize AIManager first
+    this.aiManager = new AIManager(this.gameState, 2);
 
+    // TODO: Refactor to use Actor-first architecture like StadiumScene
+    throw new Error('TestStadiumScene is outdated - needs refactoring after SeatManager deletion');
+    
+    /*
     // Initialize SeatManager
     this.seatManager = new SeatManager(this);
 
@@ -83,8 +89,9 @@ export class TestStadiumScene extends Phaser.Scene {
       this.seatManager.populateAllSeats();
     }
 
-    // Initialize WaveManager with VendorManager and SeatManager
-    this.waveManager = new WaveManager(this.gameState, this.vendorManager, this.seatManager);
+    // Initialize WaveManager with AIManager and SeatManager
+    this.waveManager = new WaveManager(this.gameState, this.aiManager, this.seatManager);
+    */
     this.successStreak = 0;
 
     const announcerService = new AnnouncerService();
@@ -248,15 +255,15 @@ export class TestStadiumScene extends Phaser.Scene {
     // Setup vendor button listeners
     ['A', 'B', 'C'].forEach(section => {
       document.getElementById(`v1-${section.toLowerCase()}`)?.addEventListener('click', () => {
-        this.vendorManager.placeVendor(0, section);
+        this.aiManager.placeVendor(0, section);
       });
       document.getElementById(`v2-${section.toLowerCase()}`)?.addEventListener('click', () => {
-        this.vendorManager.placeVendor(1, section);
+        this.aiManager.placeVendor(1, section);
       });
     });
 
-    // Listen to VendorManager events for visual feedback
-    this.vendorManager.on('vendorPlaced', (data: { vendorId: number; section: string }) => {
+    // Listen to AIManager events for visual feedback
+    this.aiManager.on('vendorPlaced', (data: { vendorId: number; section: string }) => {
       const sectionIndex = data.section.charCodeAt(0) - 65; // A=0, B=1, C=2
       const section = this.sections[sectionIndex];
       section.placedVendor(data.vendorId);
@@ -266,7 +273,7 @@ export class TestStadiumScene extends Phaser.Scene {
       }).setOrigin(0.5).setName(`vendor-${data.vendorId}-indicator`);
     });
 
-    this.vendorManager.on('serviceComplete', (data: { vendorId: number; section: string }) => {
+    this.aiManager.on('serviceComplete', (data: { vendorId: number; section: string }) => {
       // Remove indicator
       const indicator = this.children.getByName(`vendor-${data.vendorId}-indicator`);
       indicator?.destroy();
@@ -462,7 +469,7 @@ export class TestStadiumScene extends Phaser.Scene {
     }
 
     // Update vendor manager
-    this.vendorManager.update(delta);
+    this.aiManager.update(delta);
 
     // Check for autonomous wave triggering (only when session is active)
     if (gameBalance.waveAutonomous.enabled && 

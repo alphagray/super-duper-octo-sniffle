@@ -1,10 +1,11 @@
 import type { GameStateManager } from './GameStateManager';
-import type { VendorManager } from './VendorManager';
-import type { SeatManager } from './SeatManager';
+import type { AIManager } from './AIManager';
 import type { GridManager } from './GridManager';
 import { gameBalance } from '@/config/gameBalance';
 import { Wave } from './Wave';
 import type { WaveType } from './Wave';
+import { WaveSprite } from '@/sprites/WaveSprite';
+import { ActorRegistry } from '@/actors/ActorRegistry';
 
 interface WaveCalculationResult {
   sectionId: string;
@@ -25,16 +26,17 @@ export class WaveManager {
   private multiplier: number;
   private waveResults: Array<{ section: string; success: boolean; chance: number }>;
   private gameState: GameStateManager;
-  private vendorManager?: VendorManager;
+  private aiManager?: AIManager;
   private gridManager?: GridManager;
   private scene?: Phaser.Scene; // Scene reference for sprite spawning
+  private actorRegistry?: ActorRegistry; // ActorRegistry reference
   private eventListeners: Map<string, Array<Function>>;
   private propagating: boolean;
-  private seatManager?: SeatManager;
-  private waveSprite?: any; // WaveSprite instance (any to avoid circular import)
+  // private seatManager?: SeatManager; // DELETED - logic moved to SectionActor
+  private waveSprite?: WaveSprite; // WaveSprite instance
   private waveSpriteCreated: boolean = false;
-  private pathSectionIds: string[] = []; // Track current path for jump logic
-  private gridColumnSequence: Array<{ sectionId: string; col: number; worldX: number }> = []; // Grid columns to traverse
+  private pathSectionActors: any[] = []; // Track current path for jump logic (SectionActor[])
+  private gridColumnSequence: Array<{ sectionActor: any; col: number; worldX: number }> = []; // Grid columns to traverse
   private currentGridColumnIndex: number = 0; // Current position in sequence
   private waveSputter: {
     active: boolean;
@@ -67,11 +69,10 @@ export class WaveManager {
   /**
    * Creates a new WaveManager instance
    * @param gameState - The GameStateManager instance to use for wave calculations
-   * @param vendorManager - Optional VendorManager instance to check for vendor interference
-   * @param seatManager - Optional SeatManager instance for seat logic
+   * @param aiManager - Optional AIManager instance to check for vendor interference
    * @param gridManager - Optional GridManager instance for grid-based wave sprites
    */
-  constructor(gameState: GameStateManager, vendorManager?: VendorManager, seatManager?: SeatManager, gridManager?: GridManager) {
+  constructor(gameState: GameStateManager, aiManager?: AIManager, gridManager?: GridManager, actorRegistry?: ActorRegistry) {
     this.countdown = gameBalance.waveTiming.triggerCountdown / 1000; // Convert ms to seconds
     this.active = false;
     this.currentSection = 0;
@@ -79,11 +80,12 @@ export class WaveManager {
     this.multiplier = 1.0;
     this.waveResults = [];
     this.gameState = gameState;
-    this.vendorManager = vendorManager;
+    this.aiManager = aiManager;
     this.gridManager = gridManager;
-    this.seatManager = seatManager;
+    // this.seatManager removed - logic in SectionActor
     this.eventListeners = new Map();
     this.propagating = false;
+    this.actorRegistry = actorRegistry;
     this.waveSputter = {
       active: false,
       columnsRemaining: 0
@@ -121,12 +123,13 @@ export class WaveManager {
         const targetCol = this.gridColumnSequence[this.currentGridColumnIndex];
         const direction = this.activeWave ? this.activeWave.direction : 'right';
         // Check if sprite has passed or reached the current target column
+        const spriteX = this.waveSprite.getPosition().x;
         const hasReachedColumn = direction === 'right'
-          ? this.waveSprite.x >= targetCol.worldX
-          : this.waveSprite.x <= targetCol.worldX;
+          ? spriteX >= targetCol.worldX
+          : spriteX <= targetCol.worldX;
         if (hasReachedColumn) {
           // Snap to exact grid column position
-          this.waveSprite.x = targetCol.worldX;
+          this.waveSprite.setPosition(targetCol.worldX, this.waveSprite.getPosition().y);
           // Trigger wave participation for seats in this grid column
           this.triggerColumnWaveParticipation(targetCol);
           this.currentGridColumnIndex++;
@@ -146,34 +149,40 @@ export class WaveManager {
    * Trigger wave participation checks for all seats in a specific grid column.
    * Uses GridManager to find seat occupants at this column position.
    */
-  private triggerColumnWaveParticipation(colData: { sectionId: string; col: number; worldX: number }): void {
-    if (!this.gridManager || !this.seatManager) return;
-
-    // Get all grid rows (vertical span)
-    const rowCount = this.gridManager.getRowCount();
-    const waveStrength = this.getCurrentWaveStrength();
-    // Determine visual state for this column
-    const isSputtering = this.waveSputter.active;
-    const visualState = this.getColumnVisualState(isSputtering);
-
-    // Check each row in this column for seat occupants
-    for (let row = 0; row < rowCount; row++) {
-      const occupants = this.gridManager.getCellOccupants(row, colData.col);
-      // Filter for seat occupants only
-      const seatOccupants = occupants.filter(occ => occ.type === 'seat');
-      if (seatOccupants.length > 0) {
-        // Emit event for this column's seats to trigger participation
-        this.emit('columnWaveReached', {
-          sectionId: colData.sectionId,
-          gridCol: colData.col,
-          worldX: colData.worldX,
-          seatIds: seatOccupants.map(s => s.id),
-          seatCount: seatOccupants.length,
-          waveStrength,
-          visualState
-        });
-      }
+  private triggerColumnWaveParticipation(colData: { sectionActor: any; col: number; worldX: number }): void {
+    if (!this.gridManager) return;
+    const sectionActor = colData.sectionActor;
+    if (!sectionActor) {
+      console.warn(`[WaveManager.triggerColumn] No sectionActor for colData`);
+      return;
     }
+    
+    // Access seats directly through SectionActor's rowActors
+    const sectionData = sectionActor.getSectionData();
+    if (!sectionData) {
+      console.warn(`[WaveManager.triggerColumn] No sectionData for ${sectionActor.id}`);
+      return;
+    }
+    
+    const colIndex = colData.col - sectionData.gridLeft;
+    const rowActors = sectionActor.getRowActors();
+    console.log(`[WaveManager.triggerColumn] Section ${sectionActor.getSectionId()} col ${colData.col} (localCol=${colIndex}), rowActors: ${rowActors.length}`);
+    
+    const seatsInColumn = rowActors
+      .map((rowActor: any) => rowActor.getSeatAt(colIndex))
+      .filter(Boolean);
+    
+    console.log(`[WaveManager.triggerColumn] Found ${seatsInColumn.length} seats in column ${colIndex}, emitting columnWaveReached`);
+    
+    this.emit('columnWaveReached', {
+      sectionId: sectionActor.getSectionId(),
+      gridCol: colData.col,
+      worldX: colData.worldX,
+      seatIds: seatsInColumn.map((s: any) => s.id),
+      seatCount: seatsInColumn.length,
+      waveStrength: this.getCurrentWaveStrength(),
+      visualState: this.getColumnVisualState(this.waveSputter.active)
+    });
   }
 
   /**
@@ -417,12 +426,15 @@ export class WaveManager {
    */
   public checkWaveProbability(): string | null {
     if (!gameBalance.waveAutonomous.enabled) {
+      console.log('[WaveManager.checkWaveProbability] Autonomous waves disabled');
       return null;
     }
     if (this.active || this.propagating) {
+      console.log('[WaveManager.checkWaveProbability] Wave already active or propagating');
       return null;
     }
     if (this.isInGlobalCooldown()) {
+      console.log('[WaveManager.checkWaveProbability] In global cooldown');
       return null;
     }
 
@@ -431,6 +443,7 @@ export class WaveManager {
       const elapsed = Date.now() - this.sessionStartTime;
       const startupDelay = 5000; // 5 seconds
       if (elapsed < startupDelay) {
+        console.log(`[WaveManager.checkWaveProbability] Startup delay: ${elapsed}ms/${startupDelay}ms`);
         return null; // Too early, don't even check
       }
     }
@@ -440,7 +453,8 @@ export class WaveManager {
     const shouldLog = (now - this.lastProbabilityCheckLog) > 1000; // Log max once per second
 
     if (shouldLog) {
-      this.lastProbabilityCheckLog = now; // logging suppressed
+      this.lastProbabilityCheckLog = now;
+      console.log(`[WaveManager.checkWaveProbability] Checking ${sections.length} sections`);
     }
 
     // Create weighted section order
@@ -501,11 +515,14 @@ export class WaveManager {
 
       // Check if this section triggers a wave
       if (roll < baseProbability) {
-        return section.id; // suppressed trigger logging
+        console.log(`[WaveManager.checkWaveProbability] Wave triggered by section ${section.id} (happiness: ${avgHappiness.toFixed(1)}%, roll: ${(roll*100).toFixed(1)}% < ${(baseProbability*100).toFixed(0)}%)`);
+        return section.id;
       }
     }
 
-    // suppressed no-trigger logging
+    if (shouldLog) {
+      console.log('[WaveManager.checkWaveProbability] No wave triggered this check');
+    }
     return null;
   }
 
@@ -808,6 +825,13 @@ export class WaveManager {
   }
 
   /**
+   * Get the current wave sprite instance (for debug access)
+   */
+  public getWaveSprite(): any {
+    return this.waveSprite;
+  }
+
+  /**
    * Updates the countdown timer
    * When countdown reaches 0, triggers wave propagation
    * @param deltaTime - Time elapsed in milliseconds
@@ -818,12 +842,16 @@ export class WaveManager {
     
     if (this.countdown <= 0) {
       // Spawn/reuse WaveSprite when countdown completes
-      if (!this.propagating && this.scene && this.activeWave && this.gridManager) {
+      if (!this.propagating && this.scene && this.activeWave && this.gridManager && this.actorRegistry) {
         console.log('[WaveManager] Countdown complete, spawning WaveSprite');
-        this.spawnWaveSprite(this.scene, this.activeWave.path);
+        // Query SectionActor objects for the wave path
+        const sectionActors = this.activeWave.path.map(sectionId =>
+          this.actorRegistry!.query({ category: 'section' as any })
+            .find((a: any) => a.getSectionId && a.getSectionId() === sectionId)
+        ).filter(Boolean);
+        this.spawnWaveSprite(this.scene, sectionActors);
+        this.propagating = true; // Mark propagation as active
       }
-      
-      await this.propagateWave();
     }
   }
 
@@ -832,33 +860,36 @@ export class WaveManager {
    * Creates sprite with section bounds for collision detection
    * Subscribes to sprite events for section enter/exit tracking
    * @param scene - The Phaser scene to add sprite to
-   * @param sections - Array of section IDs for path generation
+   * @param sectionActors - Array of SectionActor objects for path generation
    */
-  public spawnWaveSprite(scene: Phaser.Scene, sections: string[]): void {
-    if (!this.gridManager || !this.seatManager) {
-      console.warn('WaveManager: Cannot spawn WaveSprite without GridManager and SeatManager');
+  public spawnWaveSprite(scene: Phaser.Scene, sectionActors: any[]): void {
+    if (!this.gridManager) {
+      console.warn('WaveManager: Cannot spawn WaveSprite without GridManager');
       return;
     }
 
-    console.log('[WaveManager] spawnWaveSprite called with sections:', sections);
-
-    // Track current path ids for jump logic
-    this.pathSectionIds = [...sections];
+    // Track current path SectionActors for jump logic
+    this.pathSectionActors = sectionActors;
 
     // Build grid column sequence across all sections in path order
     this.gridColumnSequence = [];
     const direction = this.activeWave?.direction || 'right';
 
-    for (const sectionId of sections) {
-      const columns = this.seatManager!.getSectionGridColumns(sectionId);
-      if (!columns) continue;
-
+    for (const sectionActor of this.pathSectionActors) {
+      if (!sectionActor) continue;
+      const sectionData = sectionActor.getSectionData();
+      if (!sectionData) continue;
+      // Generate column sequence from grid bounds
+      const columns = [];
+      for (let col = sectionData.gridLeft; col <= sectionData.gridRight; col++) {
+        const worldPos = this.gridManager.gridToWorld(sectionData.gridTop, col);
+        columns.push({ col, worldX: worldPos.x });
+      }
       // If moving left, reverse the column order for this section
       const orderedColumns = direction === 'right' ? columns : columns.slice().reverse();
-      
       for (const colData of orderedColumns) {
         this.gridColumnSequence.push({
-          sectionId,
+          sectionActor,
           col: colData.col,
           worldX: colData.worldX
         });
@@ -870,14 +901,27 @@ export class WaveManager {
       return;
     }
 
-    console.log(`[WaveManager] Built grid sequence: ${this.gridColumnSequence.length} columns across ${sections.length} sections`);
+    console.log(`[WaveManager] Built grid sequence: ${this.gridColumnSequence.length} columns across ${sectionActors.length} sections`);
 
-    // Get precise seat-based bounds for vertical line rendering only
-    const sectionBounds = sections.map(sectionId => {
-      const b = this.seatManager!.getSectionSeatBounds(sectionId);
-      if (!b) return null;
-      return { id: sectionId, ...b };
-    }).filter(b => b !== null) as any[];
+    // Get precise seat-based bounds for vertical line rendering
+    const sectionBounds: Array<{ id: string; left: number; right: number; top: number; bottom: number }> = [];
+    for (const sectionActor of this.pathSectionActors) {
+      if (!sectionActor) continue;
+
+      const sectionData = sectionActor.getSectionData();
+      if (!sectionData) continue;
+      const sectionId = sectionActor.getSectionId();
+
+      const topLeft = this.gridManager.gridToWorld(sectionData.gridTop, sectionData.gridLeft);
+      const bottomRight = this.gridManager.gridToWorld(sectionData.gridBottom, sectionData.gridRight);
+      sectionBounds.push({
+        id: sectionId,
+        left: topLeft.x,
+        right: bottomRight.x,
+        top: topLeft.y,
+        bottom: bottomRight.y
+      });
+    }
 
     if (sectionBounds.length === 0) {
       console.warn('WaveManager: No valid section bounds');
@@ -896,109 +940,104 @@ export class WaveManager {
     
     // Only create WaveSprite once, then re-use
     if (!this.waveSpriteCreated) {
-      import('@/sprites/WaveSprite').then(module => {
-        const WaveSpriteClass = module.WaveSprite;
-        const spriteConfig = gameBalance.waveSprite;
-        this.waveSprite = new WaveSpriteClass(
-          scene,
-          `wave-shared`,
-          this.gridManager!,
-          startX,
-          (lineTop + lineBottom) / 2,
-          {
-            baseSpeed: spriteConfig.speed * 3, // triple speed for runtime effect
-            waveStrength: this.getCurrentWaveStrength(),
-            debugVisible: spriteConfig.visible,
-            debugColor: spriteConfig.debugColor,
-            debugAlpha: spriteConfig.debugAlpha,
-            lineWidth: 3,
-          }
-        );
-        this.waveSpriteCreated = true;
-        // Set up event listeners for sprite-driven wave propagation
-        this.waveSprite.on('waveSpriteEntersSection', (data: { sectionId: string; x: number }) => {
-          this.handleSpriteExitsSection(data.sectionId);
-        });
-        this.waveSprite.on('waveSpriteExitsSection', (data: { sectionId: string; x: number }) => {
-          this.handleSpriteExitsSection(data.sectionId);
-        });
-        this.waveSprite.on('pathComplete', () => {
-          this.handleWaveComplete();
-        });
-        // Configure and start
-        this.waveSprite.setSections(sectionBounds);
-        this.waveSprite.setLineBounds(lineTop, lineBottom);
-        this.waveSprite.setTarget(direction, targetX);
-        this.waveSprite.setWaveStrength(this.getCurrentWaveStrength());
-        this.waveSprite.x = startX;
-        this.waveSprite.startMovement();
-      }).catch(err => {
-        console.error('WaveManager: Failed to import WaveSprite', err);
+      const spriteConfig = gameBalance.waveSprite;
+      this.waveSprite = new WaveSprite(
+        scene,
+        `wave-shared`,
+        this.gridManager!,
+        startX,
+        (lineTop + lineBottom) / 2,
+        {
+          baseSpeed: spriteConfig.speed * 3, // triple speed for runtime effect
+          waveStrength: this.getCurrentWaveStrength(),
+          debugVisible: spriteConfig.visible,
+          debugColor: spriteConfig.debugColor,
+          debugAlpha: spriteConfig.debugAlpha,
+          lineWidth: 3,
+        }
+      );
+      this.waveSpriteCreated = true;
+      // Set up event listeners for sprite-driven wave propagation
+      // No-op for waveSpriteEntersSection (not needed)
+      this.waveSprite.on('waveSpriteExitsSection', (data: { sectionId: string; x: number }) => {
+        this.handleSpriteExitsSection(data.sectionId);
       });
-    } else {
-      // Re-use existing sprite: reset and reconfigure
+      this.waveSprite.on('pathComplete', () => {
+        this.handleWaveComplete();
+      });
+      // Configure and start
       this.waveSprite.setSections(sectionBounds);
       this.waveSprite.setLineBounds(lineTop, lineBottom);
       this.waveSprite.setTarget(direction, targetX);
       this.waveSprite.setWaveStrength(this.getCurrentWaveStrength());
-      this.waveSprite.x = startX;
-      this.waveSprite.movementState = 'idle';
-      this.waveSprite.hasEnteredSection = new Set();
-      this.waveSprite.currentSectionIndex = -1;
+      this.waveSprite.setPosition(startX, (lineTop + lineBottom) / 2);
       this.waveSprite.startMovement();
+    } else if (this.waveSprite) {
+      // Re-use existing sprite: reset and reconfigure
+      console.log('[WaveManager] Reusing existing WaveSprite');
+      this.waveSprite.resetState();
+      this.waveSprite.setSections(sectionBounds);
+      this.waveSprite.setLineBounds(lineTop, lineBottom);
+      this.waveSprite.setWaveStrength(this.getCurrentWaveStrength());
+      this.waveSprite.configure(startX, direction, targetX);
+      this.waveSprite.startMovement();
+      console.log('[WaveManager] WaveSprite reuse complete, movement started');
     }
-          }
+  }
 
   private handleSpriteExitsSection(sectionId: string): void {
     console.log(`[WaveManager] handleSpriteExitsSection: ${sectionId}`);
-    
     // Calculate section state from recorded column states for this section
     const sectionColumns = this.columnStateRecords.filter(r => r.sectionId === sectionId);
-    
     let successCount = 0;
     let sputterCount = 0;
     let deathCount = 0;
     let totalParticipation = 0;
-    
     for (const col of sectionColumns) {
       totalParticipation += col.participation;
       if (col.state === 'success') successCount++;
       else if (col.state === 'sputter') sputterCount++;
       else deathCount++;
     }
-    
     // Determine overall section state based on column majority
     let sectionState: 'success' | 'sputter' | 'death' = 'death';
     if (successCount >= sputterCount && successCount >= deathCount) sectionState = 'success';
     else if (sputterCount >= deathCount) sectionState = 'sputter';
-    
     const avgParticipation = sectionColumns.length > 0 ? totalParticipation / sectionColumns.length : 0;
-    
     console.log(`[WaveManager] Section ${sectionId} complete: ${sectionState} (S:${successCount} SP:${sputterCount} D:${deathCount}, avg ${Math.round(avgParticipation*100)}%)`);
+    
+    // Trigger section visual effects based on result
+    this.emit('sectionComplete', {
+      sectionId,
+      state: sectionState,
+      avgParticipation,
+      successCount,
+      sputterCount,
+      deathCount
+    });
     
     // Update wave strength based on section result
     this.adjustWaveStrength(sectionState, avgParticipation);
     this.setLastSectionWaveState(sectionState);
-    
     // Track results
     this.waveResults.push({
       section: sectionId,
       success: sectionState === 'success',
       chance: 0
     });
-
     // Handle failure
     if (sectionState === 'death') {
       this.multiplier = 1.0;
       // TODO: Stop wave sprite movement on death?
     }
-
     // Award points for successful sections
     if (sectionState === 'success') {
       this.score += 100;
       this.gameState.incrementSectionSuccesses();
+      if (typeof window !== 'undefined') {
+        console.log(`[DEBUG] Score incremented! New score: ${this.score}`);
+      }
     }
-
     // No manual jump needed - grid column sequence handles inter-section gaps automatically
   }
 
@@ -1011,54 +1050,27 @@ export class WaveManager {
     
     // Determine if wave was successful (no deaths)
     const waveSuccess = !this.waveResults.some(r => !r.success);
-    
+
+    // Emit full success event for camera shake if all sections succeeded
+    if (waveSuccess) {
+      this.emit('waveFullSuccess', {});
+    }
+
     // Finalize the Wave instance if we have one
     if (this.activeWave) {
       this.finalizeWave(waveSuccess);
     } else {
       this.recordWaveEnd(waveSuccess);
     }
-    
+
     this.emit('waveComplete', { results: this.waveResults });
     this.active = false;
     this.propagating = false;
 
-    // Fully reset sprite state and hide debug visuals for reuse
-    if (this.waveSprite && typeof this.waveSprite.resetState === 'function') {
-      try { this.waveSprite.resetState(); } catch {}
+    // Reset sprite state for reuse
+    if (this.waveSprite) {
+      this.waveSprite.resetState();
     }
-    // Do NOT set this.waveSprite = undefined; we re-use the instance
-  }
-
-  /**
-   * OLD METHOD - Keep for now as fallback
-   * Propagates the wave through sections sequentially (timer-based)
-   * TODO: Remove this once sprite-driven propagation is verified working
-   */
-  public async propagateWave(): Promise<void> {
-    // For now, just initialize wave state but don't do the loop
-    // The WaveSprite events will drive propagation instead
-    if (this.propagating) return;
-    this.propagating = true;
-
-    this.waveResults = [];
-    this.waveCalculationResults = [];
-    
-    console.log('[WaveManager] propagateWave called - wave is now sprite-driven');
-    // Note: Actual propagation now happens via WaveSprite events
-    // This method kept for initialization only
-  }
-
-  /**
-   * Registers an event listener
-   * @param event - The event name
-   * @param callback - The callback function to invoke
-   */
-  public on(event: string, callback: Function): void {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, []);
-    }
-    this.eventListeners.get(event)!.push(callback);
   }
 
   /**
@@ -1070,6 +1082,33 @@ export class WaveManager {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
       listeners.forEach((callback) => callback(data));
+    }
+  }
+
+  /**
+   * Subscribe to an event
+   * @param event - The event name
+   * @param callback - The callback function to invoke when event is emitted
+   */
+  public on(event: string, callback: Function): void {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, []);
+    }
+    this.eventListeners.get(event)!.push(callback);
+  }
+
+  /**
+   * Unsubscribe from an event
+   * @param event - The event name
+   * @param callback - The callback function to remove
+   */
+  public off(event: string, callback: Function): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      const index = listeners.indexOf(callback);
+      if (index !== -1) {
+        listeners.splice(index, 1);
+      }
     }
   }
 

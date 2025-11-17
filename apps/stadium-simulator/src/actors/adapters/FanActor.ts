@@ -10,7 +10,8 @@ export class FanActor extends AnimatedActor {
   private fan: Fan;
 
   constructor(id: string, fan: Fan, category: ActorCategory = 'fan', enableLogging = false) {
-    super(id, 'fan', category, fan.x, fan.y, enableLogging);
+    // Fan sprite has x/y, but we're not using grid positioning for fans currently
+    super(id, 'fan', category, 0, 0, enableLogging); 
     this.fan = fan;
     this.logger.debug('FanActor created, wrapping Fan sprite');
   }
@@ -21,8 +22,7 @@ export class FanActor extends AnimatedActor {
   public update(delta: number): void {
     // Fan.update() already handles stat decay, so just call it
     // In future, may delegate to SeatManager or direct calls
-    this.x = this.fan.x;
-    this.y = this.fan.y;
+    // No need to sync x/y - Fan sprite handles its own position
   }
 
   /**

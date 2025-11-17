@@ -1,4 +1,5 @@
 import { Actor } from './Actor';
+
 import type { ActorSnapshot, ActorQuery, ActorCategory } from './ActorTypes';
 import { LoggerService } from '@/services/LoggerService';
 
@@ -10,6 +11,18 @@ export class ActorRegistry {
   private actors: Map<string, Actor> = new Map();
   private byCategory: Map<ActorCategory, Set<string>> = new Map();
   private logger = LoggerService.instance();
+
+  /**
+   * Type-safe lookup for a registered actor by id and type.
+   * Returns the actor as type T if found, or undefined.
+   */
+  public getActorByType<T extends Actor = Actor>(id: string, type: string): T | undefined {
+    const actor = this.actors.get(id);
+    if (actor && actor.type === type) {
+      return actor as T;
+    }
+    return undefined;
+  }
 
   /**
    * Register an actor in the registry.
@@ -113,7 +126,7 @@ export class ActorRegistry {
       type: actor.type,
       category: actor.category as ActorCategory,
       kind: (actor.constructor.name.replace('Actor', '').toLowerCase() || 'unknown') as any,
-      position: actor.getPosition(),
+      position: actor.getGridPosition(), // Returns grid coords {row, col}
       state: {},
       visible: true
     }));

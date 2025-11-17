@@ -267,13 +267,25 @@ export const gameBalance = {
    * Wave sprite visualization configuration
    */
   waveSprite: {
-    visible: false, // Set to true to show wave sprite by default.
+    visible: true, // Set to true to show wave sprite by default.
     speed: 266, // pixels per second (baseline; runtime may multiply)
     debugColor: 0x00ffff, // cyan
     debugAlpha: 0.8,
     debugRadius: 12,
     trailLength: 5, // number of trail points to show
     trailFadeRate: 0.15, // how quickly trail points fade
+  },
+
+  /**
+   * Section row rendering and pathing configuration
+   */
+  sectionRows: {
+    dividerHeightRatio: 0.15,
+    gradientLightness: {
+      min: 30,
+      max: 90,
+    },
+    debugLabelColor: '#fffbcc',
   },
 
   /**

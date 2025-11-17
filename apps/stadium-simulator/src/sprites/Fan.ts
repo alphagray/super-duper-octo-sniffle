@@ -13,6 +13,8 @@ import { BaseActorContainer } from './BaseActor';
  * - playWave(delay, intensity) to perform the quick up/down motion with variable intensity
  */
 export class Fan extends BaseActorContainer {
+    private _originalX: number;
+    private _originalY: number;
   private top: Phaser.GameObjects.Rectangle;
   private bottom: Phaser.GameObjects.Rectangle;
   private size: number;
@@ -41,6 +43,8 @@ export class Fan extends BaseActorContainer {
     // of the fan's body. That makes rotating the container rotate around that point.
     super(scene, x, y, 'fan', false); // disabled by default (massive noise with 100+ fans)
     this.size = size;
+    this._originalX = x;
+    this._originalY = y;
 
     // Bottom is taller than it is wide
     const bottomW = Math.round(size * 0.6);
@@ -278,6 +282,82 @@ export class Fan extends BaseActorContainer {
             }
           });
         },
+      });
+    });
+  }
+
+  /**
+   * Play a named animation on this fan
+   * @param animationName - The name of the animation ('wave', 'celebrate', 'boo', etc.)
+   * @param options - Optional parameters for the animation
+   */
+  public playAnimation(animationName: string, options?: Record<string, any>): Promise<void> | void {
+    switch (animationName) {
+      case 'wave':
+        return this.playWave(
+          options?.delayMs ?? 0,
+          options?.intensity ?? 1.0,
+          options?.visualState ?? 'full',
+          options?.waveStrength ?? 70
+        );
+      
+      case 'celebrate':
+        return this.playCelebrate(options?.delayMs ?? 0);
+      
+      case 'boo':
+        // TODO: Implement boo animation
+        return Promise.resolve();
+      case 'reset':
+        this.resetPositionAndTweens();
+        return Promise.resolve();
+      
+      default:
+        console.warn(`Unknown animation '${animationName}' for Fan`);
+        return Promise.resolve();
+    }
+  }
+
+  /**
+   * Reset all tweens and return fan to original position (after wave/celebrate)
+   */
+  public resetPositionAndTweens(): void {
+    this.scene.tweens.killTweensOf(this);
+    this.x = this._originalX;
+    this.y = this._originalY;
+    this.rotation = 0;
+    // Also reset head/body rotation if needed
+    if (this.top) this.top.rotation = 0;
+    if (this.bottom) this.bottom.rotation = 0;
+  }
+
+  /**
+   * Play celebration animation (quick hop and rotate)
+   */
+  private playCelebrate(delayMs: number = 0): Promise<void> {
+    return new Promise((resolve) => {
+      const originalY = this.y;
+      const originalRotation = this.rotation;
+      
+      this.scene.tweens.killTweensOf(this);
+      
+      // Quick celebratory hop with slight rotation
+      this.scene.tweens.add({
+        targets: this,
+        y: originalY - 30,
+        rotation: originalRotation + 0.2,
+        duration: 100,
+        ease: 'Sine.easeOut',
+        delay: delayMs,
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: this,
+            y: originalY,
+            rotation: originalRotation,
+            duration: 150,
+            ease: 'Bounce.easeOut',
+            onComplete: () => resolve()
+          });
+        }
       });
     });
   }

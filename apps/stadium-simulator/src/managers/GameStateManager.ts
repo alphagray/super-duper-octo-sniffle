@@ -1,5 +1,6 @@
 import type { GameState, Section } from '@/types/GameTypes';
 import { gameBalance } from '@/config/gameBalance';
+import { LoggerService } from '@/services/LoggerService';
 
 export type GameMode = 'eternal' | 'run';
 export type SessionState = 'idle' | 'countdown' | 'active' | 'complete';
@@ -42,15 +43,31 @@ export class GameStateManager {
   private initialAggregateStats: AggregateStats | null = null;
   private eventListeners: Map<string, Array<Function>>;
   private waveBoosts: Map<string, WaveBoost> = new Map(); // Track temporary boosts per section
+  private logger = LoggerService.instance();
 
   constructor() {
-    // Initialize 3 sections (A, B, C) with default values
-    this.sections = [
-      { id: 'A', happiness: 70, thirst: 0, attention: 50 },
-      { id: 'B', happiness: 70, thirst: 0, attention: 50 },
-      { id: 'C', happiness: 70, thirst: 0, attention: 50 },
-    ];
+    // Initialize empty sections array - will be populated by initializeSections()
+    this.sections = [];
     this.eventListeners = new Map();
+  }
+
+  /**
+   * Initialize sections from level data
+   * @param sectionData Array of section configurations from LevelService
+   */
+  public initializeSections(sectionData: Array<{ id: string }>): void {
+    this.sections = sectionData.map(data => ({
+      id: data.id,
+      happiness: 70,
+      thirst: 0,
+      attention: 50
+    }));
+    this.logger.push({ 
+      level: 'info', 
+      category: 'system:gamestate', 
+      message: `Initialized ${this.sections.length} sections from level data`, 
+      ts: Date.now() 
+    });
   }
 
   /**

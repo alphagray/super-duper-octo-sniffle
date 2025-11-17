@@ -63,9 +63,10 @@ export class WaveSprite extends UtilityActor {
     this.direction = 'right';
     this.config.waveStrength = 70;
     if (this.debugGraphics) {
-      this.debugGraphics.setVisible(false);
       this.debugGraphics.clear();
+      // Don't hide graphics if debug is enabled - just clear them
     }
+    this.logger.debug('State reset for reuse');
   }
 
 
@@ -146,12 +147,38 @@ export class WaveSprite extends UtilityActor {
   }
 
   /**
+   * Reset sprite state for reuse (called by WaveManager)
+   */
+  public _resetState(): void {
+    this.movementState = 'idle';
+    this.hasEnteredSection.clear();
+    this.currentSectionIndex = -1;
+    this.targetX = 0;
+    this.logger.debug('State reset for reuse');
+  }
+
+  /**
+   * Configure sprite for new wave (called by WaveManager)
+   */
+  public configure(startX: number, direction: 'left' | 'right', targetX: number): void {
+    this.x = startX;
+    this.direction = direction;
+    this.targetX = targetX;
+    this.movementState = 'idle';
+    this.logger.debug(`Configured: x=${startX} direction=${direction} target=${targetX}`);
+  }
+
+  /**
    * Start wave movement toward target
    */
   public startMovement(): void {
     this.movementState = 'moving';
     this.currentSectionIndex = -1;
     this.hasEnteredSection.clear();
+    // Ensure debug graphics are visible if debug mode is enabled
+    if (this.debugVisible && this.debugGraphics) {
+      this.debugGraphics.setVisible(true);
+    }
     this.emit('movementStarted', { actorId: this.id, x: this.x });
     this.logger.debug('Movement started');
   }
@@ -184,8 +211,11 @@ export class WaveSprite extends UtilityActor {
     const dx = this.targetX - this.x;
     const distance = Math.abs(dx);
 
+    console.log(`[WaveSprite.update] x=${this.x.toFixed(1)} target=${this.targetX} dx=${dx.toFixed(1)} distance=${distance.toFixed(1)} moveDistance=${moveDistance.toFixed(1)} direction=${this.direction}`);
+
     if (distance <= moveDistance) {
       // Reached target
+      console.log(`[WaveSprite.update] REACHED TARGET - completing`);
       this.x = this.targetX;
       this.onMovementComplete();
     } else {
@@ -263,6 +293,14 @@ export class WaveSprite extends UtilityActor {
     if (this.debugGraphics) {
       this.debugGraphics.setVisible(visible);
     }
+  }
+
+  /**
+   * Toggle debug visual visibility (for W key)
+   */
+  public toggleDebugVisible(): void {
+    this.setDebugVisible(!this.debugVisible);
+    this.logger.debug(`Debug visibility toggled to: ${this.debugVisible}`);
   }
 
   /**

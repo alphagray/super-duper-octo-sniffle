@@ -1,16 +1,18 @@
 import Phaser from 'phaser';
 import { StadiumSection } from '@/sprites/StadiumSection';
 import { SectionConfig } from '@/types/GameTypes';
-import { SeatManager } from '@/managers/SeatManager';
+// import { SeatManager } from '@/managers/SeatManager'; // DELETED - TODO: Refactor test scene
 import { Fan } from '@/sprites/Fan';
 
 /**
  * TestSectionDebugScene displays a single section with per-fan debug stats
  * Shows happiness, thirst, and attention values in bright blue text above each fan
+ * 
+ * NOTE: This test scene is outdated after SeatManager deletion
  */
 export class TestSectionDebugScene extends Phaser.Scene {
   private section?: StadiumSection;
-  private seatManager?: SeatManager;
+  // private seatManager?: SeatManager; // DELETED
   private debugTexts: Phaser.GameObjects.Text[] = [];
   private timeElapsed: number = 0;
   private isPaused: boolean = false;
@@ -23,12 +25,17 @@ export class TestSectionDebugScene extends Phaser.Scene {
   }
 
   create(): void {
+    // TODO: Refactor to Actor-first architecture
+    throw new Error('TestSectionDebugScene is outdated - needs refactoring after SeatManager deletion');
+    
+    /*
     // Title
     this.add.text(this.cameras.main.centerX, 30, 'FAN STATS DEBUG SCENE', {
       fontSize: '32px',
       fontFamily: 'Arial',
       color: '#ffffff',
     }).setOrigin(0.5);
+    */
 
     // Instructions
     this.add.text(this.cameras.main.centerX, 70, 'Press SPACE to pause/resume | Press R to reset stats', {
@@ -57,13 +64,13 @@ export class TestSectionDebugScene extends Phaser.Scene {
       'DEBUG'
     );
 
-    // Initialize SeatManager
-    this.seatManager = new SeatManager(this);
-    this.seatManager.initializeSections([this.section]);
-    this.seatManager.populateAllSeats(20); // Smaller fans for debug scene
+    // TODO: Refactor to Actor-first pattern
+    // this.seatManager = new SeatManager(this); // DELETED
+    // this.seatManager.initializeSections([this.section]);
+    // this.seatManager.populateAllSeats(20); // Smaller fans for debug scene
 
     // Create debug text for each fan
-    this.createDebugTexts();
+    // this.createDebugTexts(); // COMMENTED - needs refactor
 
     // Add keyboard controls
     this.input.keyboard?.on('keydown-SPACE', () => {

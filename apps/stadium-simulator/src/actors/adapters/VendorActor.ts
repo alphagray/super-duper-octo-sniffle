@@ -10,18 +10,18 @@ export class VendorActor extends AnimatedActor {
   private vendor: Vendor;
 
   constructor(id: string, vendor: Vendor, category: ActorCategory = 'vendor', enableLogging = false) {
-    super(id, 'vendor', category, vendor.x, vendor.y, enableLogging);
+    // Vendor sprite has x/y, but we're not using grid positioning for vendors currently
+    super(id, 'vendor', category, 0, 0, enableLogging);
     this.vendor = vendor;
     this.logger.debug('VendorActor created, wrapping Vendor sprite');
   }
 
   /**
    * Update vendor position from sprite.
-   * Actual vendor logic is handled by VendorManager.
+   * Actual vendor logic is handled by AIManager.
    */
   public update(delta: number): void {
-    this.x = this.vendor.x;
-    this.y = this.vendor.y;
+    // No need to sync x/y - Vendor sprite handles its own position
   }
 
   /**

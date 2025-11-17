@@ -1,71 +1,90 @@
 import { Fan } from './Fan';
-import { UtilityActor } from '@/actors/Actor';
 import type { VendorAbilities } from '@/types/GameTypes';
 import { gameBalance } from '@/config/gameBalance';
+import { Actor } from '@/actors/Actor';
 
 /**
- * Represents a seat in a stadium section row
+ * SeatActor: Represents a seat in a stadium section row as an Actor.
+ * Handles grid position, collision, and fan polling.
  */
-export class Seat extends UtilityActor {
+export class SeatActor extends Actor {
   public readonly seatIndex: number;
   private fan: Fan | null;
-  private static _counter = 0;
+  public readonly id: string;
 
-  constructor(seatIndex: number, x: number, y: number, id?: string) {
-    super(id ?? `seat-${Seat._counter++}`, 'seat', 'seat', x, y, false);
+  constructor(seatIndex: number, gridRow: number, gridCol: number, id?: string) {
+    super(id ?? `seat-${seatIndex}`, 'seat', 'seat', gridRow, gridCol, false);
+    this.id = id ?? `seat-${seatIndex}`;
     this.seatIndex = seatIndex;
     this.fan = null;
   }
 
+  setFan(fan: Fan): void {
+    this.fan = fan;
+  }
 
-  /** Assign a fan to this seat */
   assignFan(fan: Fan): void {
     this.fan = fan;
   }
 
-  /** Remove the fan from this seat */
   removeFan(): Fan | null {
     const removed = this.fan;
     this.fan = null;
     return removed;
   }
 
-  /** Is this seat empty? */
   isEmpty(): boolean {
     return this.fan === null;
   }
 
-  /** Get the fan assigned to this seat */
   getFan(): Fan | null {
     return this.fan;
   }
 
-  /** Get the position of this seat */
-  getPosition(): { x: number; y: number } {
-    return { x: this.x, y: this.y };
+  /**
+   * Called by WaveSprite to poll for fan participation
+   */
+  pollFanForWave(): boolean {
+    // Return false - participation polling handled by WaveManager via SectionActor
+    return false;
   }
 
-  // UtilityActor required methods (no-op for Seat)
-  public update(delta: number): void {}
-  public draw(): void {}
+  /**
+   * Handle collision with WaveSprite (stub)
+   */
+  handleWaveCollision(): void {
+    // Implement collision logic as needed
+  }
 
   /**
-   * Calculate traversal penalty for vendor pathfinding
-   * Returns movement penalty multiplier (0 = no penalty, higher = more penalty)
-   * 
-   * @param vendorAbilities Vendor abilities to check for penalty overrides
-   * @returns Penalty value (0-1 scale, where 1 = maxTerrainPenalty)
+   * Get the grid position of this seat
    */
+  getGridPosition(): { row: number; col: number } {
+    return { row: this.gridRow, col: this.gridCol };
+  }
+
+  /**
+   * Get the position of this seat in world space (requires gridManager)
+   */
+  getWorldPosition(gridManager: any): { x: number; y: number } {
+    return gridManager.gridToWorld(this.gridRow, this.gridCol);
+  }
+
+  /**
+   * Get the position of this seat (legacy API for AIManager)
+   * Returns relative position within row (x, y)
+   */
+  getPosition(): { x: number; y: number } {
+    // Return zero for now - AIManager adds section offset
+    // Real position comes from gridManager.gridToWorld
+    return { x: 0, y: 0 };
+  }
+
   public getTraversalPenalty(vendorAbilities: VendorAbilities): number {
-    // Empty seats have no penalty
     if (this.isEmpty()) {
       return gameBalance.vendorMovement.emptySeatPenalty;
     }
-
-    // Occupied seat base penalty
     let penalty = gameBalance.vendorMovement.occupiedSeatPenalty;
-
-    // Check if fan is difficult terrain (grump)
     if (this.fan && this.fan.isDifficultTerrain()) {
       if (!vendorAbilities.ignoreGrumpPenalty) {
         const grumpPenalty = gameBalance.vendorMovement.rowBasePenalty 
@@ -73,7 +92,17 @@ export class Seat extends UtilityActor {
         penalty = Math.min(grumpPenalty, gameBalance.vendorMovement.maxTerrainPenalty);
       }
     }
-
     return penalty;
   }
+
+  update(delta: number): void {
+    // No-op for now
+  }
+
+  draw(): void {
+    // No-op for now
+  }
 }
+
+// Legacy export for backward compatibility with SectionRow
+export { SeatActor as Seat };

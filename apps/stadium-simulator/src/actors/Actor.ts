@@ -9,20 +9,23 @@ import { ActorLogger } from '@/sprites/ActorLogger';
  * - SceneryActor: Static visual element (StadiumSection, SectionRow, Seat)
  * - UtilityActor: Non-visual logic entity (Waypoint, Zone, WaveState)
  */
+
 export abstract class Actor {
   readonly id: string;
   readonly type: string;
   readonly category: string;
   protected logger: ActorLogger;
-  protected x: number;
-  protected y: number;
+  protected gridRow: number;
+  protected gridCol: number;
+  // Optionally, a reference to a sprite (if visual)
+  protected sprite?: Phaser.GameObjects.Sprite | Phaser.GameObjects.Container;
 
-  constructor(id: string, type: string, category: string, x: number = 0, y: number = 0, enableLogging = false) {
+  constructor(id: string, type: string, category: string, gridRow: number = 0, gridCol: number = 0, enableLogging = false) {
     this.id = id;
     this.type = type;
     this.category = category;
-    this.x = x;
-    this.y = y;
+    this.gridRow = gridRow;
+    this.gridCol = gridCol;
     this.logger = new ActorLogger(category, id, enableLogging);
   }
 
@@ -30,13 +33,44 @@ export abstract class Actor {
     this.logger.setEnabled(enabled);
   }
 
-  public getPosition(): { x: number; y: number } {
-    return { x: this.x, y: this.y };
+
+  /**
+   * Returns the actor's grid position
+   */
+  public getGridPosition(): { row: number; col: number } {
+    return { row: this.gridRow, col: this.gridCol };
   }
 
-  public setPosition(x: number, y: number): void {
-    this.x = x;
-    this.y = y;
+  /**
+   * Sets the actor's grid position and updates sprite if present
+   */
+  public setGridPosition(row: number, col: number, gridManager?: any): void {
+    this.gridRow = row;
+    this.gridCol = col;
+    if (this.sprite && gridManager) {
+      const { x, y } = gridManager.gridToWorld(row, col);
+      this.sprite.setPosition(x, y);
+    }
+  }
+
+  /**
+   * Returns the actor's world position using GridManager
+   */
+  public getWorldPosition(gridManager: any): { x: number; y: number } {
+    return gridManager.gridToWorld(this.gridRow, this.gridCol);
+  }
+
+  /**
+   * Play a named animation on this actor
+   * Override in subclasses to implement specific animations
+   * @param animationName - The name of the animation to play
+   * @param options - Optional parameters for the animation
+   * @returns Promise that resolves when animation completes, or void if not implemented
+   */
+  public playAnimation(animationName: string, options?: Record<string, any>): Promise<void> | void {
+    // Default implementation does nothing
+    // Subclasses should override to implement their animations
+    this.logger.debug(`Animation '${animationName}' not implemented for ${this.type}`);
   }
 
   /**

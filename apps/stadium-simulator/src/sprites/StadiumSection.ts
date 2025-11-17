@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { SectionRow } from './SectionRow';
 import { SectionConfig } from '../types/GameTypes';
 import { gameBalance } from '@/config/gameBalance';
 import type { Fan } from './Fan';
+import type { SeatActor } from './Seat';
 
 /**
  * StadiumSection is a container sprite that manages:
@@ -16,7 +16,16 @@ export class StadiumSection extends Phaser.GameObjects.Container {
   private sectionWidth: number;
   private sectionHeight: number;
   private config: SectionConfig;
-  private rows: SectionRow[] = [];
+  private rows: Array<{
+    rowIndex: number;
+    seats: SeatActor[];
+    getSeats(): SeatActor[];
+    getFans(): Fan[];
+    updateFanIntensity(value: number): void;
+  }> = [];
+  private waveColumnStates: Map<number, 'success' | 'sputter' | 'death'> = new Map();
+  private expectedColumnCount: number = 0;
+  private currentWaveActive: boolean = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -38,53 +47,55 @@ export class StadiumSection extends Phaser.GameObjects.Container {
       startLightness: Math.max(30, Math.min(90, config.startLightness ?? 62)),
       autoPopulate: config.autoPopulate ?? true,
     };
+    this.expectedColumnCount = config.seatsPerRow ?? 8;
 
     this.initializeRows(scene);
     scene.add.existing(this);
   }
 
   /**
+   * Get the section ID
+   */
+  public getId(): string {
+    return this.sectionId;
+  }
+
+  /**
    * Initializes SectionRow objects and adds them to the container
+   * TODO: This will be replaced by SectionRowActor initialization in SectionActor
    */
   private initializeRows(scene: Phaser.Scene): void {
     const rowCount = this.config.rowCount ?? 4;
     const seatsPerRow = this.config.seatsPerRow ?? 8;
-    const width = this.config.width;
-    const height = this.config.height;
-    const rowBaseHeightPercent = this.config.rowBaseHeightPercent ?? 0.15;
-    const startLightness = this.config.startLightness ?? 62;
-    // Calculate row heights
-    const baseRowHeight = Math.floor(height / rowCount);
-    const remainder = height - baseRowHeight * rowCount;
-    // Calculate lightness values
-    const maxLightness = 90;
-    const minLightness = 30;
-    const interval = (maxLightness - startLightness) / Math.max(1, rowCount - 1);
-    let currentY = -height / 2;
+    
+    // Stub: Create empty row structures
+    // Real row/seat creation happens in SectionActor.populateFromData()
     for (let i = 0; i < rowCount; i++) {
-      const rowHeight = baseRowHeight + (i === 0 ? remainder : 0);
-      const targetLightness = Math.max(minLightness, Math.min(maxLightness, startLightness + interval * i));
-      const nextRowLightness = Math.max(minLightness, Math.min(maxLightness, startLightness + interval * (i + 1)));
-      const row = new SectionRow(
-        scene,
-        this,
-        i,
-        currentY,
-        width,
-        rowHeight,
-        targetLightness,
-        nextRowLightness,
-        seatsPerRow
-      );
-      this.rows.push(row);
-      currentY += rowHeight;
+      this.rows.push({
+        rowIndex: i,
+        seats: [],
+        getSeats: () => this.rows[i]?.seats || [],
+        getFans: () => this.rows[i]?.seats.map(s => s.getFan()).filter((f): f is Fan => f !== null) || [],
+        updateFanIntensity: (value: number) => {
+          this.rows[i]?.seats.forEach(seat => {
+            const fan = seat.getFan();
+            if (fan) fan.setIntensity(value);
+          });
+        }
+      });
     }
   }
 
   /**
    * Get all SectionRow objects
    */
-  public getRows(): SectionRow[] {
+  public getRows(): Array<{
+    rowIndex: number;
+    seats: SeatActor[];
+    getSeats(): SeatActor[];
+    getFans(): Fan[];
+    updateFanIntensity(value: number): void;
+  }> {
     return this.rows;
   }
 
@@ -215,6 +226,10 @@ export class StadiumSection extends Phaser.GameObjects.Container {
             if (willParticipate) {
               participatingCount++;
             }
+            // Debug: log each fan's participation roll
+            if (typeof window !== 'undefined') {
+              console.log(`[DEBUG] Fan at row ${rowIdx} col ${columnIndex} (section ${this.sectionId}) willParticipate=${willParticipate}`);
+            }
           }
         }
       }
@@ -244,6 +259,10 @@ export class StadiumSection extends Phaser.GameObjects.Container {
       });
     }
 
+    // Debug: log summary for this column
+    if (typeof window !== 'undefined') {
+      console.log(`[DEBUG] Section ${this.sectionId} col ${columnIndex}: ${participatingCount}/${fanStates.length} fans participating`);
+    }
     return result;
   }
 
@@ -281,17 +300,21 @@ export class StadiumSection extends Phaser.GameObjects.Container {
     // Get row count for proper staggering
     const rows = this.getRows();
 
+    let animCount = 0;
     for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
       const state = fanStates[rowIdx];
       if (state && state.willParticipate && state.fan) {
         const delayMs = rowIdx * baseRowDelay;
         columnPromises.push(state.fan.playWave(delayMs, state.intensity, visualState, waveStrength));
-
+        animCount++;
         // Call onWaveParticipation after animation completes
         this.scene.time.delayedCall(delayMs + animationDuration, () => {
           state.fan.onWaveParticipation(state.willParticipate);
         });
       }
+    }
+    if (typeof window !== 'undefined') {
+      console.log(`[DEBUG] playColumnAnimation: section ${this.sectionId} col ${columnIndex} animating ${animCount} fans`);
     }
 
     // Start all fans in this column (don't await - allows smooth overlapping animations)
@@ -379,6 +402,25 @@ export class StadiumSection extends Phaser.GameObjects.Container {
 
     const participationRate = totalFans > 0 ? participatingFans / totalFans : 0;
     return { participatingFans, totalFans, participationRate };
+  }
+
+  /**
+   * Play a named animation on this section
+   * @param animationName - The name of the animation ('flash-success', 'flash-fail', etc.)
+   * @param options - Optional parameters for the animation
+   */
+  public playAnimation(animationName: string, options?: Record<string, any>): Promise<void> | void {
+    switch (animationName) {
+      case 'flash-success':
+        return this.flashSuccess();
+      
+      case 'flash-fail':
+        return this.flashFail();
+      
+      default:
+        console.warn(`Unknown animation '${animationName}' for StadiumSection`);
+        return Promise.resolve();
+    }
   }
 
   /**
