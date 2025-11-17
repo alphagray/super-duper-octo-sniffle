@@ -71,7 +71,7 @@ export class SectionRow {
     for (let i = 0; i < this.seatCount; i++) {
       // Center of cell: left edge + (i + 0.5) * cellWidth
       const x = -this.width / 2 + (i + 0.5) * cellWidth;
-      const y = this.y + this.height * 0.85; // Position at divider top
+      const y = this.y + this.height * 0.85 - 5; // Position 5px above divider top for visual alignment
       this.seats.push(new Seat(i, x, y));
     }
   }

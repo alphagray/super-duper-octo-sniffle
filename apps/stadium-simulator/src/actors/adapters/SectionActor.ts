@@ -19,6 +19,9 @@ export class SectionActor extends SceneryActor {
   private gridManager?: any;
   private sectionData: any;
   private labelText?: Phaser.GameObjects.Text;
+  private happinessAgg: number = 0;
+  private thirstAgg: number = 0;
+  private attentionAgg: number = 0;
 
   constructor(
     id: string,
@@ -60,7 +63,7 @@ export class SectionActor extends SceneryActor {
       const topLeft = gridManager.gridToWorld(sectionData.gridTop, sectionData.gridLeft);
       const topRight = gridManager.gridToWorld(sectionData.gridTop, sectionData.gridRight);
       const labelX = (topLeft.x + topRight.x) / 2;
-      const labelY = topLeft.y - 16;
+      const labelY = topLeft.y - 96;
       this.labelText = scene.add.text(labelX, labelY, sectionData.label, {
         fontSize: '24px',
         fontFamily: 'Arial',
@@ -135,7 +138,8 @@ export class SectionActor extends SceneryActor {
             ? this.gridManager.gridToWorld(this.sectionData.gridTop + fd.row, this.sectionData.gridLeft + fd.col)
             : { x: 0, y: 0 };
           const cellSize = this.gridManager ? this.gridManager.getWorldSize().cellSize : 32;
-          const fanY = worldPos.y + cellSize / 2; // Shift down to bottom of cell
+          const seatOffsetY = 5; // Offset to align with top of row floor divider (matches SectionRow seat positioning)
+          const fanY = worldPos.y + cellSize / 2 - seatOffsetY; // Shift down to bottom of cell, then up by seat offset
           const fan = new Fan(this.section.scene, worldPos.x, fanY);
           seat.setFan(fan);
           this.fans.set(`${fd.row}-${fd.col}`, fan);

@@ -387,7 +387,7 @@ export class StadiumScene extends Phaser.Scene {
       // No animation for sputter - it's just a weak success
     });
 
-    this.waveManager.on('waveComplete', () => {
+    this.waveManager.on('waveComplete', (data: { results: any[] }) => {
       this.gameState.incrementCompletedWaves();
       if (waveBtn) {
         waveBtn.disabled = false;
@@ -397,17 +397,49 @@ export class StadiumScene extends Phaser.Scene {
       if (this.waveStrengthMeter) {
         this.waveStrengthMeter.setVisible(false);
       }
-      // Reset all fans to their original positions and stop tweens
-      this.sections.forEach(section => {
-        section.getFans().forEach(fan => {
+      
+      // Trigger celebration or grumpy animations based on section participation
+      const successfulSections = new Set(data.results.filter((r: any) => r.success).map((r: any) => r.section));
+      
+      this.sections.forEach((section, sectionIdx) => {
+        const sectionId = this.levelData?.sections[sectionIdx]?.id || String.fromCharCode(65 + sectionIdx);
+        const participated = successfulSections.has(sectionId);
+        const fans = section.getFans();
+        
+        if (participated) {
+          // Happy bounce for participating sections - randomized timing and subset
+          const celebratePercentage = 0.4 + Math.random() * 0.3; // 40-70% of fans celebrate
+          const celebrateCount = Math.floor(fans.length * celebratePercentage);
+          const celebrateFans = fans.sort(() => Math.random() - 0.5).slice(0, celebrateCount);
+          
+          celebrateFans.forEach((fan: any) => {
+            const randomDelay = Math.random() * 300; // Spread over 300ms
+            if (typeof fan.playAnimation === 'function') {
+              fan.playAnimation('celebrate', { delayMs: randomDelay });
+            }
+          });
+        } else {
+          // Grumpy jitter for non-participating sections - randomized timing and subset
+          const grumpyPercentage = 0.3 + Math.random() * 0.2; // 30-50% show grumpiness
+          const grumpyCount = Math.floor(fans.length * grumpyPercentage);
+          const grumpyFans = fans.sort(() => Math.random() - 0.5).slice(0, grumpyCount);
+          
+          grumpyFans.forEach((fan: any) => {
+            const randomDelay = Math.random() * 200; // Spread over 200ms
+            if (typeof fan.playAnimation === 'function') {
+              fan.playAnimation('grumpy', { delayMs: randomDelay });
+            }
+          });
+        }
+        
+        // Reset all fans to their original positions (after animations complete)
+        fans.forEach((fan: any) => {
           if (typeof fan.resetPositionAndTweens === 'function') {
             fan.resetPositionAndTweens();
           }
         });
       });
-    });
-
-    // Full wave success celebration (camera shake) - scene-level effect
+    });    // Full wave success celebration (camera shake) - scene-level effect
     this.waveManager.on('waveFullSuccess', () => {
       console.log('[StadiumScene] waveFullSuccess - triggering camera shake');
       this.cameras.main.shake(200, 0.005);
@@ -621,6 +653,7 @@ export class StadiumScene extends Phaser.Scene {
 
     // Create overlay container with semi-transparent background
     this.sessionCountdownOverlay = this.add.container(0, 0);
+    this.sessionCountdownOverlay.setDepth(2000); // Render above vendors (depth 1000)
     const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
     bg.setOrigin(0, 0)
     this.sessionCountdownOverlay.add(bg);

@@ -304,6 +304,9 @@ export class Fan extends BaseActorContainer {
       case 'celebrate':
         return this.playCelebrate(options?.delayMs ?? 0);
       
+      case 'grumpy':
+        return this.playGrumpy(options?.delayMs ?? 0);
+      
       case 'boo':
         // TODO: Implement boo animation
         return Promise.resolve();
@@ -321,13 +324,46 @@ export class Fan extends BaseActorContainer {
    * Reset all tweens and return fan to original position (after wave/celebrate)
    */
   public resetPositionAndTweens(): void {
-    this.scene.tweens.killTweensOf(this);
-    this.x = this._originalX;
-    this.y = this._originalY;
-    this.rotation = 0;
-    // Also reset head/body rotation if needed
-    if (this.top) this.top.rotation = 0;
-    if (this.bottom) this.bottom.rotation = 0;
+    // Don't kill tweens - let wave animations finish naturally
+    // Instead, chain the settle animation after any existing tweens complete
+    
+    // Check if fan is currently tweening
+    const activeTweens = this.scene.tweens.getTweensOf(this);
+    
+    if (activeTweens.length > 0) {
+      // Wait for current tweens to finish, then apply settle
+      const lastTween = activeTweens[activeTweens.length - 1];
+      lastTween.once('complete', () => {
+        this.applySettleAnimation();
+      });
+    } else {
+      // No active tweens, apply settle immediately
+      this.applySettleAnimation();
+    }
+  }
+
+  /**
+   * Apply the settle animation back to original position
+   */
+  private applySettleAnimation(): void {
+    this.scene.tweens.add({
+      targets: this,
+      x: this._originalX,
+      y: this._originalY,
+      rotation: 0,
+      duration: 600,
+      ease: 'Elastic.easeOut',
+    });
+    
+    // Reset head/body rotation smoothly
+    if (this.top || this.bottom) {
+      this.scene.tweens.add({
+        targets: [this.top, this.bottom].filter(Boolean),
+        rotation: 0,
+        duration: 600,
+        ease: 'Elastic.easeOut'
+      });
+    }
   }
 
   /**
@@ -338,14 +374,18 @@ export class Fan extends BaseActorContainer {
       const originalY = this.y;
       const originalRotation = this.rotation;
       
-      this.scene.tweens.killTweensOf(this);
+      // Randomize bounce height and duration for organic feel
+      const bounceHeight = 20 + Math.random() * 15; // 20-35 pixels
+      const upDuration = 80 + Math.random() * 40; // 80-120ms
+      const downDuration = 120 + Math.random() * 60; // 120-180ms
+      const rotationAmount = (Math.random() - 0.5) * 0.4; // ±0.2 radians
       
       // Quick celebratory hop with slight rotation
       this.scene.tweens.add({
         targets: this,
-        y: originalY - 30,
-        rotation: originalRotation + 0.2,
-        duration: 100,
+        y: originalY - bounceHeight,
+        rotation: originalRotation + rotationAmount,
+        duration: upDuration,
         ease: 'Sine.easeOut',
         delay: delayMs,
         onComplete: () => {
@@ -353,12 +393,60 @@ export class Fan extends BaseActorContainer {
             targets: this,
             y: originalY,
             rotation: originalRotation,
-            duration: 150,
+            duration: downDuration,
             ease: 'Bounce.easeOut',
             onComplete: () => resolve()
           });
         }
       });
+    });
+  }
+
+  /**
+   * Play grumpy jitter animation (angry shake for non-participants)
+   */
+  private playGrumpy(delayMs: number = 0): Promise<void> {
+    return new Promise((resolve) => {
+      const originalX = this.x;
+      const originalRotation = this.rotation;
+      
+      // Randomize jitter intensity and timing
+      const jitterAmount = 2 + Math.random() * 3; // 2-5 pixels
+      const jitterDuration = 40 + Math.random() * 20; // 40-60ms per jitter
+      const jitterCount = 3 + Math.floor(Math.random() * 3); // 3-5 jitters
+      const rotationJitter = (Math.random() - 0.5) * 0.15; // ±0.075 radians
+      
+      let jittersCompleted = 0;
+      
+      const doJitter = () => {
+        if (jittersCompleted >= jitterCount) {
+          // Return to original position
+          this.scene.tweens.add({
+            targets: this,
+            x: originalX,
+            rotation: originalRotation,
+            duration: jitterDuration,
+            ease: 'Sine.easeOut',
+            onComplete: () => resolve()
+          });
+          return;
+        }
+        
+        const direction = (jittersCompleted % 2 === 0) ? 1 : -1;
+        this.scene.tweens.add({
+          targets: this,
+          x: originalX + (direction * jitterAmount),
+          rotation: originalRotation + (direction * rotationJitter),
+          duration: jitterDuration,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            jittersCompleted++;
+            doJitter();
+          }
+        });
+      };
+      
+      this.scene.time.delayedCall(delayMs, () => doJitter());
     });
   }
 
