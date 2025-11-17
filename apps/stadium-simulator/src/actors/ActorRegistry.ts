@@ -1,6 +1,6 @@
 import { Actor } from './Actor';
 
-import type { ActorSnapshot, ActorQuery, ActorCategory } from './ActorTypes';
+import type { ActorSnapshot, ActorQuery, ActorCategory } from './interfaces/ActorTypes';
 import { LoggerService } from '@/services/LoggerService';
 
 /**

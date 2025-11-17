@@ -1,6 +1,6 @@
 import { SceneryActor } from '@/actors/Actor';
 import { StadiumSection } from '@/sprites/StadiumSection';
-import type { ActorCategory } from '@/actors/ActorTypes';
+import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import type { FanData } from '@/services/LevelService';
 import { Fan } from '@/sprites/Fan';
 import { SeatActor } from '@/sprites/Seat';

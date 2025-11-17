@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BaseActorSprite } from './BaseActor';
+import { BaseActorSprite } from './helpers/BaseActor';
 
 export class Mascot extends BaseActorSprite {
   private cooldown: number;

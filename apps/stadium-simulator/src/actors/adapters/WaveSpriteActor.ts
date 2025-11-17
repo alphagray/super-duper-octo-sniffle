@@ -1,6 +1,6 @@
 import { UtilityActor } from '@/actors/Actor';
 import type { WaveSprite } from '@/sprites/WaveSprite';
-import type { ActorCategory } from '@/actors/ActorTypes';
+import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 
 /**
  * WaveSpriteActor: Adapter for grid-based WaveSprite.

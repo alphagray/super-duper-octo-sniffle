@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import { GameStateManager, GameMode } from '@/managers/GameStateManager';
+import { GameStateManager } from '@/managers/GameStateManager';
 import { WaveManager } from '@/managers/WaveManager';
 import { AIManager } from '@/managers/AIManager';
 import { StadiumSection } from '@/sprites/StadiumSection';
 import { Vendor } from '@/sprites/Vendor';
 import { AnnouncerService } from '@/managers/AnnouncerService';
-import { SectionConfig } from '@/types/GameTypes';
+
 import { gameBalance } from '@/config/gameBalance';
 import { ActorRegistry } from '@/actors/ActorRegistry';
 import { ActorFactory } from '@/actors/ActorFactory';
@@ -36,7 +36,6 @@ export class StadiumScene extends Phaser.Scene {
   private demoMode: boolean = false;
   private debugMode: boolean = false;
   private successStreak: number = 0;
-  private gameMode: GameMode = 'eternal';
   private sessionCountdownOverlay?: Phaser.GameObjects.Container;
   private waveStrengthMeter?: Phaser.GameObjects.Container;
   private forceSputterNextSection: boolean = false;
@@ -51,13 +50,12 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   init(data: any): void {
-    // Get game mode and debug mode from scene data
-    this.gameMode = data?.gameMode || 'eternal';
+    // Get debug mode from scene data
     this.debugMode = data?.debugMode || false;
     this.gridManager = data?.gridManager;
 
     if (this.debugMode) {
-      console.log('StadiumScene initialized with mode:', this.gameMode);
+      console.log('StadiumScene initialized in run mode');
       console.log('GridManager received:', this.gridManager ? 'YES' : 'NO');
     }
   }
@@ -74,7 +72,7 @@ export class StadiumScene extends Phaser.Scene {
 
     // Initialize GameStateManager with level sections
     this.gameState.initializeSections(levelData.sections);
-    this.gameState.startSession(this.gameMode);
+    this.gameState.startSession();
 
     // Initialize AIManager
     this.aiManager = new AIManager(this.gameState, 2, this.gridManager);
@@ -131,15 +129,13 @@ export class StadiumScene extends Phaser.Scene {
       color: '#ffffff',
     }).setOrigin(1, 0.5);
 
-    // Session timer display (run mode only)
-    if (this.gameMode === 'run') {
-      this.sessionTimerText = this.add.text(512, 20, '100s', {
-        fontSize: '28px',
-        fontFamily: 'Arial',
-        color: '#ffff00',
-        fontStyle: 'bold',
-      }).setOrigin(0.5, 0);
-    }
+    // Session timer display (always shown in run mode)
+    this.sessionTimerText = this.add.text(512, 20, '100s', {
+      fontSize: '28px',
+      fontFamily: 'Arial',
+      color: '#ffff00',
+      fontStyle: 'bold',
+    }).setOrigin(0.5, 0);
 
     // Countdown display at top-left
     this.countdownText = this.add.text(100, 50, '', {
@@ -192,12 +188,7 @@ export class StadiumScene extends Phaser.Scene {
     document.body.appendChild(demoBtn);
 
     // Show session countdown overlay before game starts (3 second countdown)
-    if (this.gameMode === 'run') {
-      this.showSessionCountdownOverlay();
-    } else {
-      // In eternal mode, start immediately
-      this.gameState.activateSession();
-    }
+    this.showSessionCountdownOverlay();
 
     // Setup wave button listener
     const waveBtn = document.getElementById('wave-btn') as HTMLButtonElement;
@@ -446,7 +437,7 @@ export class StadiumScene extends Phaser.Scene {
       this.gameState.updateSession(delta);
       
       // Update session timer display
-      if (this.sessionTimerText && this.gameMode === 'run') {
+      if (this.sessionTimerText) {
         const timeRemaining = this.gameState.getSessionTimeRemaining();
         const seconds = Math.max(0, Math.ceil(timeRemaining / 1000));
         this.sessionTimerText.setText(`${seconds}s`);

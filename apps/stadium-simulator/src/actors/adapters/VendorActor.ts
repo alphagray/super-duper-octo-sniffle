@@ -1,6 +1,6 @@
 import { AnimatedActor } from '@/actors/Actor';
 import { Vendor } from '@/sprites/Vendor';
-import type { ActorCategory } from '@/actors/ActorTypes';
+import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 
 /**
  * VendorActor: Adapter wrapping Vendor sprite as an AnimatedActor.

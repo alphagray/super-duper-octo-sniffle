@@ -1,5 +1,5 @@
 import { LoggerService } from '@/services/LoggerService';
-import type { LogLevel } from '@/managers/base/BaseManager';
+import type { LogLevel } from '@/managers/helpers/BaseManager';
 
 /**
  * ActorLogger provides lightweight logging for Phaser sprite instances.

@@ -1,4 +1,4 @@
-import { BaseManager } from '@/managers/base/BaseManager';
+import { BaseManager } from '@/managers/helpers/BaseManager';
 import { gameBalance } from '@/config/gameBalance';
 
 export type CardinalDirection = 'top' | 'right' | 'bottom' | 'left';

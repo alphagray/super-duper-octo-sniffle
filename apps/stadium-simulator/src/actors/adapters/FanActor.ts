@@ -1,6 +1,6 @@
 import { AnimatedActor } from '@/actors/Actor';
 import { Fan } from '@/sprites/Fan';
-import type { ActorCategory } from '@/actors/ActorTypes';
+import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 
 /**
  * FanActor: Adapter wrapping Fan sprite as an AnimatedActor.

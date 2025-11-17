@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { SectionConfig } from '../types/GameTypes';
+import { SectionConfig } from '@/managers/interfaces/Section';
 import { gameBalance } from '@/config/gameBalance';
 import type { Fan } from './Fan';
 import type { SeatActor } from './Seat';

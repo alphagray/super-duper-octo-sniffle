@@ -1,4 +1,4 @@
-import type { LogEvent, LogLevel } from '@/managers/base/BaseManager';
+import type { LogEvent, LogLevel } from '@/managers/helpers/BaseManager';
 
 interface LoggerConfig {
   globalLevel: LogLevel;

@@ -1,4 +1,4 @@
-import type { VendorProfile, PathSegment, PathNodeType } from '@/types/GameTypes';
+import type { VendorProfile, PathSegment, PathNodeType } from '@/managers/interfaces/VendorTypes';
 import type { StadiumSection } from '@/sprites/StadiumSection';
 import type { Fan } from '@/sprites/Fan';
 import type { GridManager } from '@/managers/GridManager';

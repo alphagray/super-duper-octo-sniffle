@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import type { VendorState } from '@/types/GameTypes';
-import { BaseActorContainer } from './BaseActor';
+import type { VendorState } from '@/managers/interfaces/VendorTypes';
+import { BaseActorContainer } from './helpers/BaseActor';
 
 /**
  * Vendor is a visual container composed of two rectangles:

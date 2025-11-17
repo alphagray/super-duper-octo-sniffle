@@ -1,6 +1,6 @@
 import { SceneryActor } from '@/actors/Actor';
-import type { ActorCategory } from '@/actors/ActorTypes';
-import type { VendorAbilities } from '@/types/GameTypes';
+import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
+import type { VendorAbilities } from '@/managers/interfaces/VendorTypes';
 import { gameBalance } from '@/config/gameBalance';
 import { SeatActor } from '@/sprites/Seat';
 import type { Fan } from '@/sprites/Fan';

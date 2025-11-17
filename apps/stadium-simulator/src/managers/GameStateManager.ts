@@ -1,8 +1,8 @@
-import type { GameState, Section } from '@/types/GameTypes';
+import type { Section } from '@/managers/interfaces/Section';
+import type { SectionConfig } from '@/managers/interfaces/Section';
 import { gameBalance } from '@/config/gameBalance';
 import { LoggerService } from '@/services/LoggerService';
 
-export type GameMode = 'eternal' | 'run';
 export type SessionState = 'idle' | 'countdown' | 'active' | 'complete';
 
 interface AggregateStats {
@@ -33,7 +33,6 @@ interface WaveBoost {
  */
 export class GameStateManager {
   private sections: Section[];
-  private gameMode: GameMode = 'eternal';
   private sessionState: SessionState = 'idle';
   private sessionTimeRemaining: number = 0;
   private sessionStartTime: number = 0;
@@ -241,13 +240,6 @@ export class GameStateManager {
   }
 
   /**
-   * Get current game mode
-   */
-  public getGameMode(): GameMode {
-    return this.gameMode;
-  }
-
-  /**
    * Get current session state
    */
   public getSessionState(): SessionState {
@@ -290,11 +282,9 @@ export class GameStateManager {
   }
 
   /**
-   * Start a new session
-   * @param mode - Game mode: 'eternal' or 'run'
+   * Start a new session (run mode only)
    */
-  public startSession(mode: GameMode): void {
-    this.gameMode = mode;
+  public startSession(): void {
     this.sessionState = 'countdown';
     this.completedWaves = 0;
     this.waveAttempts = 0;
@@ -303,13 +293,8 @@ export class GameStateManager {
     // Snapshot initial aggregate stats
     this.initialAggregateStats = this.getAggregateStats();
 
-    // Set timer based on mode
-    const duration =
-      mode === 'run'
-        ? gameBalance.sessionConfig.runModeDuration
-        : gameBalance.sessionConfig.eternalModeDuration;
-
-    this.sessionTimeRemaining = duration;
+    // Set timer for run mode (100 seconds)
+    this.sessionTimeRemaining = gameBalance.sessionConfig.runModeDuration;
     this.sessionStartTime = Date.now();
 
     this.emit('sessionStateChanged', { state: 'countdown' });
@@ -332,16 +317,14 @@ export class GameStateManager {
       return;
     }
 
-    if (this.gameMode === 'run') {
-      this.sessionTimeRemaining -= deltaTime;
+    this.sessionTimeRemaining -= deltaTime;
 
-      if (this.sessionTimeRemaining <= 0) {
-        this.sessionTimeRemaining = 0;
-        this.completeSession();
-      }
-
-      this.emit('sessionTick', { timeRemaining: this.sessionTimeRemaining });
+    if (this.sessionTimeRemaining <= 0) {
+      this.sessionTimeRemaining = 0;
+      this.completeSession();
     }
+
+    this.emit('sessionTick', { timeRemaining: this.sessionTimeRemaining });
   }
 
   /**

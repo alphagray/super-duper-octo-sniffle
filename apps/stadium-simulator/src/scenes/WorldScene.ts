@@ -4,7 +4,6 @@ import { GridOverlay } from '@/scenes/GridOverlay';
 import { gameBalance } from '@/config/gameBalance';
 
 export interface WorldSceneInitData {
-  gameMode?: 'run' | 'eternal';
   debugMode?: boolean;
 }
 
@@ -15,7 +14,6 @@ export interface WorldSceneInitData {
 export class WorldScene extends Phaser.Scene {
   private gridManager!: GridManager;
   private gridOverlay?: GridOverlay;
-  private gameMode: 'run' | 'eternal' = 'eternal';
   private debugMode: boolean = false;
 
   constructor() {
@@ -23,7 +21,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   init(data: WorldSceneInitData): void {
-    this.gameMode = data?.gameMode || 'eternal';
     this.debugMode = data?.debugMode || false;
   }
 
@@ -51,14 +48,13 @@ export class WorldScene extends Phaser.Scene {
       });
     }
 
-    // Launch StadiumScene as parallel scene with grid reference
+    // Launch StadiumScene as parallel scene with grid reference (run mode only)
     this.scene.launch('StadiumScene', {
-      gameMode: this.gameMode,
       debugMode: this.debugMode,
       gridManager: this.gridManager,
     });
 
-    console.log(`[WorldScene] Initialized (mode=${this.gameMode}, debug=${this.debugMode})`);
+    console.log(`[WorldScene] Initialized (mode=run, debug=${this.debugMode})`);
   }
 
   update(time: number, delta: number): void {

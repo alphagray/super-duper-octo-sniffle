@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { UtilityActor } from './BaseActor';
+import { UtilityActor } from './helpers/BaseActor';
 import { GridManager } from '@/managers/GridManager';
 import { gameBalance } from '@/config/gameBalance';
 

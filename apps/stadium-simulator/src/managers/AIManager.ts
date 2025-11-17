@@ -1,5 +1,5 @@
 import type { GameStateManager } from './GameStateManager';
-import type { VendorProfile, VendorState, VendorType, VendorQualityTier, VendorAbilities, PathSegment } from '@/types/GameTypes';
+import type { VendorProfile, VendorState, VendorType, VendorQualityTier, VendorAbilities, PathSegment } from '@/managers/interfaces/VendorTypes';
 import type { Fan } from '@/sprites/Fan';
 import type { StadiumSection } from '@/sprites/StadiumSection';
 import type { GridManager } from './GridManager';

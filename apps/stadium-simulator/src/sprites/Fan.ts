@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { gameBalance } from '@/config/gameBalance';
-import { BaseActorContainer } from './BaseActor';
+import { BaseActorContainer } from './helpers/BaseActor';
 
 /**
  * Fan is a small container composed of two rectangles:

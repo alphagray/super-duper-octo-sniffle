@@ -1,5 +1,5 @@
 import { Fan } from './Fan';
-import type { VendorAbilities } from '@/types/GameTypes';
+import type { VendorAbilities } from '@/managers/interfaces/VendorTypes';
 import { gameBalance } from '@/config/gameBalance';
 import { Actor } from '@/actors/Actor';
 

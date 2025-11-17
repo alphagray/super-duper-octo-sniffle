@@ -1,4 +1,4 @@
-import { ActorLogger } from '@/sprites/ActorLogger';
+import { ActorLogger } from '@/sprites/helpers/ActorLogger';
 
 /**
  * Actor: Root abstraction for all game entities.

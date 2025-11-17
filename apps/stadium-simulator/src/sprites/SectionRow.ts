@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Seat } from './Seat';
-import type { VendorAbilities } from '@/types/GameTypes';
+import type { VendorAbilities } from '@/managers/interfaces/VendorTypes';
 import { gameBalance } from '@/config/gameBalance';
 
 /**

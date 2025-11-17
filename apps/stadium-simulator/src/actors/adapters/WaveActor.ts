@@ -1,6 +1,6 @@
 import { UtilityActor } from '@/actors/Actor';
 import type { Wave } from '@/managers/Wave';
-import type { ActorCategory } from '@/actors/ActorTypes';
+import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 
 /**
  * WaveActor: Non-visual adapter for wave state.

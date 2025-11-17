@@ -2,27 +2,12 @@ import Phaser from 'phaser';
 import { MenuScene } from './scenes/MenuScene';
 import { WorldScene } from './scenes/WorldScene';
 import { StadiumScene } from './scenes/StadiumScene';
-import { TestStadiumScene } from './scenes/TestStadiumScene';
 import { ScoreReportScene } from './scenes/ScoreReportScene';
 import { GameOverScene } from './scenes/GameOverScene';
-import { TestSectionScene } from './scenes/TestSectionScene';
-import { TestSectionDebugScene } from './scenes/TestSectionDebugScene';
+import { GridOverlay } from './scenes/GridOverlay';
 
-// Detect debug/test mode from URL before exporting config
-let scenes: Phaser.Types.Scenes.SceneType[] = [MenuScene, WorldScene, StadiumScene, ScoreReportScene, GameOverScene, TestSectionScene, TestStadiumScene];
-try {
-  const url = new URL(window.location.href);
-  const testMode = url.searchParams.get('test');
-  const demoMode = url.searchParams.get('demo');
-  
-  if (demoMode === 'debug') {
-    scenes = [TestSectionDebugScene];
-  } else if (testMode === 'stadium') {
-    scenes = [TestStadiumScene];
-  }
-} catch (e) {
-  // fallback to default scenes
-}
+// Core game scenes
+let scenes: Phaser.Types.Scenes.SceneType[] = [MenuScene, WorldScene, StadiumScene, ScoreReportScene, GameOverScene];
 
 export const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
