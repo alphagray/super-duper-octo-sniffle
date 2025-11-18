@@ -1,0 +1,415 @@
+{
+  "version": "1.0.0-static",
+  "epoch": 0,
+  "generatedAt": 1704067200000,
+  "environment": "production",
+  "vendors": [
+    {
+      "id": "vendor-classic-hotdog",
+      "name": "Frank the Hotdog Vendor",
+      "description": "A classic hotdog vendor with a heart of gold and a voice that carries across three sections",
+      "productType": "snacks",
+      "traits": [
+        {
+          "id": "trait-enthusiastic",
+          "name": "Enthusiastic",
+          "description": "Always excited about serving customers",
+          "intensity": 0.9,
+          "tags": ["positive", "energy"]
+        },
+        {
+          "id": "trait-friendly",
+          "name": "Friendly",
+          "description": "Warm and welcoming to everyone",
+          "intensity": 0.8,
+          "tags": ["social", "positive"]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-vendor-serve-1",
+          "text": "Get your hot dogs here! Fresh and delicious!",
+          "context": {
+            "event": "vendorServe",
+            "minHappiness": 50
+          },
+          "emotion": "excited",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-1",
+          "text": "That wave looks great, folks! Keep it up!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 60
+          },
+          "emotion": "encouraging",
+          "priority": 3,
+          "cooldown": 45000
+        }
+      ],
+      "movement": {
+        "speed": 50,
+        "pauseDuration": 3000,
+        "sectionPreferences": {
+          "A": 1.0,
+          "B": 1.2,
+          "C": 0.8
+        },
+        "avoidsActiveWave": false
+      },
+      "appearance": {
+        "spriteSheet": "vendor-hotdog",
+        "animations": ["walk", "serve", "idle"],
+        "colorPalette": ["#FF6B6B", "#4ECDC4", "#FFE66D"],
+        "scale": 1.0
+      },
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "vendor-soda-pop",
+      "name": "Rita the Refreshment Queen",
+      "description": "Bubbly personality matching her fizzy beverages",
+      "productType": "drinks",
+      "traits": [
+        {
+          "id": "trait-energetic",
+          "name": "Energetic",
+          "description": "Never runs out of energy",
+          "intensity": 0.95,
+          "tags": ["energy", "positive"]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-vendor-thirsty-1",
+          "text": "Ice cold drinks! Beat the heat!",
+          "context": {
+            "event": "vendorServe",
+            "minThirst": 60
+          },
+          "emotion": "excited",
+          "priority": 8,
+          "cooldown": 20000
+        }
+      ],
+      "movement": {
+        "speed": 60,
+        "pauseDuration": 2500,
+        "sectionPreferences": {
+          "A": 1.0,
+          "B": 1.0,
+          "C": 1.0
+        },
+        "avoidsActiveWave": true
+      },
+      "appearance": {
+        "spriteSheet": "vendor-drinks",
+        "animations": ["walk", "serve", "idle"],
+        "colorPalette": ["#00B4D8", "#90E0EF", "#CAF0F8"],
+        "scale": 1.0
+      },
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    }
+  ],
+  "mascots": [
+    {
+      "id": "mascot-thunder-bird",
+      "name": "Thunder the Stadium Bird",
+      "description": "A majestic bird mascot who soars above the crowd, inspiring waves of excitement",
+      "theme": "animal",
+      "traits": [
+        {
+          "id": "trait-majestic",
+          "name": "Majestic",
+          "description": "Commands respect and awe",
+          "intensity": 0.9,
+          "tags": ["impressive", "powerful"]
+        },
+        {
+          "id": "trait-inspiring",
+          "name": "Inspiring",
+          "description": "Motivates the crowd to greatness",
+          "intensity": 0.85,
+          "tags": ["leadership", "positive"]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-mascot-activate-1",
+          "text": "*SCREECH* Let's see that wave reach the sky!",
+          "context": {
+            "event": "mascotActivate",
+            "minAttention": 40
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 60000,
+          "animation": "fly-high"
+        },
+        {
+          "id": "dlg-mascot-wave-1",
+          "text": "Magnificent! The crowd soars with me!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 70
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 45000
+        }
+      ],
+      "abilities": [
+        {
+          "id": "ability-sky-rally",
+          "name": "Sky Rally",
+          "description": "Flies above the crowd, boosting attention across all sections",
+          "cooldown": 120000,
+          "duration": 15000,
+          "effects": [
+            {
+              "stat": "attention",
+              "type": "add",
+              "value": 20,
+              "target": "allSections"
+            },
+            {
+              "stat": "waveStrength",
+              "type": "multiply",
+              "value": 1.3,
+              "target": "activeFans"
+            }
+          ],
+          "visualEffect": "fly-trail",
+          "soundEffect": "eagle-cry"
+        }
+      ],
+      "appearance": {
+        "spriteSheet": "mascot-bird",
+        "animations": ["fly", "land", "dance", "celebrate"],
+        "colorPalette": ["#003566", "#FFC300", "#FFFFFF"],
+        "scale": 1.5
+      },
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    }
+  ],
+  "announcers": [
+    {
+      "id": "announcer-classic-jim",
+      "name": "Classic Jim",
+      "description": "The voice of tradition - a seasoned announcer with decades of experience",
+      "style": "classic",
+      "traits": [
+        {
+          "id": "trait-professional",
+          "name": "Professional",
+          "description": "Always maintains composure and clarity",
+          "intensity": 0.9,
+          "tags": ["reliable", "traditional"]
+        },
+        {
+          "id": "trait-knowledgeable",
+          "name": "Knowledgeable",
+          "description": "Deep understanding of the game and crowd dynamics",
+          "intensity": 0.8,
+          "tags": ["experienced", "intelligent"]
+        }
+      ],
+      "commentary": [
+        {
+          "id": "com-wave-start-1",
+          "text": "Ladies and gentlemen, here comes another wave!",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "neutral",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-success-1",
+          "text": "Beautiful execution by section A! The wave continues!",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 20000
+        },
+        {
+          "id": "com-wave-fail-1",
+          "text": "Oh, section B couldn't keep it going. Let's try again!",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "disappointed",
+          "priority": 6,
+          "cooldown": 25000
+        },
+        {
+          "id": "com-session-start-1",
+          "text": "Welcome to the stadium! Get ready for an exciting session!",
+          "context": {
+            "event": "sessionStart"
+          },
+          "emotion": "excited",
+          "priority": 10,
+          "cooldown": 300000
+        },
+        {
+          "id": "com-high-score-1",
+          "text": "Fantastic performance! The crowd is absolutely electric today!",
+          "context": {
+            "event": "highScore",
+            "minHappiness": 80
+          },
+          "emotion": "celebratory",
+          "priority": 8,
+          "cooldown": 60000
+        }
+      ],
+      "catchphrases": [
+        {
+          "id": "catch-perfect-wave",
+          "text": "AND THE WAVE IS PERFECT! All three sections in perfect harmony!",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "perfectWave": true
+            }
+          },
+          "rarity": 0.8,
+          "audioClip": "perfect-wave-classic"
+        },
+        {
+          "id": "catch-streak",
+          "text": "Five in a row! This crowd is unstoppable!",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "consecutiveSuccesses": 5
+            }
+          },
+          "rarity": 0.6
+        }
+      ],
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "announcer-energetic-zoey",
+      "name": "Energetic Zoey",
+      "description": "A high-energy announcer who brings NBA Jam-style excitement to every moment",
+      "style": "energetic",
+      "traits": [
+        {
+          "id": "trait-enthusiastic-max",
+          "name": "Maximum Enthusiasm",
+          "description": "Energy levels off the charts at all times",
+          "intensity": 1.0,
+          "tags": ["energy", "exciting"]
+        }
+      ],
+      "commentary": [
+        {
+          "id": "com-wave-start-2",
+          "text": "BOOM! HERE WE GO! WAVE TIME!",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-success-2",
+          "text": "YES! YES! YES! Keep it rolling!",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "celebratory",
+          "priority": 8,
+          "cooldown": 15000
+        },
+        {
+          "id": "com-wave-fail-2",
+          "text": "Aww, so close! But we're not giving up!",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "encouraging",
+          "priority": 7,
+          "cooldown": 20000
+        }
+      ],
+      "catchphrases": [
+        {
+          "id": "catch-on-fire",
+          "text": "THE CROWD IS ON FIRE! BOOM-SHAKALAKA!",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "minMultiplier": 3,
+              "consecutiveSuccesses": 3
+            }
+          },
+          "rarity": 0.7,
+          "audioClip": "boom-shakalaka"
+        }
+      ],
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    }
+  ],
+  "metadata": {
+    "totalItems": 5,
+    "totalCost": 0,
+    "totalTokens": 0,
+    "generationTime": 0,
+    "status": "cached"
+  }
+}

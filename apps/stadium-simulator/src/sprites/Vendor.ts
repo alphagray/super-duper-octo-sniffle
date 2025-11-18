@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import type { VendorState } from '@/managers/interfaces/VendorTypes';
 import { BaseActorContainer } from './helpers/BaseActor';
+import type { VendorPersonality, DialogueLine } from '@/types/personalities';
+import type { DialogueManager } from '@/systems/DialogueManager';
 
 /**
  * Vendor is a visual container composed of two rectangles:
@@ -18,8 +20,12 @@ export class Vendor extends BaseActorContainer {
   private bottom: Phaser.GameObjects.Rectangle;
   private currentState: VendorState;
   private stateAnimation?: Phaser.Time.TimerEvent;
+  private personality: VendorPersonality | null;
+  private dialogueManager: DialogueManager | null;
+  private vendorId: string;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, personality?: VendorPersonality,
+    dialogueManager?: DialogueManager) {
     super(scene, x, y, 'vendor', false); // disabled by default
 
     // Body: green rectangle (20x30 pixels)
@@ -32,9 +38,31 @@ export class Vendor extends BaseActorContainer {
     this.add([this.bottom, this.top]);
     this.currentState = 'idle';
     this.logger.debug(`Spawned at (${x}, ${y})`);
+    this.personality = personality || null;
+    this.dialogueManager = dialogueManager || null;
+    this.vendorId = personality?.id || `vendor-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Apply visual customization if personality is provided
+    if (this.personality) {
+      this.applyVisualCustomization();
+    }
 
     // Note: Don't call scene.add.existing here - let the caller decide
   }
+
+  private applyVisualCustomization(): void {
+    if (!this.personality) return;
+
+    // Apply color tint from personality palette
+    if (this.personality.appearance.colorPalette.length > 0) {
+      const primaryColor = this.personality.appearance.colorPalette[0];
+      // this.bottom.setTint(parseInt(primaryColor.replace('#', '0x')));
+    }
+
+    // Apply scale from personality
+    this.setScale(this.personality.appearance.scale);
+  }
+
 
   /**
    * Update vendor visual state based on state machine

@@ -1,0 +1,3076 @@
+{
+  "version": "1.0.0-static-complete",
+  "epoch": 0,
+  "generatedAt": 1704067200000,
+  "environment": "production",
+  "vendors": [
+    {
+      "id": "vendor-classic-hotdog",
+      "name": "Frank the Hotdog Vendor",
+      "description": "A classic hotdog vendor with a heart of gold and a voice that carries across three sections",
+      "productType": "snacks",
+      "traits": [
+        {
+          "id": "trait-enthusiastic",
+          "name": "Enthusiastic",
+          "description": "Always excited about serving customers",
+          "intensity": 0.9,
+          "tags": [
+            "positive",
+            "energy"
+          ]
+        },
+        {
+          "id": "trait-friendly",
+          "name": "Friendly",
+          "description": "Warm and welcoming to everyone",
+          "intensity": 0.8,
+          "tags": [
+            "social",
+            "positive"
+          ]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-vendor-serve-1",
+          "text": "Get your hot dogs here! Fresh and delicious!",
+          "context": {
+            "event": "vendorServe",
+            "minHappiness": 50
+          },
+          "emotion": "excited",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-1",
+          "text": "That wave looks great, folks! Keep it up!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 60
+          },
+          "emotion": "encouraging",
+          "priority": 3,
+          "cooldown": 45000
+        },
+        {
+          "id": "dlg-vendor-serve-frank-2",
+          "text": "Hot dogs! The perfect game snack!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-frank-2",
+          "text": "What a wave! That's the spirit!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "celebratory",
+          "priority": 4,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-vendor-serve-frank-3",
+          "text": "Step right up for the best dogs in the stadium!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 6,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-thirsty-frank-1",
+          "text": "Don't forget to hydrate after those hot dogs!",
+          "context": {
+            "event": "vendorServe",
+            "minThirst": 70
+          },
+          "emotion": "playful",
+          "priority": 6,
+          "cooldown": 35000
+        },
+        {
+          "id": "dlg-vendor-wave-frank-3",
+          "text": "That's how you do it! Beautiful wave!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 75
+          },
+          "emotion": "celebratory",
+          "priority": 5,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-vendor-serve-frank-4",
+          "text": "Classic dogs for a classic crowd!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 5,
+          "cooldown": 30000
+        }
+      ],
+      "movement": {
+        "speed": 50,
+        "pauseDuration": 3000,
+        "sectionPreferences": {
+          "A": 1.0,
+          "B": 1.2,
+          "C": 0.8
+        },
+        "avoidsActiveWave": false
+      },
+      "appearance": {
+        "spriteSheet": "vendor-hotdog",
+        "animations": [
+          "walk",
+          "serve",
+          "idle"
+        ],
+        "colorPalette": [
+          "#FF6B6B",
+          "#4ECDC4",
+          "#FFE66D"
+        ],
+        "scale": 1.0
+      },
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "vendor-soda-pop",
+      "name": "Rita the Refreshment Queen",
+      "description": "Bubbly personality matching her fizzy beverages",
+      "productType": "drinks",
+      "traits": [
+        {
+          "id": "trait-energetic",
+          "name": "Energetic",
+          "description": "Never runs out of energy",
+          "intensity": 0.95,
+          "tags": [
+            "energy",
+            "positive"
+          ]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-vendor-thirsty-1",
+          "text": "Ice cold drinks! Beat the heat!",
+          "context": {
+            "event": "vendorServe",
+            "minThirst": 60
+          },
+          "emotion": "excited",
+          "priority": 8,
+          "cooldown": 20000
+        },
+        {
+          "id": "dlg-vendor-serve-rita-1",
+          "text": "Refreshments here! Stay hydrated!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 25000
+        },
+        {
+          "id": "dlg-vendor-wave-rita-1",
+          "text": "That wave was refreshing!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "playful",
+          "priority": 4,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-vendor-serve-rita-2",
+          "text": "Quench your thirst with the best!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 25000
+        },
+        {
+          "id": "dlg-vendor-thirsty-rita-2",
+          "text": "Don't let that thirst slow you down!",
+          "context": {
+            "event": "vendorServe",
+            "minThirst": 70
+          },
+          "emotion": "urgent",
+          "priority": 9,
+          "cooldown": 20000
+        },
+        {
+          "id": "dlg-vendor-wave-rita-2",
+          "text": "Fizzy drinks for a fizzy crowd!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 70
+          },
+          "emotion": "celebratory",
+          "priority": 5,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-vendor-serve-rita-3",
+          "text": "Pop some bottles, pop some waves!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "playful",
+          "priority": 6,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-rita-3",
+          "text": "You're all bubbling with excitement!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "celebratory",
+          "priority": 4,
+          "cooldown": 40000
+        }
+      ],
+      "movement": {
+        "speed": 60,
+        "pauseDuration": 2500,
+        "sectionPreferences": {
+          "A": 1.0,
+          "B": 1.0,
+          "C": 1.0
+        },
+        "avoidsActiveWave": true
+      },
+      "appearance": {
+        "spriteSheet": "vendor-drinks",
+        "animations": [
+          "walk",
+          "serve",
+          "idle"
+        ],
+        "colorPalette": [
+          "#00B4D8",
+          "#90E0EF",
+          "#CAF0F8"
+        ],
+        "scale": 1.0
+      },
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "vendor-grumpy-pretzels",
+      "name": "Vinnie the Crunch Calzone",
+      "description": "Grizzled veteran vendor who has seen every stadium wave since PAC-MAN",
+      "productType": "snacks",
+      "traits": [
+        {
+          "id": "trait-grumpy",
+          "name": "Grumpy",
+          "description": "Slightly cynical but secretly cares",
+          "intensity": 0.7,
+          "tags": [
+            "sarcastic",
+            "experienced"
+          ]
+        },
+        {
+          "id": "trait-veteran",
+          "name": "Veteran",
+          "description": "Been doing this for decades",
+          "intensity": 0.9,
+          "tags": [
+            "experienced",
+            "reliable"
+          ]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-vendor-serve-g1",
+          "text": "Pretzels hotter than a CRT!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "neutral",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-serve-g2",
+          "text": "Eat up, before the wave eats you!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "sarcastic",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-g1",
+          "text": "Another wave, another crumb...",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "neutral",
+          "priority": 3,
+          "cooldown": 45000
+        },
+        {
+          "id": "dlg-vendor-serve-g3",
+          "text": "Don't spill on the joystick, kid!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "frustrated",
+          "priority": 6,
+          "cooldown": 35000
+        },
+        {
+          "id": "dlg-vendor-serve-g4",
+          "text": "Old school flavor, fresh batch!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "neutral",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-g2",
+          "text": "I survived the flood. You?",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 70
+          },
+          "emotion": "sarcastic",
+          "priority": 4,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-vendor-serve-g5",
+          "text": "Snack attack, coming atcha!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "playful",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-g3",
+          "text": "Still got it. Wave's got nothing on me!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "encouraging",
+          "priority": 4,
+          "cooldown": 40000
+        }
+      ],
+      "movement": {
+        "speed": 50,
+        "pauseDuration": 3500,
+        "sectionPreferences": {
+          "A": 1.1,
+          "B": 0.9,
+          "C": 1.0
+        },
+        "avoidsActiveWave": false
+      },
+      "appearance": {
+        "spriteSheet": "vendor-pretzels",
+        "animations": [
+          "walk",
+          "serve",
+          "idle"
+        ],
+        "colorPalette": [
+          "#E53D30",
+          "#FFE14B",
+          "#9D9D9D",
+          "#FCAA64"
+        ],
+        "scale": 1.0
+      },
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "vendor-enthusiastic-merch",
+      "name": "Dotty Merch",
+      "description": "Hyper-enthusiastic rookie who speaks like a 1980s toy commercial",
+      "productType": "merchandise",
+      "traits": [
+        {
+          "id": "trait-hyperactive",
+          "name": "Hyperactive",
+          "description": "Energy levels off the charts",
+          "intensity": 1.0,
+          "tags": [
+            "energy",
+            "positive",
+            "enthusiastic"
+          ]
+        },
+        {
+          "id": "trait-rookie",
+          "name": "Rookie",
+          "description": "New to the game but eager to please",
+          "intensity": 0.8,
+          "tags": [
+            "inexperienced",
+            "eager"
+          ]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-vendor-serve-d1",
+          "text": "Power up with a foam finger!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 25000
+        },
+        {
+          "id": "dlg-vendor-serve-d2",
+          "text": "Shirt sale\u2014get 'em while they zap!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 25000
+        },
+        {
+          "id": "dlg-vendor-wave-d1",
+          "text": "Wicked! You wave like a boss!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "celebratory",
+          "priority": 5,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-vendor-serve-d3",
+          "text": "Cap or tee\u2014level up your look!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 25000
+        },
+        {
+          "id": "dlg-vendor-serve-d4",
+          "text": "Merch boost! Style unlocked!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "excited",
+          "priority": 8,
+          "cooldown": 25000
+        },
+        {
+          "id": "dlg-vendor-wave-d2",
+          "text": "Epic wave! You're high score material!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 75
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 35000
+        },
+        {
+          "id": "dlg-vendor-serve-d5",
+          "text": "Flash sale\u2014don't glitch!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "urgent",
+          "priority": 9,
+          "cooldown": 20000
+        },
+        {
+          "id": "dlg-vendor-wave-d3",
+          "text": "You rock the stands, superstar!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "celebratory",
+          "priority": 5,
+          "cooldown": 40000
+        }
+      ],
+      "movement": {
+        "speed": 65,
+        "pauseDuration": 2300,
+        "sectionPreferences": {
+          "A": 1.0,
+          "B": 1.0,
+          "C": 1.0
+        },
+        "avoidsActiveWave": false
+      },
+      "appearance": {
+        "spriteSheet": "vendor-merch",
+        "animations": [
+          "walk",
+          "serve",
+          "idle",
+          "dance"
+        ],
+        "colorPalette": [
+          "#8A2BE2",
+          "#38FFF7",
+          "#FFFB00",
+          "#FFB3D9"
+        ],
+        "scale": 1.0
+      },
+      "metadata": {
+        "model": "claude-3-5-sonnet-20241022",
+        "temperature": 0.8,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "vendor-cool-mixed",
+      "name": "Spike Rad Johnson",
+      "description": "Laid-back cool skater vendor with 80s slang and chill vibes",
+      "productType": "mixed",
+      "traits": [
+        {
+          "id": "trait-cool",
+          "name": "Cool",
+          "description": "Always relaxed and smooth",
+          "intensity": 0.9,
+          "tags": [
+            "chill",
+            "confident"
+          ]
+        },
+        {
+          "id": "trait-surfer",
+          "name": "Surfer Dude",
+          "description": "Uses 80s slang naturally",
+          "intensity": 0.85,
+          "tags": [
+            "retro",
+            "laid-back"
+          ]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-vendor-serve-s1",
+          "text": "Snax and swag: gnarly combo, bro!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "playful",
+          "priority": 6,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-serve-s2",
+          "text": "Grab a bite, score a toy\u2014radness guaranteed!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "playful",
+          "priority": 6,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-s1",
+          "text": "Whoa, wave was major turbo!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "excited",
+          "priority": 5,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-vendor-serve-s3",
+          "text": "Totally munchable!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "playful",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-serve-s4",
+          "text": "Merch in motion\u2014surf the style!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "playful",
+          "priority": 6,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-s2",
+          "text": "You're cruising the top score zone!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 70
+          },
+          "emotion": "celebratory",
+          "priority": 5,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-vendor-serve-s5",
+          "text": "Snack up, chill out!",
+          "context": {
+            "event": "vendorServe"
+          },
+          "emotion": "neutral",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "dlg-vendor-wave-s3",
+          "text": "Wave-slayer, you!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "celebratory",
+          "priority": 5,
+          "cooldown": 40000
+        }
+      ],
+      "movement": {
+        "speed": 40,
+        "pauseDuration": 4000,
+        "sectionPreferences": {
+          "A": 0.9,
+          "B": 1.1,
+          "C": 1.0
+        },
+        "avoidsActiveWave": true
+      },
+      "appearance": {
+        "spriteSheet": "vendor-mixed",
+        "animations": [
+          "walk",
+          "serve",
+          "idle",
+          "slide"
+        ],
+        "colorPalette": [
+          "#4BDEFF",
+          "#F440FF",
+          "#FFD800",
+          "#92EF54"
+        ],
+        "scale": 1.0
+      },
+      "metadata": {
+        "model": "claude-3-5-sonnet-20241022",
+        "temperature": 0.8,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    }
+  ],
+  "mascots": [
+    {
+      "id": "mascot-thunder-bird",
+      "name": "Thunder the Stadium Bird",
+      "description": "A majestic bird mascot who soars above the crowd, inspiring waves of excitement",
+      "theme": "animal",
+      "traits": [
+        {
+          "id": "trait-majestic",
+          "name": "Majestic",
+          "description": "Commands respect and awe",
+          "intensity": 0.9,
+          "tags": [
+            "impressive",
+            "powerful"
+          ]
+        },
+        {
+          "id": "trait-inspiring",
+          "name": "Inspiring",
+          "description": "Motivates the crowd to greatness",
+          "intensity": 0.85,
+          "tags": [
+            "leadership",
+            "positive"
+          ]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-mascot-activate-1",
+          "text": "*SCREECH* Let's see that wave reach the sky!",
+          "context": {
+            "event": "mascotActivate",
+            "minAttention": 40
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 60000,
+          "animation": "fly-high"
+        },
+        {
+          "id": "dlg-mascot-wave-1",
+          "text": "Magnificent! The crowd soars with me!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 70
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 45000
+        },
+        {
+          "id": "dlg-mascot-wave-thunder-2",
+          "text": "Spread your wings, fans! Let's fly!",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "excited",
+          "priority": 6,
+          "cooldown": 50000,
+          "animation": "flap"
+        },
+        {
+          "id": "dlg-mascot-thunder-high",
+          "text": "The stadium thunders with your power!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 80
+          },
+          "emotion": "celebratory",
+          "priority": 7,
+          "cooldown": 50000
+        },
+        {
+          "id": "dlg-mascot-thunder-encourage",
+          "text": "Rise above! Show them your spirit!",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "encouraging",
+          "priority": 5,
+          "cooldown": 45000
+        },
+        {
+          "id": "dlg-mascot-thunder-inspire",
+          "text": "Together we soar! Never give up!",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "encouraging",
+          "priority": 6,
+          "cooldown": 40000
+        }
+      ],
+      "abilities": [
+        {
+          "id": "ability-sky-rally",
+          "name": "Sky Rally",
+          "description": "Flies above the crowd, boosting attention across all sections",
+          "cooldown": 120000,
+          "duration": 15000,
+          "effects": [
+            {
+              "stat": "attention",
+              "type": "add",
+              "value": 20,
+              "target": "allSections"
+            },
+            {
+              "stat": "waveStrength",
+              "type": "multiply",
+              "value": 1.3,
+              "target": "activeFans"
+            }
+          ],
+          "visualEffect": "fly-trail",
+          "soundEffect": "eagle-cry"
+        }
+      ],
+      "appearance": {
+        "spriteSheet": "mascot-bird",
+        "animations": [
+          "fly",
+          "land",
+          "dance",
+          "celebrate"
+        ],
+        "colorPalette": [
+          "#003566",
+          "#FFC300",
+          "#FFFFFF"
+        ],
+        "scale": 1.5
+      },
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "mascot-slam-dunk-duck",
+      "name": "Slam Dunk Duck",
+      "description": "Energetic sporty mallard with basketball skills straight from a late-80s arcade",
+      "theme": "animal",
+      "traits": [
+        {
+          "id": "trait-competitive",
+          "name": "Competitive",
+          "description": "Loves showing off and winning",
+          "intensity": 0.9,
+          "tags": [
+            "sports",
+            "energetic"
+          ]
+        },
+        {
+          "id": "trait-clumsy",
+          "name": "Clumsy",
+          "description": "Sometimes trips but always recovers with style",
+          "intensity": 0.6,
+          "tags": [
+            "funny",
+            "endearing"
+          ]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-mascot-activate-duck-1",
+          "text": "Let's get quacking! Flap those wings, fans!",
+          "context": {
+            "event": "mascotActivate",
+            "minAttention": 40
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 60000,
+          "animation": "flap-wings"
+        },
+        {
+          "id": "dlg-mascot-wave-duck-1",
+          "text": "Slam dunk, team! That wave hit the high score!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 70
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 45000
+        },
+        {
+          "id": "dlg-mascot-low-happiness",
+          "text": "C'mon, don't be a lame duck\u2014smile and wave!",
+          "context": {
+            "event": "fanBored",
+            "maxHappiness": 40
+          },
+          "emotion": "encouraging",
+          "priority": 7,
+          "cooldown": 50000
+        },
+        {
+          "id": "dlg-mascot-low-wave",
+          "text": "Put your feathers into it! We need lift-off!",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "encouraging",
+          "priority": 6,
+          "cooldown": 40000
+        },
+        {
+          "id": "dlg-mascot-ability-use",
+          "text": "Quack Attack incoming! Time for some splashy moves!",
+          "context": {
+            "event": "mascotActivate"
+          },
+          "emotion": "excited",
+          "priority": 9,
+          "cooldown": 90000,
+          "animation": "splash"
+        },
+        {
+          "id": "dlg-mascot-excited",
+          "text": "Duck yeah! Fans fly together!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 80
+          },
+          "emotion": "celebratory",
+          "priority": 7,
+          "cooldown": 50000
+        },
+        {
+          "id": "dlg-mascot-surprised",
+          "text": "Whoa! That's a full court wave!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "excited",
+          "priority": 5,
+          "cooldown": 45000
+        }
+      ],
+      "abilities": [
+        {
+          "id": "ability-quack-attack",
+          "name": "Quack Attack",
+          "description": "Splashes water and boosts wave energy with basketball slam moves",
+          "cooldown": 90000,
+          "duration": 12000,
+          "effects": [
+            {
+              "stat": "waveStrength",
+              "type": "multiply",
+              "value": 1.22,
+              "target": "activeFans"
+            },
+            {
+              "stat": "happiness",
+              "type": "add",
+              "value": 15,
+              "target": "allSections"
+            },
+            {
+              "stat": "attention",
+              "type": "add",
+              "value": 10,
+              "target": "allSections"
+            },
+            {
+              "stat": "thirst",
+              "type": "add",
+              "value": -5,
+              "target": "allSections"
+            }
+          ],
+          "visualEffect": "water-splash",
+          "soundEffect": "quack-slam",
+          "animation": "dunk"
+        }
+      ],
+      "appearance": {
+        "spriteSheet": "mascot-duck",
+        "animations": [
+          "walk",
+          "flap-wings",
+          "dunk",
+          "splash",
+          "celebrate"
+        ],
+        "colorPalette": [
+          "#FEC930",
+          "#0170C1",
+          "#F44336",
+          "#E57300"
+        ],
+        "scale": 1.5
+      },
+      "metadata": {
+        "model": "claude-3-5-sonnet-20241022",
+        "temperature": 0.8,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "mascot-pixel-panther",
+      "name": "Pixel Panther",
+      "description": "Neon-glow panther inspired by 80s arcades and sports car culture with mysterious cool style",
+      "theme": "character",
+      "traits": [
+        {
+          "id": "trait-mysterious",
+          "name": "Mysterious",
+          "description": "Cool, suave, and enigmatic",
+          "intensity": 0.9,
+          "tags": [
+            "mysterious",
+            "cool"
+          ]
+        },
+        {
+          "id": "trait-stylish",
+          "name": "Stylish",
+          "description": "Always has the coolest moves",
+          "intensity": 0.95,
+          "tags": [
+            "confident",
+            "impressive"
+          ]
+        }
+      ],
+      "dialogue": [
+        {
+          "id": "dlg-mascot-activate-panther-1",
+          "text": "Lights out, neon on\u2014let's see some energy!",
+          "context": {
+            "event": "mascotActivate",
+            "minAttention": 30
+          },
+          "emotion": "playful",
+          "priority": 7,
+          "cooldown": 60000,
+          "animation": "glow"
+        },
+        {
+          "id": "dlg-mascot-wave-panther-1",
+          "text": "Now THAT'S a wave\u2014pure panther power!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 75
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 45000
+        },
+        {
+          "id": "dlg-mascot-low-attention",
+          "text": "Yo, eyes on the prize. Panther's in the house!",
+          "context": {
+            "event": "fanBored",
+            "maxAttention": 40
+          },
+          "emotion": "neutral",
+          "priority": 7,
+          "cooldown": 50000
+        },
+        {
+          "id": "dlg-mascot-low-thirst",
+          "text": "Stay hydrated, wildcats\u2014I don't wanna see you fade!",
+          "context": {
+            "event": "fanThirsty",
+            "minThirst": 70
+          },
+          "emotion": "encouraging",
+          "priority": 6,
+          "cooldown": 50000
+        },
+        {
+          "id": "dlg-mascot-ability-panther",
+          "text": "Panther Pulse! Get ready to groove!",
+          "context": {
+            "event": "mascotActivate"
+          },
+          "emotion": "excited",
+          "priority": 9,
+          "cooldown": 120000,
+          "animation": "pulse"
+        },
+        {
+          "id": "dlg-mascot-excited-panther",
+          "text": "Wave smooth, wave cool, wave wild!",
+          "context": {
+            "event": "waveComplete",
+            "minHappiness": 80
+          },
+          "emotion": "celebratory",
+          "priority": 7,
+          "cooldown": 50000
+        },
+        {
+          "id": "dlg-mascot-surprised-panther",
+          "text": "Is that all you got? I wanna see the pulse!",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "playful",
+          "priority": 5,
+          "cooldown": 45000
+        }
+      ],
+      "abilities": [
+        {
+          "id": "ability-panther-pulse",
+          "name": "Panther Pulse",
+          "description": "Neon glow mesmerizes crowd and boosts all stats",
+          "cooldown": 120000,
+          "duration": 15000,
+          "effects": [
+            {
+              "stat": "attention",
+              "type": "add",
+              "value": 30,
+              "target": "allSections"
+            },
+            {
+              "stat": "happiness",
+              "type": "add",
+              "value": 13,
+              "target": "allSections"
+            },
+            {
+              "stat": "thirst",
+              "type": "add",
+              "value": -12,
+              "target": "allSections"
+            },
+            {
+              "stat": "waveStrength",
+              "type": "multiply",
+              "value": 1.08,
+              "target": "activeFans"
+            }
+          ],
+          "visualEffect": "neon-pulse",
+          "soundEffect": "synth-wave",
+          "animation": "moonwalk"
+        }
+      ],
+      "appearance": {
+        "spriteSheet": "mascot-panther",
+        "animations": [
+          "walk",
+          "glow",
+          "pulse",
+          "moonwalk",
+          "celebrate"
+        ],
+        "colorPalette": [
+          "#5E3AEB",
+          "#2DFFAB",
+          "#111111",
+          "#FF0467",
+          "#FFD300"
+        ],
+        "scale": 1.5
+      },
+      "metadata": {
+        "model": "claude-3-5-sonnet-20241022",
+        "temperature": 0.8,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    }
+  ],
+  "announcers": [
+    {
+      "id": "announcer-classic-jim",
+      "name": "Classic Jim",
+      "description": "The voice of tradition - a seasoned announcer with decades of experience",
+      "style": "classic",
+      "traits": [
+        {
+          "id": "trait-professional",
+          "name": "Professional",
+          "description": "Always maintains composure and clarity",
+          "intensity": 0.9,
+          "tags": [
+            "reliable",
+            "traditional"
+          ]
+        },
+        {
+          "id": "trait-knowledgeable",
+          "name": "Knowledgeable",
+          "description": "Deep understanding of the game and crowd dynamics",
+          "intensity": 0.8,
+          "tags": [
+            "experienced",
+            "intelligent"
+          ]
+        }
+      ],
+      "commentary": [
+        {
+          "id": "com-wave-start-1",
+          "text": "Ladies and gentlemen, here comes another wave!",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "neutral",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-success-1",
+          "text": "Beautiful execution by section A! The wave continues!",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 20000
+        },
+        {
+          "id": "com-wave-fail-1",
+          "text": "Oh, section B couldn't keep it going. Let's try again!",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "disappointed",
+          "priority": 6,
+          "cooldown": 25000
+        },
+        {
+          "id": "com-session-start-1",
+          "text": "Welcome to the stadium! Get ready for an exciting session!",
+          "context": {
+            "event": "sessionStart"
+          },
+          "emotion": "excited",
+          "priority": 10,
+          "cooldown": 300000
+        },
+        {
+          "id": "com-high-score-1",
+          "text": "Fantastic performance! The crowd is absolutely electric today!",
+          "context": {
+            "event": "highScore",
+            "minHappiness": 80
+          },
+          "emotion": "celebratory",
+          "priority": 8,
+          "cooldown": 60000
+        },
+        {
+          "id": "com-wave-complete-jim-1",
+          "text": "And the wave completes its journey! Magnificent!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 40000
+        },
+        {
+          "id": "com-low-score-jim-1",
+          "text": "The crowd seems a bit tired. Let's get that energy back!",
+          "context": {
+            "event": "fanBored"
+          },
+          "emotion": "encouraging",
+          "priority": 6,
+          "cooldown": 45000
+        }
+      ],
+      "catchphrases": [
+        {
+          "id": "catch-perfect-wave",
+          "text": "AND THE WAVE IS PERFECT! All three sections in perfect harmony!",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "perfectWave": true
+            }
+          },
+          "rarity": 0.8,
+          "audioClip": "perfect-wave-classic"
+        },
+        {
+          "id": "catch-streak",
+          "text": "Five in a row! This crowd is unstoppable!",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "consecutiveSuccesses": 5
+            }
+          },
+          "rarity": 0.6
+        }
+      ],
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "announcer-energetic-zoey",
+      "name": "Energetic Zoey",
+      "description": "A high-energy announcer who brings NBA Jam-style excitement to every moment",
+      "style": "energetic",
+      "traits": [
+        {
+          "id": "trait-enthusiastic-max",
+          "name": "Maximum Enthusiasm",
+          "description": "Energy levels off the charts at all times",
+          "intensity": 1.0,
+          "tags": [
+            "energy",
+            "exciting"
+          ]
+        }
+      ],
+      "commentary": [
+        {
+          "id": "com-wave-start-2",
+          "text": "BOOM! HERE WE GO! WAVE TIME!",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "excited",
+          "priority": 7,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-success-2",
+          "text": "YES! YES! YES! Keep it rolling!",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "celebratory",
+          "priority": 8,
+          "cooldown": 15000
+        },
+        {
+          "id": "com-wave-fail-2",
+          "text": "Aww, so close! But we're not giving up!",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "encouraging",
+          "priority": 7,
+          "cooldown": 20000
+        },
+        {
+          "id": "com-wave-complete-zoey-1",
+          "text": "TOUCHDOWN! THAT WAVE WAS PERFECT!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "celebratory",
+          "priority": 9,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-session-start-zoey-1",
+          "text": "LET'S GET THIS PARTY STARTED! ARE YOU READY?!",
+          "context": {
+            "event": "sessionStart"
+          },
+          "emotion": "excited",
+          "priority": 10,
+          "cooldown": 300000
+        },
+        {
+          "id": "com-high-score-zoey-1",
+          "text": "OFF THE CHARTS! YOU'RE BREAKING RECORDS!",
+          "context": {
+            "event": "highScore"
+          },
+          "emotion": "celebratory",
+          "priority": 9,
+          "cooldown": 60000
+        },
+        {
+          "id": "com-low-score-zoey-1",
+          "text": "Come on, crowd! Let's pump up that energy!",
+          "context": {
+            "event": "fanBored"
+          },
+          "emotion": "encouraging",
+          "priority": 7,
+          "cooldown": 40000
+        }
+      ],
+      "catchphrases": [
+        {
+          "id": "catch-on-fire",
+          "text": "THE CROWD IS ON FIRE! BOOM-SHAKALAKA!",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "minMultiplier": 3,
+              "consecutiveSuccesses": 3
+            }
+          },
+          "rarity": 0.7,
+          "audioClip": "boom-shakalaka"
+        }
+      ],
+      "metadata": {
+        "model": "static-content",
+        "temperature": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "announcer-sarcastic-sam",
+      "name": "Sarcastic Sam",
+      "description": "Dry wit and deadpan delivery with subtle sarcasm",
+      "style": "sarcastic",
+      "traits": [
+        {
+          "id": "trait-sarcastic",
+          "name": "Sarcastic",
+          "description": "Delivers commentary with dry humor",
+          "intensity": 0.9,
+          "tags": [
+            "witty",
+            "sarcastic"
+          ]
+        }
+      ],
+      "commentary": [
+        {
+          "id": "com-wave-start-sam-1",
+          "text": "Wow, another wave. Riveting\u2014who could've guessed?",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "sarcastic",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-start-sam-2",
+          "text": "Hold onto your hats, it's yet ANOTHER wave start.",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "sarcastic",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-success-sam-1",
+          "text": "Impressive start\u2014assuming we call any start 'impressive'.",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "sarcastic",
+          "priority": 5,
+          "cooldown": 25000
+        },
+        {
+          "id": "com-wave-fail-sam-1",
+          "text": "And there it goes. Surprise level: zero.",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "sarcastic",
+          "priority": 6,
+          "cooldown": 25000
+        },
+        {
+          "id": "com-session-start-sam-1",
+          "text": "Another session begins. Try to contain your excitement.",
+          "context": {
+            "event": "sessionStart"
+          },
+          "emotion": "sarcastic",
+          "priority": 10,
+          "cooldown": 300000
+        },
+        {
+          "id": "com-high-score-sam-1",
+          "text": "Well, well. Someone's actually trying today.",
+          "context": {
+            "event": "highScore"
+          },
+          "emotion": "sarcastic",
+          "priority": 7,
+          "cooldown": 60000
+        },
+        {
+          "id": "com-wave-complete-sam-1",
+          "text": "And the wave completes. Shocking development.",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "sarcastic",
+          "priority": 5,
+          "cooldown": 40000
+        },
+        {
+          "id": "com-low-score-sam-1",
+          "text": "The crowd is awake! Or just not asleep yet.",
+          "context": {
+            "event": "fanBored"
+          },
+          "emotion": "sarcastic",
+          "priority": 6,
+          "cooldown": 40000
+        }
+      ],
+      "catchphrases": [
+        {
+          "id": "catch-perfect-sam",
+          "text": "Perfect wave. Someone write this down for the history books. Or don't.",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "perfectWave": true
+            }
+          },
+          "rarity": 0.8
+        }
+      ],
+      "metadata": {
+        "model": "claude-3-5-sonnet-20241022",
+        "temperature": 0.8,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "announcer-professional-patricia",
+      "name": "Professional Patricia",
+      "description": "Precise, measured, and highly professional sports broadcaster",
+      "style": "professional",
+      "traits": [
+        {
+          "id": "trait-precise",
+          "name": "Precise",
+          "description": "Every word carefully chosen",
+          "intensity": 0.95,
+          "tags": [
+            "professional",
+            "detailed"
+          ]
+        }
+      ],
+      "commentary": [
+        {
+          "id": "com-wave-start-pat-1",
+          "text": "Attention fans, the wave sequence is commencing\u2014prepare your sections.",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "neutral",
+          "priority": 6,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-start-pat-2",
+          "text": "Wave initiation announced\u2014please synchronize your participation.",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "neutral",
+          "priority": 6,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-success-pat-1",
+          "text": "Excellent execution by that section. Wave continues as expected.",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "neutral",
+          "priority": 6,
+          "cooldown": 25000
+        },
+        {
+          "id": "com-wave-fail-pat-1",
+          "text": "Section participation below optimal levels. Wave interrupted.",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "disappointed",
+          "priority": 6,
+          "cooldown": 25000
+        },
+        {
+          "id": "com-session-start-pat-1",
+          "text": "Stadium session commencing. All participants, please be ready.",
+          "context": {
+            "event": "sessionStart"
+          },
+          "emotion": "neutral",
+          "priority": 10,
+          "cooldown": 300000
+        },
+        {
+          "id": "com-high-score-pat-1",
+          "text": "Outstanding performance metrics achieved. Crowd excellence confirmed.",
+          "context": {
+            "event": "highScore"
+          },
+          "emotion": "celebratory",
+          "priority": 8,
+          "cooldown": 60000
+        },
+        {
+          "id": "com-wave-complete-pat-1",
+          "text": "Wave sequence completed successfully. Well done, all sections.",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "neutral",
+          "priority": 6,
+          "cooldown": 40000
+        },
+        {
+          "id": "com-low-score-pat-1",
+          "text": "Attention levels require improvement. Please increase engagement.",
+          "context": {
+            "event": "fanBored"
+          },
+          "emotion": "neutral",
+          "priority": 6,
+          "cooldown": 40000
+        }
+      ],
+      "catchphrases": [
+        {
+          "id": "catch-perfect-pat",
+          "text": "Flawless wave execution across all sections. Textbook performance.",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "perfectWave": true
+            }
+          },
+          "rarity": 0.7
+        }
+      ],
+      "metadata": {
+        "model": "claude-3-5-sonnet-20241022",
+        "temperature": 0.8,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    },
+    {
+      "id": "announcer-casual-carl",
+      "name": "Casual Carl",
+      "description": "Laid-back friendly commentator who makes everyone feel comfortable",
+      "style": "casual",
+      "traits": [
+        {
+          "id": "trait-relaxed",
+          "name": "Relaxed",
+          "description": "Always chill and friendly",
+          "intensity": 0.85,
+          "tags": [
+            "friendly",
+            "casual"
+          ]
+        }
+      ],
+      "commentary": [
+        {
+          "id": "com-wave-start-carl-1",
+          "text": "Alright folks, here comes the wave\u2014get ready to chill!",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "playful",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-start-carl-2",
+          "text": "Wave time! Everybody, just go with it.",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "playful",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-wave-success-carl-1",
+          "text": "Nice one! Keep it rolling, friends.",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "encouraging",
+          "priority": 5,
+          "cooldown": 25000
+        },
+        {
+          "id": "com-wave-fail-carl-1",
+          "text": "Ah well, can't win 'em all. Let's try again!",
+          "context": {
+            "event": "sectionFail"
+          },
+          "emotion": "encouraging",
+          "priority": 6,
+          "cooldown": 25000
+        },
+        {
+          "id": "com-session-start-carl-1",
+          "text": "Hey everyone, welcome! Let's have some fun out there.",
+          "context": {
+            "event": "sessionStart"
+          },
+          "emotion": "excited",
+          "priority": 10,
+          "cooldown": 300000
+        },
+        {
+          "id": "com-high-score-carl-1",
+          "text": "Wow, you guys are killing it! Keep up the awesome work!",
+          "context": {
+            "event": "highScore"
+          },
+          "emotion": "celebratory",
+          "priority": 8,
+          "cooldown": 60000
+        },
+        {
+          "id": "com-wave-complete-carl-1",
+          "text": "Nice! That wave made it all the way through!",
+          "context": {
+            "event": "waveComplete"
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 40000
+        },
+        {
+          "id": "com-low-score-carl-1",
+          "text": "Hey, no worries\u2014just having fun is what matters!",
+          "context": {
+            "event": "fanBored"
+          },
+          "emotion": "encouraging",
+          "priority": 6,
+          "cooldown": 40000
+        },
+        {
+          "id": "com-wave-start-carl-3",
+          "text": "Here comes another one! Let's make it count!",
+          "context": {
+            "event": "waveStart"
+          },
+          "emotion": "excited",
+          "priority": 5,
+          "cooldown": 30000
+        },
+        {
+          "id": "com-section-success-carl-2",
+          "text": "Beautiful! That section nailed it!",
+          "context": {
+            "event": "sectionSuccess"
+          },
+          "emotion": "celebratory",
+          "priority": 6,
+          "cooldown": 25000
+        }
+      ],
+      "catchphrases": [
+        {
+          "id": "catch-perfect-carl",
+          "text": "Dude! That wave was absolutely perfect! High fives all around!",
+          "trigger": {
+            "event": "waveComplete",
+            "conditions": {
+              "perfectWave": true
+            }
+          },
+          "rarity": 0.6
+        }
+      ],
+      "metadata": {
+        "model": "claude-3-5-sonnet-20241022",
+        "temperature": 0.8,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0,
+        "generatedAt": 1704067200000,
+        "epoch": 0,
+        "usageCount": 0
+      }
+    }
+  ],
+  "crowdChatter": [
+    {
+      "id": "crowd-chatter-1",
+      "text": "Rad move, mascot! Do the worm!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-2",
+      "text": "That wave was totally tubular!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-3",
+      "text": "Gnarly jump, pixel dude!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-4",
+      "text": "This game's maxed out on fun!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-5",
+      "text": "Power up that wave!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-6",
+      "text": "Hit us with another turbo wave!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-7",
+      "text": "All your base are belong to us!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-8",
+      "text": "Score! That's high score fever!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-9",
+      "text": "Woot! Extra life for that snack!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-10",
+      "text": "Game on, dudes!",
+      "emotion": "playful",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-11",
+      "text": "Level up that popcorn, vendor!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-12",
+      "text": "Chunky cheese bites, coming through!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-13",
+      "text": "That mascot's got Pac-Man energy!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-14",
+      "text": "Wave power, activate!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-15",
+      "text": "Let's go full-on boss mode!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-16",
+      "text": "Knockout wave, totally radical!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-17",
+      "text": "Gimme a high five, Mario style!",
+      "emotion": "playful",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-18",
+      "text": "My joystick's loving this action!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-19",
+      "text": "That touchdown was 8-bit epic!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-20",
+      "text": "It's a pixel party, bro!",
+      "emotion": "playful",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-21",
+      "text": "Surf that digital wave, fans!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-22",
+      "text": "Ride the glitch, ride the wave!",
+      "emotion": "frustrated",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-23",
+      "text": "Up, down, up\u2014insert coin for epic wave!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-24",
+      "text": "Wave so wild it's breaking my screen!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-25",
+      "text": "Let's go! Wave power: maximum!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-26",
+      "text": "Get your sprite moving, next row!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-27",
+      "text": "Wave like Space Invaders, folks!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-28",
+      "text": "This wave's so hot, it needs a cooldown!",
+      "emotion": "urgent",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-29",
+      "text": "Feeling wave rage quit yet?",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-30",
+      "text": "Keep it moving, like a scrolling background!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-31",
+      "text": "Yo, where's my soda, vendor?",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-32",
+      "text": "Bring on the snacks, not the lag!",
+      "emotion": "frustrated",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-33",
+      "text": "Is the wave stuck in a bug loop?",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-34",
+      "text": "My energy bar's running low!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-35",
+      "text": "We need cheat codes for faster hotdogs!",
+      "emotion": "urgent",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-36",
+      "text": "That mascot skipped my row\u2014lame!",
+      "emotion": "frustrated",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-37",
+      "text": "Is this wave on pause?",
+      "emotion": "frustrated",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-38",
+      "text": "I'd trade all my gold rings for nachos!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-39",
+      "text": "Vendor, you're camping my spawn point!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-40",
+      "text": "Mascot's moves are glitchy today!",
+      "emotion": "frustrated",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-41",
+      "text": "Reload my chips, vendor!",
+      "emotion": "urgent",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-42",
+      "text": "I need a soda refill, stat!",
+      "emotion": "urgent",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-43",
+      "text": "Anyone got a mushroom pizza?",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-44",
+      "text": "Power pellet popcorn, please!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-45",
+      "text": "Got any Pac-Man snacks?",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-46",
+      "text": "Vendor's speed is lower than NES!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-47",
+      "text": "Nachos! The true bonus stage!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-48",
+      "text": "Looks like my drink is Game Over.",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-49",
+      "text": "Snack attack, donkey style!",
+      "emotion": "playful",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-50",
+      "text": "Dude, save a hotdog for Player 2!",
+      "emotion": "playful",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-51",
+      "text": "AFK until the next wave starts!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-52",
+      "text": "Which level is this? Feels like filler!",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-53",
+      "text": "Game devs, patch this wave lag!",
+      "emotion": "frustrated",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-54",
+      "text": "The real boss fight: getting a soda!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-55",
+      "text": "Wish real life had unlimited lives!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-56",
+      "text": "This crowd could use a power-up.",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-57",
+      "text": "Needs more neon, less yawns!",
+      "emotion": "urgent",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-58",
+      "text": "Is this wave DLC? Feels add-on!",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-59",
+      "text": "Mascot's on idle mode again!",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-60",
+      "text": "Wake up, crowd\u2014this isn't demo mode!",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-61",
+      "text": "Mascot's got some Donkey Kong jumps!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-62",
+      "text": "Vendor's walking in debug mode!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-63",
+      "text": "Mascot, bring me some coin drops!",
+      "emotion": "urgent",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-64",
+      "text": "Vendor's AI needs a patch!",
+      "emotion": "urgent",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-65",
+      "text": "Mascot, use your super move!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-66",
+      "text": "Vendor, do a speedrun!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-67",
+      "text": "That mascot's the ultimate cheat code!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-68",
+      "text": "Vendor just rage-quit the aisle!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-69",
+      "text": "Mascot's costume is pixel-perfect!",
+      "emotion": "playful",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-70",
+      "text": "Vendor's got boss-level snacks!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-71",
+      "text": "Who unlocked hard mode on this wave?",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-72",
+      "text": "Is this the Konami code for fun?",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-73",
+      "text": "That mascot's got Pong skills!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-74",
+      "text": "Vendor's pathfinding worse than Frogger!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-75",
+      "text": "My popcorn's stuck in a glitch!",
+      "emotion": "frustrated",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-76",
+      "text": "Put a quarter in and start the wave!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-77",
+      "text": "Mascot's doing a Mega Man slide!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-78",
+      "text": "Vendor's sprite just reset!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-79",
+      "text": "Level up your snack game!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-80",
+      "text": "Wave's got more bounce than Sonic!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-81",
+      "text": "Go team! Blast those pixels!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-82",
+      "text": "Eat, sleep, wave, repeat!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-83",
+      "text": "Wave so loud it's breaking the game!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-84",
+      "text": "Boo-yah! That wave was a combo hit!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-85",
+      "text": "Crank it up to warp zone speed!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-86",
+      "text": "Let's break the scoreboard, crowd!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-87",
+      "text": "Hyper jump on this next wave!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-88",
+      "text": "High score for wave power!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-89",
+      "text": "It's a crowd control party!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-90",
+      "text": "Power combo: cheers and nachos!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-91",
+      "text": "Vendors, mash that A button!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-92",
+      "text": "Mascot's dancing like he's stuck in a cutscene!",
+      "emotion": "sarcastic",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-93",
+      "text": "Wave so strong, it needs a memory upgrade!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-94",
+      "text": "Next wave, let's go turbo!",
+      "emotion": "excited",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-95",
+      "text": "Team's playing like old-school heroes!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-96",
+      "text": "Vendor's lagging IRL!",
+      "emotion": "frustrated",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-97",
+      "text": "Mascot, press START to party!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-98",
+      "text": "We're in the bonus round of cheers!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-99",
+      "text": "Wave, wave, revolution arcade style!",
+      "emotion": "playful",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    },
+    {
+      "id": "crowd-chatter-100",
+      "text": "Only in 8-bit can my dad do the wave!",
+      "emotion": "celebratory",
+      "tags": [
+        "crowd",
+        "retro",
+        "8-bit"
+      ],
+      "priority": 3,
+      "cooldown": 10000
+    }
+  ],
+  "metadata": {
+    "totalItems": 113,
+    "totalCost": 0,
+    "totalTokens": 0,
+    "generationTime": 0,
+    "status": "cached"
+  }
+}

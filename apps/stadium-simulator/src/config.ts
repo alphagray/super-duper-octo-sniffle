@@ -5,9 +5,19 @@ import { StadiumScene } from './scenes/StadiumScene';
 import { ScoreReportScene } from './scenes/ScoreReportScene';
 import { GameOverScene } from './scenes/GameOverScene';
 import { GridOverlay } from './scenes/GridOverlay';
+import { SpeechBubbleDemoScene } from './scenes/SpeechBubbleDemoScene';
 
-// Core game scenes
-let scenes: Phaser.Types.Scenes.SceneType[] = [MenuScene, WorldScene, StadiumScene, ScoreReportScene, GameOverScene];
+// Detect debug mode from URL before exporting config
+let scenes: Phaser.Types.Scenes.SceneType[] = [MenuScene, StadiumScene, ScoreReportScene, GameOverScene, TestSectionScene];
+try {
+  const url = new URL(window.location.href);
+  const demoMode = url.searchParams.get('demo');
+  if (demoMode === 'debug') {
+    scenes = [SpeechBubbleDemoScene];
+  }
+} catch (e) {
+  // fallback to default scenes
+}
 
 export const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

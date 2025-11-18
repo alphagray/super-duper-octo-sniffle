@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import { config } from './config';
+import { initDevPanel } from './ui/DevPanel';
+
+// Initialize dev panel (only in development mode)
+initDevPanel();
 
 // Check for demo mode parameters before creating game
 let demoMode: string | null = null;
@@ -20,5 +24,8 @@ if (demoMode === 'section') {
 } else if (demoMode === 'debug') {
   game.scene.stop('StadiumScene');
   game.scene.start('TestSectionDebugScene');
+} else if (demoMode === 'speech') {
+  game.scene.stop('StadiumScene');
+  game.scene.start('SpeechBubbleDemoScene');
 }
 
