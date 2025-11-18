@@ -47,6 +47,9 @@ ANTHROPIC_API_URL=https://api.anthropic.com/v1/messages
 Set environment variables in the Vercel dashboard:
 - `ANTHROPIC_API_KEY` - Your Anthropic API key
 - `ANTHROPIC_API_URL` - (Optional) Defaults to `https://api.anthropic.com/v1/messages`
+- `ADMIN_API_KEY` - Secure key for admin dashboard access
+
+📖 **See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete deployment instructions.**
 
 ### Development
 
@@ -192,6 +195,38 @@ The project can also deploy to GitHub Pages (static assets only, no serverless f
 - **Input Validation**: All requests validated and sanitized
 - **Environment Variables**: API keys stored securely server-side
 - **CORS Protection**: Configured for secure cross-origin requests
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[AI_SYSTEM.md](./docs/AI_SYSTEM.md)** - Complete AI system documentation
+  - Architecture overview with diagrams
+  - Developer guide for adding archetypes and content types
+  - Designer guide for writing effective prompts
+  - Configuration reference
+  - API reference with examples
+  - Troubleshooting guide
+  - Cost analysis and projections
+
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Production deployment checklist
+  - Pre-deployment verification
+  - Step-by-step deployment instructions
+  - Post-deployment validation
+  - Rollback procedures
+  - Ongoing maintenance tasks
+
+- **[AI_CONFIGURATION.md](./docs/AI_CONFIGURATION.md)** - Detailed AI config reference
+- **[API_GENERATE_CONTENT.md](./docs/API_GENERATE_CONTENT.md)** - API implementation details
+- **[CONTENT_GENERATION_GUIDE.md](./docs/CONTENT_GENERATION_GUIDE.md)** - Content creation tips
+
+### Admin Dashboard
+
+Access the cost monitoring dashboard at `/admin.html`:
+- Real-time usage and cost tracking
+- Endpoint-specific statistics
+- Epoch-based cost breakdown
+- Requires ADMIN_API_KEY for authentication
 
 ## 📝 Development Status
 

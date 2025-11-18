@@ -34,7 +34,7 @@ const createLargeGameContent = (epoch: number): GameAIContent => {
     id: `vendor-${i}`,
     name: `Vendor ${i}`,
     description: 'A friendly vendor',
-    productType: ['food', 'drinks', 'snacks'][i % 3] as 'food' | 'drinks' | 'snacks',
+    productType: ['snacks', 'drinks', 'merchandise'][i % 3] as 'snacks' | 'drinks' | 'merchandise',
     traits: [
       {
         id: `trait-${i}`,
@@ -51,7 +51,7 @@ const createLargeGameContent = (epoch: number): GameAIContent => {
         event: 'vendorServe' as const,
         minHappiness: j * 5,
       },
-      emotion: 'cheerful' as const,
+      emotion: 'playful' as const,
       priority: 5,
       cooldown: 5000,
     })),
@@ -83,7 +83,7 @@ const createLargeGameContent = (epoch: number): GameAIContent => {
     id: `mascot-${i}`,
     name: `Mascot ${i}`,
     description: 'An energetic mascot',
-    mascotType: 'bear' as const,
+    theme: 'animal' as const,
     traits: [
       {
         id: `trait-mascot-${i}`,
@@ -112,15 +112,12 @@ const createLargeGameContent = (epoch: number): GameAIContent => {
         duration: 10000,
         effects: [
           {
-            target: 'crowd' as const,
-            statModifier: 'happiness' as const,
+            stat: 'happiness' as const,
+            type: 'add' as const,
             value: 20,
-            duration: 10000,
+            target: 'allSections' as const,
           },
         ],
-        triggerCondition: {
-          minHappiness: 0,
-        },
         animation: 'dance',
       },
     ],
@@ -171,7 +168,7 @@ const createLargeGameContent = (epoch: number): GameAIContent => {
         id: `catchphrase-${i}`,
         text: 'Amazing!',
         trigger: {
-          event: 'waveComplete',
+          event: 'waveComplete' as const,
           conditions: {
             perfectWave: true,
           },

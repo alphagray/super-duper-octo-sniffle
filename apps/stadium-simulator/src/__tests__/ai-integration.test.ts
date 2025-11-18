@@ -30,7 +30,7 @@ const createMockGameContent = (epoch: number): GameAIContent => ({
       id: `vendor-epoch-${epoch}`,
       name: 'Hot Dog Harry',
       description: 'A friendly hot dog vendor',
-      productType: 'food',
+      productType: 'snacks',
       traits: [
         {
           id: 'friendly',
@@ -48,7 +48,7 @@ const createMockGameContent = (epoch: number): GameAIContent => ({
             event: 'vendorServe',
             minHappiness: 0,
           },
-          emotion: 'cheerful',
+          emotion: 'playful',
           priority: 5,
           cooldown: 5000,
         },
@@ -93,7 +93,7 @@ const createMockGameContent = (epoch: number): GameAIContent => ({
       id: `mascot-epoch-${epoch}`,
       name: 'Thunder Bear',
       description: 'An energetic stadium mascot',
-      mascotType: 'bear',
+      theme: 'animal',
       traits: [
         {
           id: 'energetic',
@@ -124,15 +124,12 @@ const createMockGameContent = (epoch: number): GameAIContent => ({
           duration: 10000,
           effects: [
             {
-              target: 'crowd',
-              statModifier: 'happiness',
+              stat: 'happiness',
+              type: 'add',
               value: 20,
-              duration: 10000,
+              target: 'allSections',
             },
           ],
-          triggerCondition: {
-            minHappiness: 0,
-          },
           animation: 'dance',
         },
       ],
@@ -186,7 +183,7 @@ const createMockGameContent = (epoch: number): GameAIContent => ({
           context: {
             event: 'waveComplete',
           },
-          emotion: 'cheerful',
+          emotion: 'celebratory',
           priority: 5,
           cooldown: 8000,
         },
@@ -681,8 +678,8 @@ describe('AI Integration Tests', () => {
 
       // Check effect properties
       const effect = ability.effects[0];
-      expect(effect.target).toBe('crowd');
-      expect(effect.statModifier).toBe('happiness');
+      expect(effect.target).toBe('allSections');
+      expect(effect.stat).toBe('happiness');
       expect(effect.value).toBe(20);
     });
 

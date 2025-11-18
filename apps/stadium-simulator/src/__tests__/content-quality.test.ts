@@ -113,7 +113,7 @@ describe('Content Quality Tests', () => {
         expect(mascot.id, `Mascot ${index} missing id`).toBeTruthy();
         expect(mascot.name, `Mascot ${index} missing name`).toBeTruthy();
         expect(mascot.description, `Mascot ${index} missing description`).toBeTruthy();
-        expect(mascot.mascotType, `Mascot ${index} missing mascotType`).toBeTruthy();
+        expect(mascot.theme, `Mascot ${index} missing theme`).toBeTruthy();
         
         // Collections
         expect(mascot.traits, `Mascot ${index} missing traits`).toBeInstanceOf(Array);
@@ -308,9 +308,9 @@ describe('Content Quality Tests', () => {
         });
       });
 
-      // Announcer dialogue should use announcer events
+      // Announcer commentary should use announcer events
       staticContent.announcers.forEach((announcer) => {
-        announcer.dialogue.forEach((line) => {
+        announcer.commentary.forEach((line) => {
           expect(['waveStart', 'waveComplete', 'sectionSuccess', 'sectionFail', 'sessionStart', 'sessionEnd', 'highScore', 'lowScore']).toContain(line.context.event);
         });
       });
@@ -465,7 +465,7 @@ describe('Content Quality Tests', () => {
         ...staticContent.announcers.flatMap(a => [
           a.name,
           a.description,
-          ...a.dialogue.map(d => d.text),
+          ...a.commentary.map(d => d.text),
           ...a.catchphrases.map(c => c.text),
           ...a.traits.map(t => t.description),
         ]),
@@ -553,11 +553,11 @@ describe('Content Quality Tests', () => {
             // Effects should have reasonable values
             expect(Math.abs(effect.value)).toBeGreaterThan(0);
             expect(Math.abs(effect.value)).toBeLessThan(100);
-            
-            // Duration should be reasonable
-            expect(effect.duration).toBeGreaterThan(0);
-            expect(effect.duration).toBeLessThan(60000); // Less than 1 minute
           });
+          
+          // Duration should be reasonable
+          expect(ability.duration).toBeGreaterThan(0);
+          expect(ability.duration).toBeLessThan(60000); // Less than 1 minute
         });
       });
     });
