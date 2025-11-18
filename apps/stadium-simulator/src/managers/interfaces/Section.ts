@@ -10,6 +10,8 @@ export interface Section {
   thirst: number;
   /** Attention level of fans in this section (0-100) */
   attention: number;
+  /** Environmental modifier for thirst (< 1.0 = shade, 1.0 = normal, > 1.0 = hot/sunny) */
+  environmentalModifier: number;
 }
 
 /**

@@ -132,14 +132,12 @@ export class SectionActor extends SceneryActor {
         const seat = rowActor.getSeatAt(fd.col);
         if (seat) {
           // Create fan sprite at seat position
-          // gridToWorld returns center of cell, but fan origin is at bottom (y=0)
-          // so we need to shift Y down by half cellSize to bottom-align the fan
+          // gridToWorld already returns center of cell
           const worldPos = this.gridManager
             ? this.gridManager.gridToWorld(this.sectionData.gridTop + fd.row, this.sectionData.gridLeft + fd.col)
             : { x: 0, y: 0 };
-          const cellSize = this.gridManager ? this.gridManager.getWorldSize().cellSize : 32;
           const seatOffsetY = 5; // Offset to align with top of row floor divider (matches SectionRow seat positioning)
-          const fanY = worldPos.y + cellSize / 2 - seatOffsetY; // Shift down to bottom of cell, then up by seat offset
+          const fanY = worldPos.y - seatOffsetY; // Adjust from cell center by seat offset
           const fan = new Fan(this.section.scene, worldPos.x, fanY);
           seat.setFan(fan);
           this.fans.set(`${fd.row}-${fd.col}`, fan);
@@ -217,11 +215,13 @@ export class SectionActor extends SceneryActor {
   /**
    * Update all fan stats (thirst, happiness, attention decay).
    * Called explicitly by StadiumScene during active session.
+   * @param deltaTime - Time elapsed in milliseconds
+   * @param environmentalModifier - Environmental thirst multiplier (< 1.0 = shade, 1.0 = normal, > 1.0 = hot/sunny)
    */
-  public updateFanStats(deltaTime: number): void {
+  public updateFanStats(deltaTime: number, environmentalModifier: number = 1.0): void {
     const allFans = this.getFans();
     for (const fan of allFans) {
-      fan.updateStats(deltaTime);
+      fan.updateStats(deltaTime, environmentalModifier);
     }
     // Update cached aggregate values for performance
     this.updateAggregateCache();

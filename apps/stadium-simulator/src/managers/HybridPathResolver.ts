@@ -7,6 +7,8 @@ import { gameBalance } from '@/config/gameBalance';
 
 /**
  * Navigation node types for hybrid pathfinding
+ * All nodes store grid coordinates (gridRow, gridCol) as source of truth
+ * World coordinates (x, y) are cached for performance
  */
 
 /** Corridor node (top or front of section) */
@@ -15,8 +17,10 @@ export interface CorridorNode {
   position: 'top' | 'front';
   sectionIdx: number;
   colIdx: number;
-  x: number;
-  y: number;
+  gridRow: number;
+  gridCol: number;
+  x: number; // cached world coordinate
+  y: number; // cached world coordinate
 }
 
 /** Stair node (left or right edge between sections) */
@@ -24,8 +28,10 @@ export interface StairNode {
   type: 'stair';
   side: 'left' | 'right';
   sectionIdx: number; // section it connects to
-  y: number; // vertical position along stair
-  x: number;
+  gridRow: number;
+  gridCol: number;
+  x: number; // cached world coordinate
+  y: number; // cached world coordinate
 }
 
 /** Row entry node (access point to a section row) */
@@ -34,8 +40,10 @@ export interface RowEntryNode {
   sectionIdx: number;
   rowIdx: number;
   colIdx: number;
-  x: number;
-  y: number;
+  gridRow: number;
+  gridCol: number;
+  x: number; // cached world coordinate
+  y: number; // cached world coordinate
 }
 
 /** Seat anchor node (specific fan location) */
@@ -44,16 +52,20 @@ export interface SeatNode {
   sectionIdx: number;
   rowIdx: number;
   colIdx: number;
-  x: number;
-  y: number;
+  gridRow: number;
+  gridCol: number;
+  x: number; // cached world coordinate
+  y: number; // cached world coordinate
   fan?: Fan;
 }
 
 /** Ground node (open area below sections, allows diagonal movement) */
 export interface GroundNode {
   type: 'ground';
-  x: number;
-  y: number;
+  gridRow: number;
+  gridCol: number;
+  x: number; // cached world coordinate
+  y: number; // cached world coordinate
   zone: number; // Ground zone index for grouping
 }
 
@@ -121,12 +133,38 @@ export class HybridPathResolver {
   }
 
   /**
+   * Helper to convert grid coordinates to world coordinates with cell centering
+   * Returns the CENTER of the grid cell for proper alignment
+   * Note: gridManager.gridToWorld() already returns cell center, no offset needed
+   */
+  private gridToWorldCentered(gridRow: number, gridCol: number): { x: number; y: number } {
+    if (!this.gridManager) {
+      // Fallback if no grid manager available
+      return { x: gridCol * 32, y: gridRow * 32 };
+    }
+    
+    // gridToWorld() already returns the cell center
+    return this.gridManager.gridToWorld(gridRow, gridCol);
+  }
+
+  /**
+   * Helper to convert world coordinates to grid coordinates
+   */
+  private worldToGrid(x: number, y: number): { row: number; col: number } | null {
+    if (!this.gridManager) {
+      return { row: Math.floor(y / 32), col: Math.floor(x / 32) };
+    }
+    return this.gridManager.worldToGrid(x, y);
+  }
+
+  /**
    * Build navigation graph from stadium sections
    * Creates a hierarchical navigation graph with:
    * - Corridor nodes (top/front of each section)
+   * - Ground nodes (open area for diagonal movement)
+   * - Stair nodes (connections between sections)
    * - Row entry nodes (access points to each row)
-   * - Seat nodes (for occupied seats)
-   * - Uses GridManager when available for accurate passability and cost
+   * - Uses grid coordinates as source of truth, caches world coordinates
    * 
    * @param sections Array of StadiumSection objects
    * @returns Navigation graph structure
@@ -135,47 +173,75 @@ export class HybridPathResolver {
     const nodes = new Map<string, NavigationNode>();
     const edges = new Map<string, Array<{ targetNodeId: string; baseCost: number }>>();
 
-    // Phase 1: Create corridor nodes for each section
+    // Get grid dimensions for ground calculation
+    const gridRows = this.gridManager?.getRowCount() || 24;
+    const gridCols = this.gridManager?.getColumnCount() || 32;
+
+    // Phase 1: Create corridor nodes for each section (grid-based)
     sections.forEach((section, sectionIdx) => {
-      const sectionBounds = section.getBounds();
-      const centerX = sectionBounds.x + sectionBounds.width / 2;
+      const rows = section.getRows();
+      if (rows.length === 0) return;
+      
+      // Get grid position from first seat of first row
+      const firstRow = rows[0];
+      const firstSeat = firstRow?.getSeats()[0];
+      if (!firstSeat) return;
+      
+      const firstSeatGrid = firstSeat.getGridPosition();
+      const lastRow = rows[rows.length - 1];
+      const lastSeat = lastRow?.getSeats()[0];
+      const lastSeatGrid = lastSeat?.getGridPosition();
+      
+      // Calculate corridor grid positions
+      const topCorridorRow = firstSeatGrid.row - 1; // One row above section
+      const frontCorridorRow = (lastSeatGrid?.row || firstSeatGrid.row) + 1; // One row below section
+      const centerCol = Math.floor(firstRow.getSeats().length / 2) + firstSeatGrid.col;
       
       // Top corridor (above section)
       const topCorridorId = `corridor_top_${sectionIdx}`;
+      const topWorld = this.gridToWorldCentered(topCorridorRow, centerCol);
       nodes.set(topCorridorId, {
         type: 'corridor',
         position: 'top',
         sectionIdx,
-        colIdx: Math.floor(section.getRows()[0]?.getSeats().length / 2) || 4,
-        x: centerX,
-        y: sectionBounds.y - gameBalance.vendorMovement.corridorWidth,
+        colIdx: Math.floor(firstRow.getSeats().length / 2),
+        gridRow: topCorridorRow,
+        gridCol: centerCol,
+        x: topWorld.x,
+        y: topWorld.y,
       });
 
       // Front corridor (below section)
       const frontCorridorId = `corridor_front_${sectionIdx}`;
+      const frontWorld = this.gridToWorldCentered(frontCorridorRow, centerCol);
       nodes.set(frontCorridorId, {
         type: 'corridor',
         position: 'front',
         sectionIdx,
-        colIdx: Math.floor(section.getRows()[0]?.getSeats().length / 2) || 4,
-        x: centerX,
-        y: sectionBounds.y + sectionBounds.height + gameBalance.vendorMovement.corridorWidth,
+        colIdx: Math.floor(firstRow.getSeats().length / 2),
+        gridRow: frontCorridorRow,
+        gridCol: centerCol,
+        x: frontWorld.x,
+        y: frontWorld.y,
       });
     });
 
-    // Phase 1.5: Create ground nodes for open area below sections
+    // Phase 1.5: Create ground nodes for open area below sections (grid-based)
     // Ground is the open space vendors can move diagonally through
-    const groundY = sections[0] ? sections[0].getBounds().y + sections[0].getBounds().height + 100 : 600;
-    const canvasWidth = 1024; // TODO: Get from scene/config
-    const groundNodeSpacing = 150; // Spacing between ground nodes
+    const groundRowsFromBottom = gameBalance.grid.groundLine.rowsFromBottom;
+    const groundGridRow = gridRows - groundRowsFromBottom; // e.g., 24 - 6 = 18
+    const groundNodeSpacing = 5; // Grid columns between ground nodes
     
-    // Create a grid of ground nodes across the width of the stadium
-    for (let x = 100; x < canvasWidth - 100; x += groundNodeSpacing) {
-      const groundNodeId = `ground_${Math.floor(x / groundNodeSpacing)}`;
+    // Create ground nodes horizontally across the stadium
+    for (let col = 2; col < gridCols - 2; col += groundNodeSpacing) {
+      const groundNodeId = `ground_${col}`;
+      const groundWorld = this.gridToWorldCentered(groundGridRow, col);
       nodes.set(groundNodeId, {
         type: 'ground',
-        x,
-        y: groundY,
+        gridRow: groundGridRow,
+        gridCol: col,
+        x: groundWorld.x,
+        y: groundWorld.y,
         zone: 0,
       });
     }
@@ -222,20 +288,27 @@ export class HybridPathResolver {
       });
     });
 
-    // Phase 2: Create stair nodes from ActorRegistry
+    // Phase 2: Create stair nodes from ActorRegistry (grid-based)
     if (this.actorRegistry) {
       const stairsActors = this.actorRegistry.getByCategory('stairs');
       stairsActors.forEach((actor: any) => {
         const stairData = actor.getSnapshot();
         const stairId = `stair_${stairData.id}`;
         
+        // Use grid bounds from StairsActor - center of stair area
+        const centerGridRow = stairData.gridBounds.top + Math.floor(stairData.gridBounds.height / 2);
+        const centerGridCol = stairData.gridBounds.left + Math.floor(stairData.gridBounds.width / 2);
+        const centerWorld = this.gridToWorldCentered(centerGridRow, centerGridCol);
+        
         // Create stair node at center of stairs
         nodes.set(stairId, {
           type: 'stair',
           side: 'right', // TODO: Determine from position relative to sections
           sectionIdx: -1, // Will be determined by connections
-          x: stairData.worldBounds.x,
-          y: stairData.worldBounds.y,
+          gridRow: centerGridRow,
+          gridCol: centerGridCol,
+          x: centerWorld.x,
+          y: centerWorld.y,
         });
 
         // Connect stairs to adjacent sections' corridor nodes
@@ -297,31 +370,36 @@ export class HybridPathResolver {
       }
     }
 
-    // Phase 3: Create row entry nodes for each section row
+    // Phase 3: Create row entry nodes for each section row (grid-based)
     sections.forEach((section, sectionIdx) => {
       const rows = section.getRows();
-      const sectionBounds = section.getBounds();
 
       rows.forEach((row, rowIdx) => {
         const seats = row.getSeats();
         // Get row position from first seat's grid coordinates
         const firstSeat = seats[0];
-        if (!firstSeat || !this.gridManager) return;
-        const gridPos = firstSeat.getGridPosition();
-        const worldPos = this.gridManager.gridToWorld(gridPos.row, gridPos.col);
-        const rowY = worldPos.y;
-
-        // Create entry nodes at both ends of row
+        const lastSeat = seats[seats.length - 1];
+        if (!firstSeat || !lastSeat) return;
+        
+        const firstGrid = firstSeat.getGridPosition();
+        const lastGrid = lastSeat.getGridPosition();
+        
+        // Entry nodes at first and last columns of row
         const leftEntryId = `rowEntry_left_${sectionIdx}_${rowIdx}`;
         const rightEntryId = `rowEntry_right_${sectionIdx}_${rowIdx}`;
+        
+        const leftWorld = this.gridToWorldCentered(firstGrid.row, firstGrid.col);
+        const rightWorld = this.gridToWorldCentered(lastGrid.row, lastGrid.col);
 
         nodes.set(leftEntryId, {
           type: 'rowEntry',
           sectionIdx,
           rowIdx,
           colIdx: 0,
-          x: sectionBounds.x,
-          y: rowY,
+          gridRow: firstGrid.row,
+          gridCol: firstGrid.col,
+          x: leftWorld.x,
+          y: leftWorld.y,
         });
 
         nodes.set(rightEntryId, {
@@ -329,24 +407,35 @@ export class HybridPathResolver {
           sectionIdx,
           rowIdx,
           colIdx: seats.length - 1,
-          x: sectionBounds.x + sectionBounds.width,
-          y: rowY,
+          gridRow: lastGrid.row,
+          gridCol: lastGrid.col,
+          x: rightWorld.x,
+          y: rightWorld.y,
         });
 
-        // Connect row entries to top corridor
-        const topCorridorId = `corridor_top_${sectionIdx}`;
+        // Connect row entries to corridors ONLY if adjacent
+        // First row connects to top corridor, last row connects to front corridor
+        const isFirstRow = rowIdx === 0;
+        const isLastRow = rowIdx === rows.length - 1;
         const entryToCorridor = gameBalance.vendorMovement.rowEntryToCorridor || 50;
-        this.addEdge(edges, leftEntryId, topCorridorId, entryToCorridor);
-        this.addEdge(edges, topCorridorId, leftEntryId, entryToCorridor);
-        this.addEdge(edges, rightEntryId, topCorridorId, entryToCorridor);
-        this.addEdge(edges, topCorridorId, rightEntryId, entryToCorridor);
-
-        // Connect row entries to front corridor
-        const frontCorridorId = `corridor_front_${sectionIdx}`;
-        this.addEdge(edges, leftEntryId, frontCorridorId, entryToCorridor);
-        this.addEdge(edges, frontCorridorId, leftEntryId, entryToCorridor);
-        this.addEdge(edges, rightEntryId, frontCorridorId, entryToCorridor);
-        this.addEdge(edges, frontCorridorId, rightEntryId, entryToCorridor);
+        
+        if (isFirstRow) {
+          // First row connects to top corridor (above section)
+          const topCorridorId = `corridor_top_${sectionIdx}`;
+          this.addEdge(edges, leftEntryId, topCorridorId, entryToCorridor);
+          this.addEdge(edges, topCorridorId, leftEntryId, entryToCorridor);
+          this.addEdge(edges, rightEntryId, topCorridorId, entryToCorridor);
+          this.addEdge(edges, topCorridorId, rightEntryId, entryToCorridor);
+        }
+        
+        if (isLastRow) {
+          // Last row connects to front corridor (below section)
+          const frontCorridorId = `corridor_front_${sectionIdx}`;
+          this.addEdge(edges, leftEntryId, frontCorridorId, entryToCorridor);
+          this.addEdge(edges, frontCorridorId, leftEntryId, entryToCorridor);
+          this.addEdge(edges, rightEntryId, frontCorridorId, entryToCorridor);
+          this.addEdge(edges, frontCorridorId, rightEntryId, entryToCorridor);
+        }
 
         // Connect left and right entries (traversing the row)
         const rowTraverseCost = seats.length * gameBalance.vendorMovement.baseSpeedRow;
@@ -451,6 +540,15 @@ export class HybridPathResolver {
     // Run Dijkstra's algorithm
     const nodePath = this.dijkstra(startNodeId, targetNodeId);
     
+    // Debug logging for pathfinding validation
+    if (nodePath.length > 0) {
+      const nodeTypes = nodePath.map(id => {
+        const node = this.graph.nodes.get(id);
+        return node ? `${node.type}(r${node.gridRow || '?'},c${node.gridCol || '?'})` : id;
+      }).join(' → ');
+      console.log(`[HybridPathResolver] Pathfinding result: ${nodePath.length} nodes\n  ${nodeTypes}`);
+    }
+    
     // Convert node path to PathSegment array
     const segments: PathSegment[] = [];
     
@@ -480,14 +578,27 @@ export class HybridPathResolver {
       }
     }
 
-    // Add segments for each node in path
+    // Add segments for each node in path, expanding to grid-cell waypoints
+    // expandToGridPath will create waypoints from currentNode to nextNode (inclusive of nextNode)
     for (let i = 0; i < nodePath.length - 1; i++) {
       const currentNode = this.graph.nodes.get(nodePath[i]);
       const nextNode = this.graph.nodes.get(nodePath[i + 1]);
       if (currentNode && nextNode) {
-        const cost = this.calculateDistance(currentNode.x, currentNode.y, nextNode.x, nextNode.y);
-        segments.push(this.nodeToSegment(nextNode, cost));
+        // Expand path between nodes to follow grid cells
+        const gridWaypoints = this.expandToGridPath(currentNode, nextNode);
+        console.log(`[HybridPathResolver] Expanding ${currentNode.type}→${nextNode.type}: ${gridWaypoints.length} waypoints`);
+        segments.push(...gridWaypoints);
       }
+    }
+    
+    // Note: We don't add a separate final node here because expandToGridPath
+    // already includes the target node in its waypoints
+    
+    console.log(`[HybridPathResolver] Total path segments: ${segments.length}`);
+    if (segments.length > 0) {
+      console.log('[HybridPathResolver] Segment details:', segments.map((s, i) => 
+        `${i}: ${s.nodeType} (${s.gridRow || '?'},${s.gridCol || '?'}) @ (${Math.round(s.x)},${Math.round(s.y)})`
+      ).join('\n  '));
     }
 
     // If original target was a seat (not a row entry), add final segment from row entry to seat
@@ -585,12 +696,19 @@ export class HybridPathResolver {
 
   /**
    * Find nearest navigation node to a world position
+   * Excludes row entries and seats - vendors can only enter via corridors, stairs, or ground
    */
   private findNearestNode(x: number, y: number): NavigationNode | null {
     let nearest: NavigationNode | null = null;
     let minDistance = Infinity;
 
     for (const node of this.graph.nodes.values()) {
+      // Vendors can only start pathfinding from public access nodes
+      // Row entries and seats are internal to sections
+      if (node.type === 'rowEntry' || node.type === 'seat') {
+        continue;
+      }
+      
       const dist = this.calculateDistance(x, y, node.x, node.y);
       if (dist < minDistance) {
         minDistance = dist;
@@ -615,6 +733,74 @@ export class HybridPathResolver {
       case 'seat':
         return `seat_${node.sectionIdx}_${node.rowIdx}_${node.colIdx}`;
     }
+  }
+
+  /**
+   * Expand path between two navigation nodes into grid-aligned waypoints
+   * Uses Manhattan (orthogonal) movement to avoid diagonal cutting through rows
+   */
+  private expandToGridPath(fromNode: NavigationNode, toNode: NavigationNode): PathSegment[] {
+    const segments: PathSegment[] = [];
+    
+    if (!this.gridManager) {
+      // No grid manager - fall back to direct segment
+      return [this.nodeToSegment(toNode, this.calculateDistance(fromNode.x, fromNode.y, toNode.x, toNode.y))];
+    }
+    
+    // Convert world positions to grid coordinates
+    const fromGrid = this.worldToGrid(fromNode.x, fromNode.y);
+    const toGrid = this.worldToGrid(toNode.x, toNode.y);
+    
+    if (!fromGrid || !toGrid) {
+      return [this.nodeToSegment(toNode, this.calculateDistance(fromNode.x, fromNode.y, toNode.x, toNode.y))];
+    }
+    
+    // Use Manhattan path: move horizontally first, then vertically
+    // This prevents diagonal movement across rows
+    const currentRow = fromGrid.row;
+    const currentCol = fromGrid.col;
+    const targetRow = toGrid.row;
+    const targetCol = toGrid.col;
+    
+    // Move horizontally
+    if (currentCol !== targetCol) {
+      const colStep = currentCol < targetCol ? 1 : -1;
+      for (let col = currentCol + colStep; col !== targetCol + colStep; col += colStep) {
+        const worldPos = this.gridManager.gridToWorld(currentRow, col);
+        segments.push({
+          nodeType: fromNode.type === 'ground' ? 'ground' : 'corridor',
+          sectionIdx: 'sectionIdx' in fromNode ? fromNode.sectionIdx : 0,
+          rowIdx: currentRow,
+          colIdx: col,
+          gridRow: currentRow,
+          gridCol: col,
+          x: worldPos.x,
+          y: worldPos.y,
+          cost: this.gridManager.getWorldSize().cellSize,
+        });
+      }
+    }
+    
+    // Move vertically
+    if (currentRow !== targetRow) {
+      const rowStep = currentRow < targetRow ? 1 : -1;
+      for (let row = currentRow + rowStep; row !== targetRow + rowStep; row += rowStep) {
+        const worldPos = this.gridManager.gridToWorld(row, targetCol);
+        segments.push({
+          nodeType: toNode.type === 'stair' ? 'stair' : toNode.type,
+          sectionIdx: 'sectionIdx' in toNode ? toNode.sectionIdx : 0,
+          rowIdx: row,
+          colIdx: targetCol,
+          gridRow: row,
+          gridCol: targetCol,
+          x: worldPos.x,
+          y: worldPos.y,
+          cost: this.gridManager.getWorldSize().cellSize,
+        });
+      }
+    }
+    
+    return segments;
   }
 
   /**

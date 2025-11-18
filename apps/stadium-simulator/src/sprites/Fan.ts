@@ -26,6 +26,9 @@ export class Fan extends BaseActorContainer {
   private thirst: number;
   private attention: number;
 
+  // Randomized thirst growth rate (environmental sensitivity)
+  private thirstMultiplier: number;
+
   // Grump/difficult terrain stats (foundation for future grump type)
   private disgruntlement: number = 0; // only grows for future grump type
   private disappointment: number = 0; // dynamic accumulator for unhappiness condition
@@ -70,6 +73,14 @@ export class Fan extends BaseActorContainer {
     this.happiness = gameBalance.fanStats.initialHappiness;
     this.thirst = Math.random() * (gameBalance.fanStats.initialThirstMax - gameBalance.fanStats.initialThirstMin) + gameBalance.fanStats.initialThirstMin;
     this.attention = gameBalance.fanStats.initialAttention;
+    
+    // Randomize thirst growth rate: 0.5x to 1.5x (bell curve centered at 1.0)
+    // Using normal distribution approximation with 3 random values
+    const r1 = Math.random();
+    const r2 = Math.random();
+    const r3 = Math.random();
+    const bellCurve = (r1 + r2 + r3) / 3; // Average of 3 randoms approximates normal distribution
+    this.thirstMultiplier = 0.5 + bellCurve; // Maps 0-1 to 0.5-1.5
   }
 
   public setIntensity(v?: number) {
@@ -493,6 +504,10 @@ export class Fan extends BaseActorContainer {
     return this.thirst;
   }
 
+  public getThirstMultiplier(): number {
+    return this.thirstMultiplier;
+  }
+
   public getHappiness(): number {
     return this.happiness;
   }
@@ -528,7 +543,7 @@ export class Fan extends BaseActorContainer {
   /**
    * Update fan stats over time
    */
-  public updateStats(deltaTime: number): void {
+  public updateStats(deltaTime: number, environmentalModifier: number = 1.0): void {
     // Convert ms to seconds for easier rate calculations
     const deltaSeconds = deltaTime / 1000;
 
@@ -547,8 +562,10 @@ export class Fan extends BaseActorContainer {
     if (this.thirstFreezeUntil && this.scene.time.now < this.thirstFreezeUntil) {
       // Do not increase thirst while frozen
     } else {
-      // Fans get thirstier over time (configurable)
-      this.thirst = Math.min(100, this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate);
+      // Fans get thirstier over time (configurable, with per-fan multiplier and environmental modifier)
+      // environmentalModifier: < 1.0 = shade/cool, 1.0 = normal, > 1.0 = hot/sunny
+      const totalMultiplier = this.thirstMultiplier * environmentalModifier;
+      this.thirst = Math.min(100, this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate * totalMultiplier);
     }
 
     // Thirsty fans get less happy (configurable rate)

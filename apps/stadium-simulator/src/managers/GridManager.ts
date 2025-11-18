@@ -107,8 +107,8 @@ export class GridManager extends BaseManager {
     const gridCol = col - Math.floor(this.cols / 2);
     const gridRow = row - Math.floor(this.rows / 2);
     return {
-      x: this.centerX + gridCol * this.cellSize,
-      y: this.centerY + gridRow * this.cellSize,
+      x: this.centerX + gridCol * this.cellSize + this.cellSize / 2,
+      y: this.centerY + gridRow * this.cellSize + this.cellSize / 2,
     };
   }
 

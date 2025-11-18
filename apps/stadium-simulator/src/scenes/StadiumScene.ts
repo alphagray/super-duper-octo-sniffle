@@ -228,11 +228,12 @@ export class StadiumScene extends Phaser.Scene {
       .catch(err => console.error('[AnnouncerService test] error', err));
 
     // Title at top center
-    this.add.text(this.cameras.main.centerX, 50, 'STADIUM SIMULATOR', {
-      fontSize: '48px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
+    // this is too cluttered for now.
+    // this.add.text(this.cameras.main.centerX, 50, 'STADIUM SIMULATOR', {
+    //   fontSize: '48px',
+    //   fontFamily: 'Arial',
+    //   color: '#ffffff',
+    // }).setOrigin(0.5, 0.5);
 
     // Score display at top-right
     this.scoreText = this.add.text(900, 50, 'Score: 0', {
@@ -638,7 +639,10 @@ export class StadiumScene extends Phaser.Scene {
       // Get section actors from registry and update their fan stats
       const sectionActors = this.actorRegistry.getByCategory('section');
       sectionActors.forEach(actor => {
-        (actor as any).updateFanStats(delta);
+        // Get environmental modifier for this section
+        const sectionId = (actor as any).data?.get('sectionId') || 'A';
+        const envModifier = this.gameState.getEnvironmentalModifier(sectionId);
+        (actor as any).updateFanStats(delta, envModifier);
       });
 
       // Sync section-level stats from fan aggregates for UI display

@@ -5,6 +5,7 @@ import type { StadiumSection } from '@/sprites/StadiumSection';
 import type { GridManager } from './GridManager';
 import { gameBalance } from '@/config/gameBalance';
 import { HybridPathResolver } from './HybridPathResolver';
+import { GridPathfinder } from './GridPathfinder';
 import type { ActorRegistry } from '@/actors/ActorRegistry';
 
 /**
@@ -54,6 +55,7 @@ export class AIManager {
   private gameState: GameStateManager;
   private eventListeners: Map<string, Array<Function>>;
   private pathResolver?: HybridPathResolver;
+  private gridPathfinder?: GridPathfinder;
   private sections: StadiumSection[];
   private gridManager?: GridManager;
   private actorRegistry?: ActorRegistry;
@@ -97,6 +99,12 @@ export class AIManager {
   public initializeSections(sections: StadiumSection[]): void {
     this.sections = sections;
     this.pathResolver = new HybridPathResolver(sections, this.gridManager, this.actorRegistry);
+    
+    // Initialize grid-based pathfinder if grid manager available
+    if (this.gridManager) {
+      this.gridPathfinder = new GridPathfinder(this.gridManager);
+      console.log('[AIManager] Grid-based pathfinder initialized');
+    }
   }
 
   /**
@@ -189,6 +197,14 @@ export class AIManager {
   }
 
   /**
+   * Get the grid pathfinder for debug visualization
+   * @returns GridPathfinder instance or undefined
+   */
+  public getGridPathfinder(): GridPathfinder | undefined {
+    return this.gridPathfinder;
+  }
+
+  /**
    * Get all vendor instances
    * @returns Map of vendor instances by ID
    */
@@ -240,11 +256,12 @@ export class AIManager {
    */
   public selectNextDrinkTarget(vendorId: number): { fan: Fan; sectionIdx: number; rowIdx: number; colIdx: number } | null {
     const instance = this.vendors.get(vendorId);
-    if (!instance || !this.pathResolver) return null;
+    if (!instance) return null;
 
-    const thirstThreshold = gameBalance.waveAutonomous.thirstHappinessDecayThreshold;
-    const candidates: Array<{ fan: Fan; sectionIdx: number; rowIdx: number; colIdx: number; x: number; y: number }> = [];
+    const candidates: Array<{ fan: Fan; sectionIdx: number; rowIdx: number; colIdx: number; x: number; y: number; thirst: number }> = [];
 
+    let totalFans = 0;
+    
     // Scan sections; if vendor has assignment restrict to that section
     for (let sIdx = 0; sIdx < this.sections.length; sIdx++) {
       if (instance.assignedSectionIdx !== undefined && instance.assignedSectionIdx !== sIdx) {
@@ -261,7 +278,8 @@ export class AIManager {
           const seat = seats[cIdx];
           if (!seat.isEmpty()) {
             const fan = seat.getFan();
-            if (fan && fan.getThirst() > thirstThreshold) {
+            totalFans++;
+            if (fan) {
               // Use grid position to get world coordinates
               const gridPos = seat.getGridPosition();
               const worldPos = this.gridManager 
@@ -274,6 +292,7 @@ export class AIManager {
                 colIdx: cIdx,
                 x: worldPos.x,
                 y: worldPos.y,
+                thirst: fan.getThirst()
               });
             }
           }
@@ -281,20 +300,41 @@ export class AIManager {
       }
     }
 
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) {
+      // if (Math.random() < 0.02) {
+      //   console.log(`[AIManager] Vendor ${vendorId} scan: ${totalFans} fans, 0 candidates (no fans found)`);
+      // }
+      return null;
+    }
 
-    // Score candidates using path resolver
-    const scores = this.pathResolver.scoreTargets(
-      instance.profile,
-      instance.position.x,
-      instance.position.y,
-      candidates
-    );
+    // Score candidates: distance + thirst weight
+    // Lower score is better (closer + thirstier)
+    const scoredCandidates = candidates.map(c => {
+      const dx = c.x - instance.position.x;
+      const dy = c.y - instance.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Thirst ranges 0-100. We want high thirst to reduce score.
+      // Distance might be 0-1000+. Normalize both to similar scale.
+      const normalizedDistance = distance / 32; // Divide by cell size to get grid distance
+      const thirstPriority = (100 - c.thirst) / 10; // High thirst = low score
+      
+      return {
+        ...c,
+        score: normalizedDistance + thirstPriority
+      };
+    });
 
-    if (scores.length === 0) return null;
+    // Sort by score (ascending - lower is better)
+    scoredCandidates.sort((a, b) => a.score - b.score);
 
-    // Return highest-scoring target
-    const best = scores[0];
+    // if (Math.random() < 0.02) { // Log occasionally
+    //   const best = scoredCandidates[0];
+    //   console.log(`[AIManager] Vendor ${vendorId} scan: ${totalFans} fans, ${candidates.length} candidates, best: thirst=${best.thirst}, dist=${Math.sqrt((best.x-instance.position.x)**2 + (best.y-instance.position.y)**2).toFixed(0)}`);
+    // }
+
+    // Return highest-priority target
+    const best = scoredCandidates[0];
     return {
       fan: best.fan,
       sectionIdx: best.sectionIdx,
@@ -310,7 +350,7 @@ export class AIManager {
    */
   public advanceMovement(vendorId: number, deltaTime: number): void {
     const instance = this.vendors.get(vendorId);
-    if (!instance || instance.state !== 'movingSegment' || !instance.currentPath) return;
+    if (!instance || (instance.state !== 'movingToFan' && instance.state !== 'movingToSection') || !instance.currentPath) return;
 
     const currentSegment = instance.currentPath[instance.currentSegmentIndex];
     if (!currentSegment) return;
@@ -332,6 +372,7 @@ export class AIManager {
     const deltaSeconds = deltaTime / 1000;
     const moveDistance = effectiveSpeed * deltaSeconds;
 
+    // Calculate distance and direction to next waypoint
     const dx = currentSegment.x - instance.position.x;
     const dy = currentSegment.y - instance.position.y;
     const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
@@ -350,12 +391,20 @@ export class AIManager {
         this.emit('vendorReachedTarget', { vendorId, position: instance.position });
       }
     } else {
-      // Move toward segment target along straight line between nodes
-      // Note: Each segment represents movement between navigation nodes,
-      // so this straight line movement is constrained to the navigation graph
-      const moveRatio = moveDistance / distanceToTarget;
-      instance.position.x += dx * moveRatio;
-      instance.position.y += dy * moveRatio;
+      // GRID-ALIGNED MOVEMENT: Move horizontally OR vertically, not diagonally
+      // Prioritize the axis with greater distance
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      
+      if (absDx > absDy) {
+        // Move horizontally
+        const direction = dx > 0 ? 1 : -1;
+        instance.position.x += direction * Math.min(moveDistance, absDx);
+      } else {
+        // Move vertically
+        const direction = dy > 0 ? 1 : -1;
+        instance.position.y += direction * Math.min(moveDistance, absDy);
+      }
     }
   }
 
@@ -438,21 +487,35 @@ export class AIManager {
    * @param deltaTime - Time elapsed in milliseconds
    */
   public update(deltaTime: number): void {
+    // Log occasionally to confirm update is running
+    // if (Math.random() < 0.01) { // ~1% chance per frame
+    //   console.log('[AIManager.update] Running with', this.vendors.size, 'vendors, delta:', deltaTime.toFixed(2));
+    //   // Log vendor states
+    //   for (const [id, v] of this.vendors) {
+    //     console.log(`  Vendor ${id}: state=${v.state}, scanTimer=${v.scanTimer.toFixed(2)}, pos=(${v.position.x.toFixed(1)},${v.position.y.toFixed(1)})`);
+    //   }
+    // }
+    
     // Update new profile-based vendors
     for (const [vendorId, instance] of this.vendors) {
-      // Update state timers
-      if (instance.stateTimer > 0) {
-        instance.stateTimer -= deltaTime;
-      }
+      try {
+        // Update state timers
+        if (instance.stateTimer > 0) {
+          instance.stateTimer -= deltaTime;
+        }
 
-      instance.distractionCheckTimer -= deltaTime;
+        instance.distractionCheckTimer -= deltaTime;
 
-      // State machine
-      switch (instance.state) {
+        // State machine
+        switch (instance.state) {
         case 'idle':
           // Attempt scan when timer elapses
           instance.scanTimer -= deltaTime;
+          // if (Math.random() < 0.005) { // Log occasionally
+          //   console.log(`[AIManager] Vendor ${vendorId} idle, scanTimer: ${instance.scanTimer.toFixed(2)}`);
+          // }
           if (instance.scanTimer <= 0) {
+            // console.log(`[AIManager] Vendor ${vendorId} scanning for targets...`);
             this.emit('vendorScanAttempt', { vendorId, assignedSectionIdx: instance.assignedSectionIdx });
             if (instance.profile.type === 'drink') {
               const target = this.selectNextDrinkTarget(vendorId);
@@ -464,7 +527,7 @@ export class AIManager {
                   colIdx: target.colIdx,
                 };
                 this.emit('vendorTargetSelected', { vendorId, sectionIdx: target.sectionIdx, rowIdx: target.rowIdx, colIdx: target.colIdx });
-                instance.state = 'planning';
+                instance.state = 'scanningInSection';
               } else {
                 this.emit('vendorNoTarget', { vendorId, assignedSectionIdx: instance.assignedSectionIdx });
                 // schedule next scan
@@ -474,10 +537,12 @@ export class AIManager {
           }
           break;
 
-        case 'planning':
-          // Plan path to target using HybridPathResolver
-          if (!this.pathResolver || !instance.targetPosition) {
-            console.warn(`[AIManager] Cannot plan path - missing pathResolver or targetPosition for vendor ${vendorId}`);
+        case 'scanningInSection':
+          // Plan path to target using pathfinding
+          // console.log(`[AIManager] Vendor ${vendorId} planning path. Has gridPathfinder: ${!!this.gridPathfinder}, Has pathResolver: ${!!this.pathResolver}, Has target: ${!!instance.targetPosition}`);
+          
+          if ((!this.gridPathfinder && !this.pathResolver) || !instance.targetPosition) {
+            console.warn(`[AIManager] Cannot plan path - missing pathfinder or targetPosition for vendor ${vendorId}`);
             instance.state = 'idle';
             break;
           }
@@ -502,24 +567,75 @@ export class AIManager {
             ? targetSeat.getWorldPosition(this.gridManager)
             : targetSeat.getPosition();
           
-          // Create target NavigationNode
-          const targetNode = {
-            type: 'seat' as const,
-            sectionIdx: instance.targetPosition.sectionIdx,
-            rowIdx: instance.targetPosition.rowIdx,
-            colIdx: instance.targetPosition.colIdx,
-            x: targetWorldPos.x,
-            y: targetWorldPos.y,
-            cost: 0,
-            heightLevel: 0
-          };
+          // Vendors can't enter seat cells - find nearest passable cell
+          let finalTargetX = targetWorldPos.x;
+          let finalTargetY = targetWorldPos.y;
           
-          const pathSegments = this.pathResolver.planPath(
-            instance.profile,
-            instance.position.x,
-            instance.position.y,
-            targetNode
-          );
+          if (this.gridManager) {
+            const seatGrid = this.gridManager.worldToGrid(targetWorldPos.x, targetWorldPos.y);
+            if (seatGrid) {
+              // Find nearest passable cell (row entry or corridor)
+              // Check cells around the seat in expanding radius
+              let found = false;
+              for (let radius = 1; radius <= 3 && !found; radius++) {
+                for (let dr = -radius; dr <= radius && !found; dr++) {
+                  for (let dc = -radius; dc <= radius && !found; dc++) {
+                    if (Math.abs(dr) !== radius && Math.abs(dc) !== radius) continue; // Only check perimeter
+                    const checkRow = seatGrid.row + dr;
+                    const checkCol = seatGrid.col + dc;
+                    const cell = this.gridManager.getCell(checkRow, checkCol);
+                    if (cell && cell.passable) {
+                      const passableWorld = this.gridManager.gridToWorld(checkRow, checkCol);
+                      finalTargetX = passableWorld.x;
+                      finalTargetY = passableWorld.y;
+                      found = true;
+                    }
+                  }
+                }
+              }
+              if (!found) {
+                console.warn(`[AIManager] No passable cell found near target seat for vendor ${vendorId}`);
+                instance.state = 'idle';
+                instance.scanTimer = 2000;
+                break;
+              }
+            }
+          }
+          
+          // Use grid-based A* pathfinding if available, otherwise fall back to navigation graph
+          let pathSegments: PathSegment[] = [];
+          
+          if (this.gridPathfinder && this.gridManager) {
+            // Grid-based A* pathfinding (preferred)
+            pathSegments = this.gridPathfinder.findPath(
+              instance.profile,
+              instance.position.x,
+              instance.position.y,
+              finalTargetX,
+              finalTargetY
+            );
+          } else if (this.pathResolver) {
+            // Fallback to navigation graph pathfinding
+            const targetNode = {
+              type: 'seat' as const,
+              sectionIdx: instance.targetPosition.sectionIdx,
+              rowIdx: instance.targetPosition.rowIdx,
+              colIdx: instance.targetPosition.colIdx,
+              gridRow: instance.targetPosition.rowIdx,
+              gridCol: instance.targetPosition.colIdx,
+              x: targetWorldPos.x,
+              y: targetWorldPos.y,
+              cost: 0,
+              heightLevel: 0
+            };
+            
+            pathSegments = this.pathResolver.planPath(
+              instance.profile,
+              instance.position.x,
+              instance.position.y,
+              targetNode
+            );
+          }
           
           const path = pathSegments && pathSegments.length > 0 
             ? { segments: pathSegments, totalCost: pathSegments.reduce((sum, s) => sum + s.cost, 0) }
@@ -534,19 +650,20 @@ export class AIManager {
 
           instance.currentPath = path.segments;
           instance.currentSegmentIndex = 0;
-          instance.state = 'movingSegment';
+          instance.state = 'movingToFan';
           
           // Debug: Log path details
-          console.log(`[AIManager] Vendor ${vendorId} path planned:`, {
-            segmentCount: path.segments.length,
-            totalCost: path.totalCost,
-            segments: path.segments.map(s => `${s.nodeType}(${Math.round(s.x)},${Math.round(s.y)})`).join(' -> ')
-          });
+          // console.log(`[AIManager] Vendor ${vendorId} path planned:`, {
+          //   segmentCount: path.segments.length,
+          //   totalCost: path.totalCost,
+          //   segments: path.segments.map(s => `${s.nodeType}(${Math.round(s.x)},${Math.round(s.y)})`).join(' -> ')
+          // });
           
           this.emit('vendorPathPlanned', { vendorId, segmentCount: path.segments.length, totalCost: path.totalCost });
           break;
 
-        case 'movingSegment':
+        case 'movingToSection':
+        case 'movingToFan':
           this.advanceMovement(vendorId, deltaTime);
           break;
 
@@ -587,6 +704,12 @@ export class AIManager {
         }
       }
       */
+      } catch (error) {
+        console.error(`[AIManager] Error updating vendor ${vendorId}:`, error);
+        // Reset to idle state on error to prevent stuck vendors
+        instance.state = 'idle';
+        instance.scanTimer = 2000;
+      }
     }
 
     // Update legacy vendors for backward compatibility

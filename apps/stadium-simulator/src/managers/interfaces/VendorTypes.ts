@@ -54,8 +54,9 @@ export interface VendorProfile {
  */
 export type VendorState = 
   | 'idle' 
-  | 'planning' 
-  | 'movingSegment' 
+  | 'movingToSection'  // Moving to section entry point
+  | 'scanningInSection'  // At section, scanning for targets
+  | 'movingToFan'  // Moving to specific fan
   | 'serving' 
   | 'cooldown' 
   | 'distracted' 

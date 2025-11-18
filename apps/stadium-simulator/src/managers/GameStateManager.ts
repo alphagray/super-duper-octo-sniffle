@@ -59,7 +59,8 @@ export class GameStateManager {
       id: data.id,
       happiness: 70,
       thirst: 0,
-      attention: 50
+      attention: 50,
+      environmentalModifier: 1.0 // Normal conditions by default
     }));
     this.logger.push({ 
       level: 'info', 
@@ -87,6 +88,32 @@ export class GameStateManager {
       throw new Error(`Section ${id} not found`);
     }
     return section;
+  }
+
+  /**
+   * Set environmental modifier for a section
+   * @param sectionId - The section identifier (A, B, or C)
+   * @param modifier - Environmental modifier (< 1.0 = shade, 1.0 = normal, > 1.0 = hot/sunny)
+   */
+  public setEnvironmentalModifier(sectionId: string, modifier: number): void {
+    const section = this.getSection(sectionId);
+    section.environmentalModifier = modifier;
+    this.logger.push({
+      level: 'info',
+      category: 'system:gamestate',
+      message: `Section ${sectionId} environmental modifier set to ${modifier.toFixed(2)}`,
+      ts: Date.now()
+    });
+  }
+
+  /**
+   * Get environmental modifier for a section
+   * @param sectionId - The section identifier (A, B, or C)
+   * @returns The environmental modifier
+   */
+  public getEnvironmentalModifier(sectionId: string): number {
+    const section = this.getSection(sectionId);
+    return section.environmentalModifier;
   }
 
   /**

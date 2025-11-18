@@ -65,8 +65,11 @@ export class SeatActor extends Actor {
 
   /**
    * Get the position of this seat in world space (requires gridManager)
+   * Returns the CENTER of the grid cell for proper alignment
+   * Note: gridManager.gridToWorld() already returns cell center, no offset needed
    */
   getWorldPosition(gridManager: any): { x: number; y: number } {
+    // gridToWorld() already returns the cell center
     return gridManager.gridToWorld(this.gridRow, this.gridCol);
   }
 
