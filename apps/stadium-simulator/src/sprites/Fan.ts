@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { gameBalance } from '@/config/gameBalance';
+import { BaseActorContainer } from './helpers/BaseActor';
 
 /**
  * Fan is a small container composed of two rectangles:
@@ -11,7 +12,9 @@ import { gameBalance } from '@/config/gameBalance';
  * - jiggle when intensity > 0
  * - playWave(delay, intensity) to perform the quick up/down motion with variable intensity
  */
-export class Fan extends Phaser.GameObjects.Container {
+export class Fan extends BaseActorContainer {
+    private _originalX: number;
+    private _originalY: number;
   private top: Phaser.GameObjects.Rectangle;
   private bottom: Phaser.GameObjects.Rectangle;
   private size: number;
@@ -22,6 +25,13 @@ export class Fan extends Phaser.GameObjects.Container {
   private happiness: number;
   private thirst: number;
   private attention: number;
+
+  // Randomized thirst growth rate (environmental sensitivity)
+  private thirstMultiplier: number;
+
+  // Grump/difficult terrain stats (foundation for future grump type)
+  private disgruntlement: number = 0; // only grows for future grump type
+  private disappointment: number = 0; // dynamic accumulator for unhappiness condition
 
   public _lastWaveParticipated: boolean = false;
 
@@ -34,8 +44,10 @@ export class Fan extends Phaser.GameObjects.Container {
   constructor(scene: Phaser.Scene, x: number, y: number, size = 28) {
     // We'll shift the container origin so local (0,0) sits at the bottom extremity
     // of the fan's body. That makes rotating the container rotate around that point.
-    super(scene, x, y);
+    super(scene, x, y, 'fan', false); // disabled by default (massive noise with 100+ fans)
     this.size = size;
+    this._originalX = x;
+    this._originalY = y;
 
     // Bottom is taller than it is wide
     const bottomW = Math.round(size * 0.6);
@@ -61,6 +73,14 @@ export class Fan extends Phaser.GameObjects.Container {
     this.happiness = gameBalance.fanStats.initialHappiness;
     this.thirst = Math.random() * (gameBalance.fanStats.initialThirstMax - gameBalance.fanStats.initialThirstMin) + gameBalance.fanStats.initialThirstMin;
     this.attention = gameBalance.fanStats.initialAttention;
+    
+    // Randomize thirst growth rate: 0.5x to 1.5x (bell curve centered at 1.0)
+    // Using normal distribution approximation with 3 random values
+    const r1 = Math.random();
+    const r2 = Math.random();
+    const r3 = Math.random();
+    const bellCurve = (r1 + r2 + r3) / 3; // Average of 3 randoms approximates normal distribution
+    this.thirstMultiplier = 0.5 + bellCurve; // Maps 0-1 to 0.5-1.5
   }
 
   public setIntensity(v?: number) {
@@ -196,7 +216,12 @@ export class Fan extends Phaser.GameObjects.Container {
     });
   }
 
-  public playWave(delayMs = 0, intensity: number = 1.0, visualState: 'full' | 'sputter' | 'death' = 'full', waveStrength: number = 70): Promise<void> {
+  public playWave(
+    delayMs = 0,
+    intensity: number = 1.0,
+    visualState: 'full' | 'sputter' | 'death' = 'full',
+    waveStrength: number = 70
+  ): Promise<void> {
     // Adjust intensity for reduced-effort fans based on wave strength
     // Higher wave strength brings reduced-effort fans closer to full intensity
     let adjustedIntensity = intensity;
@@ -272,6 +297,170 @@ export class Fan extends Phaser.GameObjects.Container {
     });
   }
 
+  /**
+   * Play a named animation on this fan
+   * @param animationName - The name of the animation ('wave', 'celebrate', 'boo', etc.)
+   * @param options - Optional parameters for the animation
+   */
+  public playAnimation(animationName: string, options?: Record<string, any>): Promise<void> | void {
+    switch (animationName) {
+      case 'wave':
+        return this.playWave(
+          options?.delayMs ?? 0,
+          options?.intensity ?? 1.0,
+          options?.visualState ?? 'full',
+          options?.waveStrength ?? 70
+        );
+      
+      case 'celebrate':
+        return this.playCelebrate(options?.delayMs ?? 0);
+      
+      case 'grumpy':
+        return this.playGrumpy(options?.delayMs ?? 0);
+      
+      case 'boo':
+        // TODO: Implement boo animation
+        return Promise.resolve();
+      case 'reset':
+        this.resetPositionAndTweens();
+        return Promise.resolve();
+      
+      default:
+        console.warn(`Unknown animation '${animationName}' for Fan`);
+        return Promise.resolve();
+    }
+  }
+
+  /**
+   * Reset all tweens and return fan to original position (after wave/celebrate)
+   */
+  public resetPositionAndTweens(): void {
+    // Don't kill tweens - let wave animations finish naturally
+    // Instead, chain the settle animation after any existing tweens complete
+    
+    // Check if fan is currently tweening
+    const activeTweens = this.scene.tweens.getTweensOf(this);
+    
+    if (activeTweens.length > 0) {
+      // Wait for current tweens to finish, then apply settle
+      const lastTween = activeTweens[activeTweens.length - 1];
+      lastTween.once('complete', () => {
+        this.applySettleAnimation();
+      });
+    } else {
+      // No active tweens, apply settle immediately
+      this.applySettleAnimation();
+    }
+  }
+
+  /**
+   * Apply the settle animation back to original position
+   */
+  private applySettleAnimation(): void {
+    this.scene.tweens.add({
+      targets: this,
+      x: this._originalX,
+      y: this._originalY,
+      rotation: 0,
+      duration: 600,
+      ease: 'Elastic.easeOut',
+    });
+    
+    // Reset head/body rotation smoothly
+    if (this.top || this.bottom) {
+      this.scene.tweens.add({
+        targets: [this.top, this.bottom].filter(Boolean),
+        rotation: 0,
+        duration: 600,
+        ease: 'Elastic.easeOut'
+      });
+    }
+  }
+
+  /**
+   * Play celebration animation (quick hop and rotate)
+   */
+  private playCelebrate(delayMs: number = 0): Promise<void> {
+    return new Promise((resolve) => {
+      const originalY = this.y;
+      const originalRotation = this.rotation;
+      
+      // Randomize bounce height and duration for organic feel
+      const bounceHeight = 20 + Math.random() * 15; // 20-35 pixels
+      const upDuration = 80 + Math.random() * 40; // 80-120ms
+      const downDuration = 120 + Math.random() * 60; // 120-180ms
+      const rotationAmount = (Math.random() - 0.5) * 0.4; // ±0.2 radians
+      
+      // Quick celebratory hop with slight rotation
+      this.scene.tweens.add({
+        targets: this,
+        y: originalY - bounceHeight,
+        rotation: originalRotation + rotationAmount,
+        duration: upDuration,
+        ease: 'Sine.easeOut',
+        delay: delayMs,
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: this,
+            y: originalY,
+            rotation: originalRotation,
+            duration: downDuration,
+            ease: 'Bounce.easeOut',
+            onComplete: () => resolve()
+          });
+        }
+      });
+    });
+  }
+
+  /**
+   * Play grumpy jitter animation (angry shake for non-participants)
+   */
+  private playGrumpy(delayMs: number = 0): Promise<void> {
+    return new Promise((resolve) => {
+      const originalX = this.x;
+      const originalRotation = this.rotation;
+      
+      // Randomize jitter intensity and timing
+      const jitterAmount = 2 + Math.random() * 3; // 2-5 pixels
+      const jitterDuration = 40 + Math.random() * 20; // 40-60ms per jitter
+      const jitterCount = 3 + Math.floor(Math.random() * 3); // 3-5 jitters
+      const rotationJitter = (Math.random() - 0.5) * 0.15; // ±0.075 radians
+      
+      let jittersCompleted = 0;
+      
+      const doJitter = () => {
+        if (jittersCompleted >= jitterCount) {
+          // Return to original position
+          this.scene.tweens.add({
+            targets: this,
+            x: originalX,
+            rotation: originalRotation,
+            duration: jitterDuration,
+            ease: 'Sine.easeOut',
+            onComplete: () => resolve()
+          });
+          return;
+        }
+        
+        const direction = (jittersCompleted % 2 === 0) ? 1 : -1;
+        this.scene.tweens.add({
+          targets: this,
+          x: originalX + (direction * jitterAmount),
+          rotation: originalRotation + (direction * rotationJitter),
+          duration: jitterDuration,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            jittersCompleted++;
+            doJitter();
+          }
+        });
+      };
+      
+      this.scene.time.delayedCall(delayMs, () => doJitter());
+    });
+  }
+
   // linear interpolation between two hex colors (0xrrggbb)
   private static lerpColor(a: number, b: number, t: number) {
     t = Phaser.Math.Clamp(t, 0, 1);
@@ -315,6 +504,10 @@ export class Fan extends Phaser.GameObjects.Container {
     return this.thirst;
   }
 
+  public getThirstMultiplier(): number {
+    return this.thirstMultiplier;
+  }
+
   public getHappiness(): number {
     return this.happiness;
   }
@@ -350,7 +543,7 @@ export class Fan extends Phaser.GameObjects.Container {
   /**
    * Update fan stats over time
    */
-  public updateStats(deltaTime: number): void {
+  public updateStats(deltaTime: number, environmentalModifier: number = 1.0): void {
     // Convert ms to seconds for easier rate calculations
     const deltaSeconds = deltaTime / 1000;
 
@@ -369,13 +562,28 @@ export class Fan extends Phaser.GameObjects.Container {
     if (this.thirstFreezeUntil && this.scene.time.now < this.thirstFreezeUntil) {
       // Do not increase thirst while frozen
     } else {
-      // Fans get thirstier over time (configurable)
-      this.thirst = Math.min(100, this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate);
+      // Fans get thirstier over time (configurable, with per-fan multiplier and environmental modifier)
+      // environmentalModifier: < 1.0 = shade/cool, 1.0 = normal, > 1.0 = hot/sunny
+      const totalMultiplier = this.thirstMultiplier * environmentalModifier;
+      this.thirst = Math.min(100, this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate * totalMultiplier);
     }
 
     // Thirsty fans get less happy (configurable rate)
     if (this.thirst > 50) {
       this.happiness = Math.max(0, this.happiness - deltaSeconds * gameBalance.fanStats.happinessDecayRate);
+    }
+
+    // Disappointment accumulation (future grump-only feature)
+    // Only accumulates when thirst > 50 AND happiness is actively decaying
+    // Currently disabled via grumpConfig.disappointmentGrowthRate = 0
+    if (this.thirst > 50 && this.happiness < gameBalance.grumpConfig.unhappyThreshold) {
+      this.disappointment = Math.min(
+        100,
+        this.disappointment + deltaSeconds * gameBalance.grumpConfig.disappointmentGrowthRate
+      );
+    } else {
+      // Gradually reduce disappointment when conditions improve
+      this.disappointment = Math.max(0, this.disappointment - deltaSeconds * 0.5);
     }
   }
 
@@ -419,5 +627,58 @@ export class Fan extends Phaser.GameObjects.Container {
     const result = Math.random() * 100 < chance;
     this._lastWaveParticipated = result;
     return result;
+  }
+
+  // === Grump/Difficult Terrain Methods (Foundation) ===
+
+  /**
+   * Check if this fan qualifies as difficult terrain for vendor pathfinding
+   * Based on happiness threshold or disappointment threshold
+   * @returns true if fan is difficult terrain, false otherwise
+   */
+  public isDifficultTerrain(): boolean {
+    return (
+      this.happiness < gameBalance.grumpConfig.unhappyThreshold ||
+      this.disappointment > gameBalance.grumpConfig.disappointmentThreshold
+    );
+  }
+
+  /**
+   * Get the terrain penalty multiplier for this fan
+   * Used by vendor pathfinding to calculate movement penalties
+   * @returns Penalty multiplier (1.0 for normal, higher for difficult terrain)
+   */
+  public getTerrainPenaltyMultiplier(): number {
+    if (this.isDifficultTerrain()) {
+      return gameBalance.vendorMovement.grumpPenaltyMultiplier;
+    }
+    return 1.0;
+  }
+
+  /**
+   * Get disgruntlement level (future grump-only stat)
+   * @returns Current disgruntlement value
+   */
+  public getDisgruntlement(): number {
+    return this.disgruntlement;
+  }
+
+  /**
+   * Get disappointment level (dynamic unhappiness accumulator)
+   * @returns Current disappointment value
+   */
+  public getDisappointment(): number {
+    return this.disappointment;
+  }
+
+  /**
+   * Cleanup resources when fan is destroyed
+   */
+  public override destroy(fromScene?: boolean): void {
+    this.stopJiggleTimer();
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.killTweensOf(this.top);
+    this.scene.tweens.killTweensOf(this.bottom);
+    super.destroy(fromScene);
   }
 }

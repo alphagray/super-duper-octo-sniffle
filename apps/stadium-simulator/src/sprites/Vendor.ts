@@ -1,27 +1,43 @@
 import Phaser from 'phaser';
+import type { VendorState } from '@/managers/interfaces/VendorTypes';
+import { BaseActorContainer } from './helpers/BaseActor';
 import type { VendorPersonality, DialogueLine } from '@/types/personalities';
 import type { DialogueManager } from '@/systems/DialogueManager';
 
-export class Vendor extends Phaser.GameObjects.Sprite {
-  private cooldown: number;
-  private isServing: boolean;
+/**
+ * Vendor is a visual container composed of two rectangles:
+ * - top: square (head), randomly colored like Fan heads
+ * - bottom: taller rectangle (body) that is green to distinguish from fans
+ * 
+ * Supports movement state changes for visual feedback:
+ * - idle: static appearance
+ * - movingSegment: subtle animation during navigation
+ * - serving: service animation
+ * - distracted: shake/confusion effect
+ */
+export class Vendor extends BaseActorContainer {
+  private top: Phaser.GameObjects.Rectangle;
+  private bottom: Phaser.GameObjects.Rectangle;
+  private currentState: VendorState;
+  private stateAnimation?: Phaser.Time.TimerEvent;
   private personality: VendorPersonality | null;
   private dialogueManager: DialogueManager | null;
   private vendorId: string;
 
-  constructor(
-    scene: Phaser.Scene, 
-    x: number, 
-    y: number,
-    personality?: VendorPersonality,
-    dialogueManager?: DialogueManager
-  ) {
-    super(scene, x, y, 'vendor'); // 'vendor' sprite key to be loaded
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
+  constructor(scene: Phaser.Scene, x: number, y: number, personality?: VendorPersonality,
+    dialogueManager?: DialogueManager) {
+    super(scene, x, y, 'vendor', false); // disabled by default
 
-    this.cooldown = 0;
-    this.isServing = false;
+    // Body: green rectangle (20x30 pixels)
+    this.bottom = scene.add.rectangle(0, 0, 20, 30, 0x00aa00).setOrigin(0.5, 0.5);
+
+    // Head: randomized square (reuse Fan color logic)
+    const headColor = Vendor.randomHeadColor();
+    this.top = scene.add.rectangle(0, -20, 18, 18, headColor).setOrigin(0.5, 0.5);
+
+    this.add([this.bottom, this.top]);
+    this.currentState = 'idle';
+    this.logger.debug(`Spawned at (${x}, ${y})`);
     this.personality = personality || null;
     this.dialogueManager = dialogueManager || null;
     this.vendorId = personality?.id || `vendor-${Math.random().toString(36).substr(2, 9)}`;
@@ -31,128 +47,170 @@ export class Vendor extends Phaser.GameObjects.Sprite {
       this.applyVisualCustomization();
     }
 
-    // TODO: Add animation setup
+    // Note: Don't call scene.add.existing here - let the caller decide
   }
 
-  /**
-   * Apply visual customization based on personality
-   */
   private applyVisualCustomization(): void {
     if (!this.personality) return;
 
     // Apply color tint from personality palette
     if (this.personality.appearance.colorPalette.length > 0) {
       const primaryColor = this.personality.appearance.colorPalette[0];
-      this.setTint(parseInt(primaryColor.replace('#', '0x')));
+      // this.bottom.setTint(parseInt(primaryColor.replace('#', '0x')));
     }
 
     // Apply scale from personality
     this.setScale(this.personality.appearance.scale);
   }
 
-  /**
-   * Get behavior-modified movement speed
-   */
-  public getMovementSpeed(): number {
-    if (!this.personality) {
-      return 100; // Default speed
-    }
-    return this.personality.movement.speed;
-  }
 
   /**
-   * Get pause duration at sections
+   * Update vendor visual state based on state machine
+   * @param state Current vendor state
    */
-  public getPauseDuration(): number {
-    if (!this.personality) {
-      return 2000; // Default 2 seconds
-    }
-    return this.personality.movement.pauseDuration;
-  }
-
-  /**
-   * Get section preference weight for a given section
-   */
-  public getSectionPreference(sectionId: string): number {
-    if (!this.personality) {
-      return 1.0; // Neutral preference
-    }
-    return this.personality.movement.sectionPreferences[sectionId] || 1.0;
-  }
-
-  /**
-   * Check if vendor avoids active wave sections
-   */
-  public avoidsActiveWave(): boolean {
-    if (!this.personality) {
-      return false;
-    }
-    return this.personality.movement.avoidsActiveWave;
-  }
-
-  /**
-   * Trigger dialogue for a specific context
-   */
-  public triggerDialogue(
-    event: 'vendorServe' | 'waveComplete' | 'sectionSuccess' | 'sectionFail',
-    gameContext: {
-      score: number;
-      waveState: 'active' | 'inactive' | 'countdown';
-      sectionStats?: {
-        happiness: number;
-        thirst: number;
-        attention: number;
-      };
-    }
-  ): string | null {
-    if (!this.personality || !this.dialogueManager) {
-      return null;
+  public setMovementState(state: VendorState): void {
+    // Stop any existing animation
+    if (this.stateAnimation) {
+      this.stateAnimation.remove(false);
+      this.stateAnimation = undefined;
     }
 
-    const dialogueLine = this.dialogueManager.selectDialogue(
-      this.vendorId,
-      this.personality.dialogue,
-      {
-        event,
-        ...gameContext,
-      }
-    );
+    const prevState = this.currentState;
+    this.currentState = state;
+    if (prevState !== state) {
+      this.logger.debug(`State: ${prevState} → ${state}`);
+    }
 
-    return dialogueLine?.text || null;
+    switch (state) {
+      case 'idle':
+        // Reset to neutral appearance
+        this.bottom.setFillStyle(0x00aa00);
+        this.rotation = 0;
+        break;
+
+      case 'movingSegment':
+        // Subtle bob animation while moving
+        this.startBobAnimation();
+        break;
+
+      case 'serving':
+        // Brighten body color during service
+        this.bottom.setFillStyle(0x00ff00);
+        this.startServiceAnimation();
+        break;
+
+      case 'distracted':
+        // Shake effect
+        this.startShakeAnimation();
+        break;
+
+      case 'cooldown':
+        // Dimmed appearance
+        this.bottom.setFillStyle(0x008800);
+        break;
+
+      case 'planning':
+      case 'rangedCharging':
+        // Neutral for now
+        this.bottom.setFillStyle(0x00aa00);
+        break;
+    }
   }
 
   /**
-   * Get vendor's personality
+   * Subtle bob animation during movement
    */
-  public getPersonality(): VendorPersonality | null {
-    return this.personality;
+  private startBobAnimation(): void {
+    const bobCycle = () => {
+      this.scene.tweens.add({
+        targets: this,
+        y: this.y - 3,
+        duration: 200,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        onComplete: () => {
+          if (this.currentState === 'movingSegment') {
+            bobCycle();
+          }
+        },
+      });
+    };
+    bobCycle();
   }
 
   /**
-   * Get vendor's unique ID
+   * Service animation (slight scale pulse)
    */
-  public getVendorId(): string {
-    return this.vendorId;
+  private startServiceAnimation(): void {
+    this.scene.tweens.add({
+      targets: this.bottom,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 300,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: 2,
+    });
   }
 
-  public serve(): void {
-    // TODO: Implement serving logic
-    if (this.cooldown <= 0) {
-      this.isServing = true;
-      this.cooldown = 60; // 1 second cooldown at 60 FPS
+  /**
+   * Shake animation for distraction
+   */
+  private startShakeAnimation(): void {
+    const shake = () => {
+      const angle = (Math.random() - 0.5) * 0.3; // radians
+      this.scene.tweens.add({
+        targets: this,
+        rotation: angle,
+        duration: 80,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        onComplete: () => {
+          if (this.currentState === 'distracted') {
+            shake();
+          } else {
+            this.rotation = 0;
+          }
+        },
+      });
+    };
+    shake();
+  }
+
+  /**
+   * Random head color (pale yellow to medium brown, same as Fan)
+   */
+  private static randomHeadColor(): number {
+    const a = 0xfff5b1; // pale yellow
+    const b = 0xa67c52; // medium brown
+    const t = Math.random();
+    return Vendor.lerpColor(a, b, t);
+  }
+
+  /**
+   * Linear interpolation between two hex colors
+   */
+  private static lerpColor(a: number, b: number, t: number): number {
+    t = Phaser.Math.Clamp(t, 0, 1);
+    const ar = (a >> 16) & 0xff;
+    const ag = (a >> 8) & 0xff;
+    const ab = a & 0xff;
+    const br = (b >> 16) & 0xff;
+    const bg = (b >> 8) & 0xff;
+    const bb = b & 0xff;
+    const rr = Math.round(ar + (br - ar) * t);
+    const rg = Math.round(ag + (bg - ag) * t);
+    const rb = Math.round(ab + (bb - ab) * t);
+    return (rr << 16) + (rg << 8) + rb;
+  }
+
+  /**
+   * Cleanup on destroy
+   */
+  public destroy(fromScene?: boolean): void {
+    if (this.stateAnimation) {
+      this.stateAnimation.remove(false);
     }
-  }
-
-  public update(delta: number): void {
-    // TODO: Update cooldown timer
-    if (this.cooldown > 0) {
-      this.cooldown -= delta;
-    } else {
-      this.isServing = false;
-    }
-  }
-
-  public getBody(): Phaser.Physics.Arcade.Body {
-    return this.body as Phaser.Physics.Arcade.Body;
+    super.destroy(fromScene);
   }
 }

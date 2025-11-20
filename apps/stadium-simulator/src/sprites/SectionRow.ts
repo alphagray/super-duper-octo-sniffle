@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { Seat } from './Seat';
+import type { VendorAbilities } from '@/managers/interfaces/VendorTypes';
+import { gameBalance } from '@/config/gameBalance';
 
 /**
  * Represents a row in a stadium section
@@ -63,9 +65,13 @@ export class SectionRow {
    * Create evenly spaced seats for this row
    */
   private initializeSeats(): void {
+    // Place seats so each is centered in its grid cell, row fills full width
+    // Each cell: width/seatCount, seat at center of cell
+    const cellWidth = this.width / this.seatCount;
     for (let i = 0; i < this.seatCount; i++) {
-      const x = (-this.width / 2) + (this.width / this.seatCount) * i + (this.width / this.seatCount) / 2;
-      const y = this.y + this.height * 0.85; // Position at divider top
+      // Center of cell: left edge + (i + 0.5) * cellWidth
+      const x = -this.width / 2 + (i + 0.5) * cellWidth;
+      const y = this.y + this.height * 0.85 - 5; // Position 5px above divider top for visual alignment
       this.seats.push(new Seat(i, x, y));
     }
   }
@@ -98,13 +104,19 @@ export class SectionRow {
   }
 
   /** Play wave animation for all fans in this row */
-  playWave(columnDelay: number, rowDelay: number): Promise<void> {
+  playWave(
+    columnDelay: number,
+    rowDelay: number,
+    intensity: number = 1.0,
+    visualState: 'full' | 'sputter' | 'death' = 'full',
+    waveStrength: number = 70
+  ): Promise<void> {
     const promises: Promise<void>[] = [];
     this.seats.forEach((seat, colIdx) => {
       const fan = seat.getFan();
       if (fan) {
         const delay = colIdx * columnDelay + this.rowIndex * rowDelay;
-        promises.push(fan.playWave(delay));
+        promises.push(fan.playWave(delay, intensity, visualState, waveStrength));
       }
     });
     return Promise.all(promises).then(() => undefined);
@@ -114,6 +126,30 @@ export class SectionRow {
   getOccupancyRate(): number {
     const occupied = this.seats.filter(seat => !seat.isEmpty()).length;
     return occupied / this.seatCount;
+  }
+
+  /**
+   * Calculate row traversal cost for vendor pathfinding
+   * Aggregates seat penalties across the row and adds base row penalty
+   * 
+   * @param vendorAbilities Vendor abilities to check for penalty overrides
+   * @returns Total movement cost penalty for traversing this row
+   */
+  public getRowTraversalCost(vendorAbilities: VendorAbilities): number {
+    let totalPenalty = 0;
+
+    // Add base row penalty unless vendor ignores it
+    if (!vendorAbilities.ignoreRowPenalty) {
+      totalPenalty += gameBalance.vendorMovement.rowBasePenalty;
+    }
+
+    // Aggregate seat penalties
+    for (const seat of this.seats) {
+      totalPenalty += seat.getTraversalPenalty(vendorAbilities);
+    }
+
+    // Cap at maximum terrain penalty
+    return Math.min(totalPenalty, gameBalance.vendorMovement.maxTerrainPenalty);
   }
 
   /** Converts HSL color values to Phaser hex format */

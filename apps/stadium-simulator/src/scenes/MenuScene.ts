@@ -109,7 +109,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private launchGame(mode: 'eternal' | 'run'): void {
-    this.scene.start('StadiumScene', { gameMode: mode, debugMode: this.debugMode });
+    this.scene.start('WorldScene', { gameMode: mode, debugMode: this.debugMode });
   }
 
   update(): void {

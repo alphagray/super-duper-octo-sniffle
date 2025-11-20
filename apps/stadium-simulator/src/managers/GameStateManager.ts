@@ -1,7 +1,8 @@
-import type { GameState, Section } from '@/types/GameTypes';
+import type { Section } from '@/managers/interfaces/Section';
+import type { SectionConfig } from '@/managers/interfaces/Section';
 import { gameBalance } from '@/config/gameBalance';
+import { LoggerService } from '@/services/LoggerService';
 
-export type GameMode = 'eternal' | 'run';
 export type SessionState = 'idle' | 'countdown' | 'active' | 'complete';
 
 interface AggregateStats {
@@ -32,7 +33,6 @@ interface WaveBoost {
  */
 export class GameStateManager {
   private sections: Section[];
-  private gameMode: GameMode = 'eternal';
   private sessionState: SessionState = 'idle';
   private sessionTimeRemaining: number = 0;
   private sessionStartTime: number = 0;
@@ -42,15 +42,32 @@ export class GameStateManager {
   private initialAggregateStats: AggregateStats | null = null;
   private eventListeners: Map<string, Array<Function>>;
   private waveBoosts: Map<string, WaveBoost> = new Map(); // Track temporary boosts per section
+  private logger = LoggerService.instance();
 
   constructor() {
-    // Initialize 3 sections (A, B, C) with default values
-    this.sections = [
-      { id: 'A', happiness: 70, thirst: 0, attention: 50 },
-      { id: 'B', happiness: 70, thirst: 0, attention: 50 },
-      { id: 'C', happiness: 70, thirst: 0, attention: 50 },
-    ];
+    // Initialize empty sections array - will be populated by initializeSections()
+    this.sections = [];
     this.eventListeners = new Map();
+  }
+
+  /**
+   * Initialize sections from level data
+   * @param sectionData Array of section configurations from LevelService
+   */
+  public initializeSections(sectionData: Array<{ id: string }>): void {
+    this.sections = sectionData.map(data => ({
+      id: data.id,
+      happiness: 70,
+      thirst: 0,
+      attention: 50,
+      environmentalModifier: 1.0 // Normal conditions by default
+    }));
+    this.logger.push({ 
+      level: 'info', 
+      category: 'system:gamestate', 
+      message: `Initialized ${this.sections.length} sections from level data`, 
+      ts: Date.now() 
+    });
   }
 
   /**
@@ -71,6 +88,32 @@ export class GameStateManager {
       throw new Error(`Section ${id} not found`);
     }
     return section;
+  }
+
+  /**
+   * Set environmental modifier for a section
+   * @param sectionId - The section identifier (A, B, or C)
+   * @param modifier - Environmental modifier (< 1.0 = shade, 1.0 = normal, > 1.0 = hot/sunny)
+   */
+  public setEnvironmentalModifier(sectionId: string, modifier: number): void {
+    const section = this.getSection(sectionId);
+    section.environmentalModifier = modifier;
+    this.logger.push({
+      level: 'info',
+      category: 'system:gamestate',
+      message: `Section ${sectionId} environmental modifier set to ${modifier.toFixed(2)}`,
+      ts: Date.now()
+    });
+  }
+
+  /**
+   * Get environmental modifier for a section
+   * @param sectionId - The section identifier (A, B, or C)
+   * @returns The environmental modifier
+   */
+  public getEnvironmentalModifier(sectionId: string): number {
+    const section = this.getSection(sectionId);
+    return section.environmentalModifier;
   }
 
   /**
@@ -224,13 +267,6 @@ export class GameStateManager {
   }
 
   /**
-   * Get current game mode
-   */
-  public getGameMode(): GameMode {
-    return this.gameMode;
-  }
-
-  /**
    * Get current session state
    */
   public getSessionState(): SessionState {
@@ -273,11 +309,9 @@ export class GameStateManager {
   }
 
   /**
-   * Start a new session
-   * @param mode - Game mode: 'eternal' or 'run'
+   * Start a new session (run mode only)
    */
-  public startSession(mode: GameMode): void {
-    this.gameMode = mode;
+  public startSession(): void {
     this.sessionState = 'countdown';
     this.completedWaves = 0;
     this.waveAttempts = 0;
@@ -286,13 +320,8 @@ export class GameStateManager {
     // Snapshot initial aggregate stats
     this.initialAggregateStats = this.getAggregateStats();
 
-    // Set timer based on mode
-    const duration =
-      mode === 'run'
-        ? gameBalance.sessionConfig.runModeDuration
-        : gameBalance.sessionConfig.eternalModeDuration;
-
-    this.sessionTimeRemaining = duration;
+    // Set timer for run mode (100 seconds)
+    this.sessionTimeRemaining = gameBalance.sessionConfig.runModeDuration;
     this.sessionStartTime = Date.now();
 
     this.emit('sessionStateChanged', { state: 'countdown' });
@@ -315,16 +344,14 @@ export class GameStateManager {
       return;
     }
 
-    if (this.gameMode === 'run') {
-      this.sessionTimeRemaining -= deltaTime;
+    this.sessionTimeRemaining -= deltaTime;
 
-      if (this.sessionTimeRemaining <= 0) {
-        this.sessionTimeRemaining = 0;
-        this.completeSession();
-      }
-
-      this.emit('sessionTick', { timeRemaining: this.sessionTimeRemaining });
+    if (this.sessionTimeRemaining <= 0) {
+      this.sessionTimeRemaining = 0;
+      this.completeSession();
     }
+
+    this.emit('sessionTick', { timeRemaining: this.sessionTimeRemaining });
   }
 
   /**

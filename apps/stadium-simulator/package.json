@@ -21,10 +21,11 @@
     "axios": "^1.7.9",
     "howler": "^2.2.4",
     "idb": "^8.0.3",
-    "phaser": "^3.80.1"
+    "phaser": "^3.80.1",
+    "phaser-navmesh": "^2.3.1"
   },
   "devDependencies": {
-    "@types/node": "^20.14.9",
+    "@types/node": "^20.19.25",
     "@vercel/node": "^5.5.5",
     "@vitest/coverage-v8": "^4.0.8",
     "@vitest/ui": "^4.0.8",

@@ -2,138 +2,178 @@
 
 ## Project Overview
 
-**Stadium Simulator** is an 8-bit retro Phaser 3 game where players initiate stadium waves across three sections while managing fan engagement (happiness, thirst, attention). The game features AI-powered announcer commentary via Claude API integration.
+**Stadium Simulator** is an 8-bit retro Phaser 3 game where players initiate stadium waves across three sections while managing fan engagement (happiness, thirst, attention). The game features AI-powered announcer commentary via Claude API and grid-based vendor AI pathfinding. Game runs 100-second timed sessions only (run mode).
 
-### Architecture Patterns
+## Architecture Overview
 
-#### 1. **Manager-Based Game Logic**
-Game state logic lives in separate manager classes that handle one domain:
-- **GameStateManager**: Central state for 3 stadium sections (A, B, C) with stat tracking; emits events for state changes
-- **WaveManager**: Wave timing, propagation logic, scoring; manages success chance calculation and sputter mechanics
-- **VendorManager**: Vendor positioning and interference with wave propagation
-- **SeatManager**: Maps fans to seats across stadium sections
-- **AnnouncerService**: Claude API integration for dynamic commentary
+### 1. **Actor System** (`src/actors/`)
+Game entities use a three-level hierarchy, decoupled from Phaser GameObjects:
+- **AnimatedActor**: Dynamic entities (Fans, Vendors, Mascots) with stats/state that affect logic
+- **SceneryActor**: Static visuals (Stadium sections, rows, seats)
+- **UtilityActor**: Non-visual logic entities (Wave states, waypoints, zones)
 
-Each manager implements an event listener pattern using `Map<string, Function[]>` for `on()` and `emit()` methods.
+**Key Components:**
+- `ActorFactory`: Generates unique IDs like `actor:fan-0`, `actor:section-A`
+- `ActorRegistry`: Central registry for all actors; supports queries by category/kind with `query()`, `getByCategory()`, `snapshot()`
+- `adapters/`: Wrapper classes connecting legacy Phaser sprites to Actor system (FanActor wraps Fan sprite, etc.)
+- Location: `src/actors/interfaces/ActorTypes.ts` defines `ActorCategory`, `ActorKind`, `ActorSnapshot`
 
-#### 2. **Phaser Scene Orchestration**
-`StadiumScene` is the main game loop that:
+### 2. **Manager-Based Game Logic** (`src/managers/`)
+Each manager handles one domain and emits events using `Map<string, Function[]>` pattern:
+- **GameStateManager**: 3 stadium sections (A, B, C) with stat tracking; `on('eventName')`, `emit('eventName')`
+- **WaveManager**: Wave countdown, section propagation, success chance calculation (`80 + happiness*0.2 - thirst*0.3`), sputter mechanics
+- **AIManager**: Vendor spawning, state machine, distraction logic
+- **GridManager**: World grid coordinate system (grid↔world conversions via `gridToWorld()`)
+- **AnnouncerService**: Claude API integration (see Integration Points below)
+
+**Interface Location**: `src/managers/interfaces/` contains `Section.ts`, `WaveState.ts`, `VendorTypes.ts`, etc.
+
+### 3. **Scene Orchestration** (`src/scenes/StadiumScene.ts`)
+Main game loop that:
 - Instantiates all managers in `create()`
-- Calls manager `update()` methods in Phaser's `update()` callback
-- Listens to manager events and updates visual sprites/text
-- Passes scene context to managers that need it (e.g., SeatManager takes `this`)
+- Calls manager `update(deltaTime)` methods in Phaser's `update()` callback
+- Listens to manager events, updates sprite visuals and text UI
+- Manages sprite lifecycle (Fan, Vendor, WaveSprite instances created via event listeners)
 
-Scene transitions: MenuScene → StadiumScene → ScoreReportScene/GameOverScene
+Related scenes: MenuScene (start screen), WorldScene (container for grid), GridOverlay (debug visualization).
 
-#### 3. **Configuration Centralization**
-All magic numbers live in `src/config/gameBalance.ts`:
-- Fan stats (thirst growth: 2 pts/sec, happiness decay: 1.25 pts/sec when thirsty)
-- Wave strength dynamics (success bonus: +8, failure penalty: -20)
-- Session timers (run mode: 100s, eternal mode: infinite)
-- Grade thresholds (S+ ≥8 completed waves, percentage-based fallback)
-- UI dimensions (meter width: 40px, countdown font: 120px)
+### 4. **Configuration Centralization** (`src/config/gameBalance.ts`)
+**All magic numbers live here.** Never hardcode values. Examples:
+- Fan stats: `thirstGrowthPerSecond: 2`, `happinessDecay: 1`
+- Wave timing: `triggerCountdown: 3000ms`
+- Session duration: `runModeDuration: 100000ms` (100 seconds)
+- Success formula: `baseSuccessChance: 80`, happiness multiplier `0.2`, thirst multiplier `-0.3`
+- Vendor config: `spawnCount: 2`, `quality: 'good'`
 
-**Never hardcode values**—update `gameBalance` instead.
+## Critical Data Flows
 
-#### 4. **Type Safety**
-TypeScript strict mode enforced. All data structures defined in `src/types/GameTypes.ts`:
-- `Section`: { id, happiness, thirst, attention }
-- `GameState`: { sections[], wave, score }
-- `WaveState`: { countdown, active, currentSection, multiplier }
+### Wave Propagation (Grid-Based, Asynchronous)
+1. `waveManager.startWave()` begins 3-second countdown
+2. Countdown ends → `propagateWave()` queries `ActorRegistry.getByCategory('section')` for all SectionActors
+3. For each SectionActor's grid columns:
+   - Calculate success chance: `baseChance + (happiness * happinessBonus) - (thirst * thirstPenalty)` + vendor interference
+   - Roll random(0-100) vs chance
+   - Emit `sectionSuccess` or `sectionFail` asynchronously with 1-second delay
+   - Track participation rate and strength per column in `WaveCalculationResult[]`
+4. On final section: emit `waveComplete` with cumulative results
 
-Managers export type definitions for their state (e.g., `SessionScore`, `WaveCalculationResult`).
+**Grid Integration**: `SectionActor` (in `actors/adapters/SectionActor.ts`) composes `SectionRowActor` instances which contain `SeatActor` children. Wave propagation traverses the grid column-by-column.
 
-### Key Workflows
+### Session Management (Run Mode Only)
+- `gameState.startSession('run')`: Snapshots initial stats across 3 sections
+- `gameState.activateSession()`: Begins session (called after countdown overlay)
+- `gameState.updateSession(deltaTime)`: Decrements `sessionTimeRemaining`; at 0, calls `completeSession()`
+- `gameState.calculateSessionScore()`: Compares final vs initial stats, assigns grade (S+, S, A, B, C, D, F based on wave count and percentage)
 
-#### Development
+### Stat Decay (Every Frame)
+`gameState.updateStats(deltaTime)` runs in `StadiumScene.update()`:
+- Happiness: `-1 pt/sec` (always)
+- Thirst: `+2 pts/sec` (always)
+- Attention: `-0.5 pts/sec` (always, when not engaged)
+
+All stats are 0-100 bounded.
+
+### Vendor AI & Pathfinding
+- **VendorManager** (`AIManager`): Spawns vendors, manages state machine (idle → planning → movingSegment → serving → cooldown)
+- **HybridPathResolver** & **GridManager**: Vendor pathfinding uses A* on navigation grid; currently stubbed with linear movement
+- **Vendor Events**: `vendorSpawned`, `vendorReachedTarget`, `serviceComplete`, `vendorDistracted`
+- **Fan Integration**: When vendor reaches target, calls `fan.drinkServed()` (thirst -100, happiness +15)
+
+## Development Workflows
+
 ```bash
 cd apps/stadium-simulator
-npm run dev          # Start Vite dev server (http://localhost:3000)
-npm run type-check   # Run TypeScript without emitting
-npm test             # Run Vitest (uses happy-dom, not browser)
-npm run test:ui      # Interactive test runner
-npm run build        # TypeScript + Vite minification
+
+# Development
+npm run dev              # Vite dev server (http://localhost:3000)
+npm run type-check       # TypeScript check only
+npm run build            # Production build (dist/)
+
+# Testing (now minimal - most old tests deleted)
+npm test                 # Run Vitest (uses happy-dom, not browser)
+npm run test:ui          # Interactive test runner
+
+# Debugging
+# URL: ?demo=debug loads TestSectionDebugScene (isolated feature testing)
 ```
 
-#### Testing Patterns
-- Tests live in `src/__tests__/` mirroring source structure
-- Use `happy-dom` for DOM simulation (no browser needed)
-- Vitest setup in `src/__tests__/setup.ts` provides globals
-- Test managers in isolation; mock dependencies in constructor
-- Example: `GameStateManager.test.ts` tests stat calculations without Phaser
+## Key Conventions
 
-#### Debug Mode
-URL parameter `?demo=debug` loads `TestSectionDebugScene` instead of normal flow—use for isolated feature testing.
+### File Organization
+- **Managers**: Pure business logic, no Phaser dependencies (except type imports for `Phaser.Scene`)
+- **Scenes**: Orchestration + rendering; call manager methods, listen to events
+- **Adapters** (`actors/adapters/`): Wrapper classes that connect legacy Phaser sprites to Actor system
+- **Sprites** (`sprites/`): Phaser GameObjects (Fan, Vendor, WaveSprite, etc.); extend Phaser classes
+- **Interfaces**: Each namespace has `interfaces/` subfolder (managers, actors, sprites)
+- **Helpers**: Each namespace has `helpers/` subfolder (BaseManager, BaseActor, ActorLogger)
 
-### Critical Data Flows
+### Type Imports
+```typescript
+// Interfaces live in namespace/interfaces/
+import type { Section } from '@/managers/interfaces/Section';
+import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
+import type { VendorProfile } from '@/managers/interfaces/VendorTypes';
 
-#### Wave Propagation (Asynchronous)
-1. User initiates wave → `waveManager.startWave()` starts 3-second countdown
-2. Countdown reaches zero → `propagateWave()` evaluates sections A→B→C sequentially
-3. For each section: calculate success chance (formula: `80 + happiness*0.2 - thirst*0.3`) + vendor penalty (-25%)
-4. Roll random(0-100) vs success chance
-5. If success: award 100 points, increment `totalSectionSuccesses`; if fail: reset multiplier, emit `sectionFail` event
-6. Emit `sectionSuccess`/`sectionFail` events **asynchronously** per section with 1-second delay
-7. On propagation end: emit `waveComplete` with all results
+// Or bulk import via index
+import type { Section, WaveState } from '@/managers/interfaces';
+```
 
-Wave strength changes per column during visual animation (not part of this propagation logic yet).
+### Event Pattern (All Managers)
+```typescript
+// Subscribe to events
+manager.on('eventName', (payload) => {
+  // handle payload
+});
 
-#### Session Management (Run vs Eternal Mode)
-- `startSession(mode)`: Sets `sessionState='countdown'`, snapshots initial stats
-- `activateSession()`: Called when countdown overlay finishes, sets `sessionState='active'`
-- For 'run' mode: `updateSession(deltaTime)` decrements `sessionTimeRemaining`; when 0, calls `completeSession()`
-- `calculateSessionScore()`: Compares final vs initial aggregate stats, assigns grade letter + points
+// Emit events
+manager.emit('eventName', payload);
+```
 
-#### State Updates
-`gameState.updateStats(deltaTime)` runs every frame:
-- All sections: happiness -= 1 pts/sec, thirst += 2 pts/sec (independent of wave state)
-- Called from `StadiumScene.update()` to keep stats decaying
+## Integration Points
 
-### Integration Points
+### Claude API (AnnouncerService)
+- **Endpoint**: `import.meta.env.VITE_ANTHROPIC_API_URL` (default: https://api.anthropic.com/v1/messages)
+- **Model**: `claude-3-5-sonnet-20241022`
+- **Headers**: `x-api-key` (from env), `anthropic-version: 2023-06-01`
+- **Max tokens**: 150
+- **Fallback**: Returns "The crowd goes wild!" on network error
+- **Called from**: StadiumScene on significant events (wave success, session start, vendor distraction)
 
-#### Claude API (AnnouncerService)
-- Endpoint: `import.meta.env.VITE_ANTHROPIC_API_URL` (default: https://api.anthropic.com/v1/messages)
-- Model: `claude-3-5-sonnet-20241022`
-- Headers: `x-api-key`, `anthropic-version: 2023-06-01`
-- Max tokens: 150
-- Fallback: Returns "The crowd goes wild!" on network error
-- Called from scenes/managers when significant game events occur
-
-#### Vite Path Aliases
-`@` resolves to `src/` (configured in `vite.config.ts`). Import as:
+### Vite Path Aliases
+`@` resolves to `src/`. Use in all imports:
 ```typescript
 import { GameStateManager } from '@/managers/GameStateManager';
-import type { Section } from '@/types/GameTypes';
+import { ActorRegistry } from '@/actors/ActorRegistry';
 ```
 
-#### GitHub Pages Deployment
-- Base path: `/stadium-simulator/` (set in vite.config)
-- Workflow: `.github/workflows/deploy.yml` (auto-deploys `main` branch to `gh-pages`)
-- Run `npm run build` locally to generate `dist/`
+### GitHub Pages Deployment
+- **Base path**: `/stadium-simulator/`
+- **Workflow**: `.github/workflows/deploy.yml` auto-deploys `main` → `gh-pages`
+- **Build**: Run `npm run build` to generate `dist/`
 
-### Common Pitfalls
+## Common Pitfalls
 
-1. **Don't bypass gameBalance.ts**: Changing hardcoded values won't persist across refactors
-2. **Event listener cleanup**: Listeners accumulate if not removed; scenes need cleanup in `shutdown`
-3. **Async propagation**: `propagateWave()` uses `emitAsync()` to wait for listeners; ensure listeners return promises
-4. **Type exports**: Managers export interfaces at bottom of file; update those if state shape changes
-5. **Phaser version**: Project uses Phaser 3.80.1; check API compatibility for advanced features
-6. **Environment variables**: Only `VITE_*` prefix exposed to client; secret keys go in `.env` (not committed)
+1. **Hardcoded values**: Never add magic numbers; update `gameBalance.ts` instead
+2. **Event listener leaks**: Remove listeners in scene's `shutdown` event; unsubscribe in manager cleanup
+3. **Actor ID conflicts**: Use `ActorFactory.generateId()` or specify custom suffix (e.g., `section-A`)
+4. **Grid vs world coords**: GridManager handles conversion; actors use grid positions, sprites use world positions
+5. **Type imports**: Import interfaces from `{namespace}/interfaces/`, not `types/` directory
+6. **Environment variables**: Only `VITE_*` prefix exposed to client; sensitive keys in `.env` (not committed)
+7. **Legacy sprites**: Some sprites (Fan, Vendor) still extend Phaser GameObjects; use adapters to integrate with Actor system
 
-### File Organization Conventions
+## Current State & Recent Changes
 
-- **Managers**: Pure business logic, no Phaser dependencies (except type imports)
-- **Scenes**: Orchestration + Phaser rendering; call manager methods, listen to events
-- **Sprites**: Phaser GameObjects; extend Phaser classes, minimal state logic
-- **Types**: Interfaces and type aliases only; no implementations
-- **Config**: Export single const objects or functions; no side effects
+- **Actor System**: Fully implemented with adapters for FanActor, VendorActor, SectionActor, WaveSpriteActor
+- **Vendor Integration**: Phase 3 complete; vendors spawn, pathfind (stubbed linear), serve fans, emit events
+- **Code Reorganization**: Interfaces moved to `{namespace}/interfaces/`, helpers to `{namespace}/helpers/`
+- **Test Cleanup**: Most old tests deleted except AnnouncerService.test.ts; focus on manual testing for now
+- **Eternal Mode**: Removed; only run mode (100-second sessions) supported
 
-### Next Implementation Priorities
+## Next Implementation Priorities
 
-- [ ] Visual wave propagation animation in seat columns
-- [ ] Vendor movement and interference detection
+- [ ] Complete HybridPathResolver A* pathfinding (currently linear)
+- [ ] Vendor collision detection + navigation graph refinement
 - [ ] Mascot special abilities
-- [ ] Complete UI overlays (score tracking, session timer display)
-- [ ] Menu and GameOverScene implementations
+- [ ] Menu and GameOverScene UI implementations
 - [ ] Pixel art asset creation + sprite sheet integration
-- [ ] Howler.js 8-bit audio event triggers
+- [ ] Audio event triggers (Howler.js 8-bit sounds)

@@ -1,107 +1,239 @@
 import Phaser from 'phaser';
-import { GameStateManager, GameMode } from '@/managers/GameStateManager';
+import { GameStateManager } from '@/managers/GameStateManager';
 import { WaveManager } from '@/managers/WaveManager';
-import { VendorManager } from '@/managers/VendorManager';
+import { AIManager } from '@/managers/AIManager';
 import { StadiumSection } from '@/sprites/StadiumSection';
+import { Vendor } from '@/sprites/Vendor';
+import { VendorState } from '@/managers/interfaces';
 import { AnnouncerService } from '@/managers/AnnouncerService';
-import { SectionConfig } from '@/types/GameTypes';
-import { SeatManager } from '@/managers/SeatManager';
+
 import { gameBalance } from '@/config/gameBalance';
+import { ActorRegistry } from '@/actors/ActorRegistry';
+import { ActorFactory } from '@/actors/ActorFactory';
+import { SectionActor } from '@/actors/adapters/SectionActor';
+import { StairsActor } from '@/actors/adapters/StairsActor';
+import { GroundActor } from '@/actors/adapters/GroundActor';
+import { SkyboxActor } from '@/actors/adapters/SkyboxActor';
+import { FanActor } from '@/actors/adapters/FanActor';
+import { GridManager } from '@/managers/GridManager';
+import { LevelService } from '@/services/LevelService';
+import { GridOverlay } from '@/scenes/GridOverlay';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
- * Orchestrates GameStateManager, WaveManager, VendorManager, and StadiumSection objects
+ * Orchestrates GameStateManager, WaveManager, AIManager, and Actor system
  */
 export class StadiumScene extends Phaser.Scene {
   private gameState: GameStateManager;
   private waveManager!: WaveManager;
-  private vendorManager!: VendorManager;
-  private seatManager!: SeatManager;
+  private aiManager!: AIManager;
+  private announcer!: AnnouncerService;
+  private gridManager?: GridManager;
   private sectionAText?: Phaser.GameObjects.Text;
   private sectionBText?: Phaser.GameObjects.Text;
   private sectionCText?: Phaser.GameObjects.Text;
+  private sectionLabels: Phaser.GameObjects.Text[] = [];
   private scoreText?: Phaser.GameObjects.Text;
   private countdownText?: Phaser.GameObjects.Text;
   private sessionTimerText?: Phaser.GameObjects.Text;
   private sections: StadiumSection[] = [];
+  private vendorSprites: Map<number, Vendor> = new Map(); // Track vendor visual sprites
   private demoMode: boolean = false;
   private debugMode: boolean = false;
   private successStreak: number = 0;
-  private gameMode: GameMode = 'eternal';
   private sessionCountdownOverlay?: Phaser.GameObjects.Container;
   private waveStrengthMeter?: Phaser.GameObjects.Container;
   private forceSputterNextSection: boolean = false;
-  private debugEventLog: string[] = [];
   private hasLoggedUpdate: boolean = false;
+  private actorRegistry: ActorRegistry;
+  private levelData?: any; // Store level data for section ID lookups
+  private skyboxActor?: any;
+  private groundActor?: any;
+  private gridOverlay?: GridOverlay;
 
   constructor() {
     super({ key: 'StadiumScene' });
     this.gameState = new GameStateManager();
+    this.actorRegistry = new ActorRegistry();
   }
 
   init(data: any): void {
-    // Get game mode and debug mode from scene data
-    this.gameMode = data?.gameMode || 'eternal';
+    // Get debug mode from scene data
     this.debugMode = data?.debugMode || false;
+    this.gridManager = data?.gridManager;
 
     if (this.debugMode) {
-      console.log('StadiumScene initialized with mode:', this.gameMode);
+      console.log('StadiumScene initialized in run mode');
+      console.log('GridManager received:', this.gridManager ? 'YES' : 'NO');
     }
   }
 
-  create(): void {
-    // Initialize GameStateManager with the selected mode
-    this.gameState.startSession(this.gameMode);
+  async create(): Promise<void> {
 
-    // Initialize VendorManager first
-    this.vendorManager = new VendorManager(this.gameState, 2);
+    // Load level data (sections, seats, fans, vendors)
+    const levelData = await LevelService.loadLevel();
+    this.levelData = levelData; // Cache for later use
+    console.log('[StadiumScene] Level data loaded:', levelData);
 
-    // Initialize SeatManager
-    this.seatManager = new SeatManager(this);
+    // Attach actorRegistry to the scene instance for WaveManager access
+    (this as any).actorRegistry = this.actorRegistry;
 
-    // Section config defaults
-    const sectionConfig: SectionConfig = {
-      width: 250,
-      height: 200,
-      rowCount: 4,
-      seatsPerRow: 8,
-      rowBaseHeightPercent: 0.15,
-      startLightness: 62,
-      autoPopulate: true,
-    };
+    // Create visual environment (ground and skybox) before sections
+    const canvasWidth = this.cameras.main.width;
+    const canvasHeight = this.cameras.main.height;
 
-    // Create 3 stadium sections
-    const sectionA = new StadiumSection(this, 200, 300, sectionConfig, 'A');
-    const sectionB = new StadiumSection(this, 500, 300, sectionConfig, 'B');
-    const sectionC = new StadiumSection(this, 800, 300, sectionConfig, 'C');
-    this.sections = [sectionA, sectionB, sectionC];
+    const gridHeight = gameBalance.grid.cellSize * gameBalance.grid.groundLine.rowsFromBottom;
+    const groundLineY = canvasHeight - gridHeight;
 
-    // Initialize SeatManager with sections
-    this.seatManager.initializeSections(this.sections);
-    if (sectionConfig.autoPopulate) {
-      this.seatManager.populateAllSeats();
+    // const groundLineY = gameBalance.grid.groundLine.enabled ? gameBalance.grid.groundLine.rowsFromBottom * canvasHeight : canvasHeight * 0.6; // Ground starts at 60% down the canvas
+    
+    canvasHeight * 0.6; // Ground starts at 60% down the canvas
+
+    // Create skybox
+    const skyboxActor = new SkyboxActor({
+      id: ActorFactory.generateId('skybox', 'main'),
+      scene: this,
+      groundLineY,
+      width: canvasWidth,
+      topColor: gameBalance.visual.skyTopColor,
+      bottomColor: gameBalance.visual.skyBottomColor
+    });
+    this.actorRegistry.register(skyboxActor);
+    this.skyboxActor = skyboxActor;
+
+    // Create ground
+    const groundHeight = canvasHeight - groundLineY;
+    const groundActor = new GroundActor({
+      id: ActorFactory.generateId('ground', 'main'),
+      scene: this,
+      groundLineY,
+      width: canvasWidth,
+      height: groundHeight,
+      color: gameBalance.visual.groundColor
+    });
+    this.actorRegistry.register(groundActor);
+    this.groundActor = groundActor;
+
+    // Initialize GameStateManager with level sections
+    this.gameState.initializeSections(levelData.sections);
+    this.gameState.startSession();
+
+    // Initialize AIManager
+    this.aiManager = new AIManager(this.gameState, 2, this.gridManager, this.actorRegistry);
+
+    // Create SectionActors from level data (Actor-first, data-driven!)
+    const sectionActors: SectionActor[] = [];
+    levelData.sections.forEach((sectionData) => {
+      const actorId = ActorFactory.generateId('section', sectionData.id);
+      const sectionActor = new SectionActor(
+        actorId,
+        this,
+        sectionData,
+        this.gridManager,
+        'section',
+        false
+      );
+      sectionActor.populateFromData(sectionData.fans);
+      this.actorRegistry.register(sectionActor);
+      sectionActors.push(sectionActor);
+      this.sections.push(sectionActor.getSection());
+    });
+
+    // Create StairsActors from level data
+    if (levelData.stairs && this.gridManager) {
+      levelData.stairs.forEach((stairData) => {
+        const actorId = ActorFactory.generateId('stairs', stairData.id);
+        // Calculate world bounds from grid bounds
+        const topLeft = this.gridManager!.gridToWorld(stairData.gridTop, stairData.gridLeft);
+        const bottomRight = this.gridManager!.gridToWorld(
+          stairData.gridTop + stairData.height - 1,
+          stairData.gridLeft + stairData.width - 1
+        );
+        const cellSize = this.gridManager!.getWorldSize().cellSize;
+        const worldBounds = {
+          x: (topLeft.x + bottomRight.x) / 2,
+          y: (topLeft.y + bottomRight.y) / 2,
+          width: stairData.width * cellSize,
+          height: stairData.height * cellSize
+        };
+        
+        const stairsActor = new StairsActor({
+          id: actorId,
+          gridBounds: {
+            left: stairData.gridLeft,
+            top: stairData.gridTop,
+            width: stairData.width,
+            height: stairData.height
+          },
+          connectsSections: stairData.connectsSections,
+          worldBounds,
+          scene: this
+        });
+        
+        this.actorRegistry.register(stairsActor);
+        
+        // Mark stair cells as passable in grid (Phase 2.2 - Option A)
+        // Stairs are passable for pathfinding (don't mark as occupied)
+        // GridManager.addOccupant marks cells as occupied, so we skip that for stairs
+      });
     }
 
-    // Initialize WaveManager with VendorManager and SeatManager
-    this.waveManager = new WaveManager(this.gameState, this.vendorManager, this.seatManager);
+    // Initialize AIManager with sections for pathfinding
+    this.aiManager.initializeSections(this.sections);
+
+    // Listen to vendor events BEFORE spawning (important!)
+    this.setupVendorEventListeners();
+
+    // Spawn vendors at positions from level data
+    if (levelData.vendors && this.gridManager) {
+      levelData.vendors.forEach((vendorData, idx) => {
+        const profile = this.aiManager.createVendor(vendorData.type as any, 'good');
+        const worldPos = this.gridManager!.gridToWorld(vendorData.gridRow, vendorData.gridCol);
+        console.log(`[Vendor Init] Vendor ${profile.id} at grid (${vendorData.gridRow}, ${vendorData.gridCol}) -> world (${worldPos.x}, ${worldPos.y})`);
+        
+        const instance = {
+          profile,
+          state: 'idle' as VendorState,
+          position: { x: worldPos.x, y: worldPos.y },
+          currentSegmentIndex: 0,
+          scanTimer: 0,
+          stateTimer: 0,
+          distractionCheckTimer: 0,
+          attentionAuraActive: false,
+          lastServiceTime: 0,
+        };
+        this.aiManager.getVendorInstances().set(profile.id, instance);
+        
+        // Directly create vendor sprite for initialization (no need for event)
+        const vendorSprite = new Vendor(this, worldPos.x, worldPos.y);
+        vendorSprite.setDepth(1000); // Render above fans
+        this.add.existing(vendorSprite);
+        this.vendorSprites.set(profile.id, vendorSprite);
+        console.log(`[Vendor Init] Created sprite for vendor ${profile.id}, total sprites: ${this.vendorSprites.size}`);
+      });
+      
+      // Rebuild vendor controls to show buttons immediately
+      this.rebuildVendorControls();
+    }
+
+    // Initialize WaveManager (no longer needs SeatManager)
+    this.waveManager = new WaveManager(this.gameState, this.aiManager, this.gridManager, this.actorRegistry);
+    this.waveManager.setScene(this); // Set scene reference for WaveSprite spawning
+    this.waveManager.setSessionStartTime(Date.now()); // Set session start time for autonomous wave delay
     this.successStreak = 0;
 
-    const announcerService = new AnnouncerService();
-    announcerService
-      .getCommentary(JSON.stringify({ event: 'waveStart' }))
-      .then((result) => {
-        console.log('[AnnouncerService test] raw result:', result);
-      })
-      .catch((error) => {
-        console.error('[AnnouncerService test] request failed:', error);
-      });
+    this.announcer = new AnnouncerService();
+    this.announcer.getCommentary(JSON.stringify({ event: 'waveStart' }))
+      .then(result => console.log('[AnnouncerService test] result:', result))
+      .catch(err => console.error('[AnnouncerService test] error', err));
 
     // Title at top center
-    this.add.text(this.cameras.main.centerX, 50, 'STADIUM SIMULATOR', {
-      fontSize: '48px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
+    // this is too cluttered for now.
+    // this.add.text(this.cameras.main.centerX, 50, 'STADIUM SIMULATOR', {
+    //   fontSize: '48px',
+    //   fontFamily: 'Arial',
+    //   color: '#ffffff',
+    // }).setOrigin(0.5, 0.5);
 
     // Score display at top-right
     this.scoreText = this.add.text(900, 50, 'Score: 0', {
@@ -110,15 +242,13 @@ export class StadiumScene extends Phaser.Scene {
       color: '#ffffff',
     }).setOrigin(1, 0.5);
 
-    // Session timer display (run mode only)
-    if (this.gameMode === 'run') {
-      this.sessionTimerText = this.add.text(512, 20, '100s', {
-        fontSize: '28px',
-        fontFamily: 'Arial',
-        color: '#ffff00',
-        fontStyle: 'bold',
-      }).setOrigin(0.5, 0);
-    }
+    // Session timer display (always shown in run mode)
+    this.sessionTimerText = this.add.text(512, 20, '100s', {
+      fontSize: '28px',
+      fontFamily: 'Arial',
+      color: '#ffff00',
+      fontStyle: 'bold',
+    }).setOrigin(0.5, 0);
 
     // Countdown display at top-left
     this.countdownText = this.add.text(100, 50, '', {
@@ -130,40 +260,52 @@ export class StadiumScene extends Phaser.Scene {
     // Create wave strength meter (will be shown on wave start)
     this.createWaveStrengthMeter();
 
-    // Section labels
-    this.add.text(200, 140, 'Section A', {
-      fontSize: '24px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
-    const statOffsetY = 300 + 100 + gameBalance.waveAutonomous.sectionStatOffsetY; // section Y + baseline offset + config offset
-    this.sectionAText = this.add.text(200, statOffsetY, '', {
-      fontSize: '16px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0);
+    // Create GridOverlay for debug rendering (must be in same scene as camera)
+    if (this.gridManager) {
+      this.gridOverlay = new GridOverlay(this, this.gridManager);
+      this.gridOverlay.setStadiumScene(this);
+      this.gridOverlay.setAIManager(this.aiManager);
+      
+      // Setup keyboard toggles for grid overlay
+      const keyboard = this.input.keyboard;
+      if (keyboard) {
+        // G key: Toggle grid visibility
+        keyboard.addKey('G').on('down', () => {
+          if (this.gridOverlay) {
+            const newVisibility = !this.gridOverlay.visible;
+            this.gridOverlay.setDebugVisible(newVisibility);
+            console.log(`[StadiumScene] Grid overlay: ${newVisibility ? 'ON' : 'OFF'}`);
+          }
+        });
 
-    this.add.text(500, 140, 'Section B', {
-      fontSize: '24px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
-    this.sectionBText = this.add.text(500, statOffsetY, '', {
-      fontSize: '16px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0);
+        // N key: Toggle navigation nodes (only if grid visible)
+        keyboard.addKey('N').on('down', () => {
+          if (this.gridOverlay) {
+            this.gridOverlay.toggleNodes();
+          }
+        });
 
-    this.add.text(800, 140, 'Section C', {
-      fontSize: '24px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
-    this.sectionCText = this.add.text(800, statOffsetY, '', {
-      fontSize: '16px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0);
+        // V key: Toggle vendor paths (only if grid visible)
+        keyboard.addKey('V').on('down', () => {
+          if (this.gridOverlay) {
+            this.gridOverlay.toggleVendorPaths();
+          }
+        });
+      }
+    }
+
+    // Notify WorldScene that initialization is complete
+    this.events.emit('stadiumReady', { aiManager: this.aiManager });
+    console.log('[StadiumScene] Initialization complete, emitted stadiumReady event');
+
+    // Notify WorldScene that initialization is complete
+    this.events.emit('stadiumReady', { aiManager: this.aiManager });
+    console.log('[StadiumScene] Initialization complete, emitted stadiumReady event');
+
+    // Section labels are now fully handled by SectionActor; no logic here
+
+    // Section stat overlays – positioned just below each section
+    // Section stat overlays should be handled by actors or a UI overlay system, not here
 
     // Initial update of text displays
     this.updateDisplay();
@@ -177,10 +319,10 @@ export class StadiumScene extends Phaser.Scene {
 
     // If demo mode, set sections to ideal values (max happiness, zero thirst)
     if (this.demoMode) {
-      ['A', 'B', 'C'].forEach((id) => {
+      levelData.sections.forEach((sectionData) => {
         // set happiness to max (100) and thirst to 0
-        this.gameState.updateSectionStat(id, 'happiness', 100);
-        this.gameState.updateSectionStat(id, 'thirst', 0);
+        this.gameState.updateSectionStat(sectionData.id, 'happiness', 100);
+        this.gameState.updateSectionStat(sectionData.id, 'thirst', 0);
       });
       // refresh display after forcing values
       this.updateDisplay();
@@ -201,12 +343,7 @@ export class StadiumScene extends Phaser.Scene {
     document.body.appendChild(demoBtn);
 
     // Show session countdown overlay before game starts (3 second countdown)
-    if (this.gameMode === 'run') {
-      this.showSessionCountdownOverlay();
-    } else {
-      // In eternal mode, start immediately
-      this.gameState.activateSession();
-    }
+    this.showSessionCountdownOverlay();
 
     // Setup wave button listener
     const waveBtn = document.getElementById('wave-btn') as HTMLButtonElement;
@@ -232,40 +369,59 @@ export class StadiumScene extends Phaser.Scene {
     const forceSputter = () => {
       if (!this.waveManager.isActive() && this.gameState.getSessionState() === 'active') {
         this.forceSputterNextSection = true;
-        this.waveManager.startWave();
+        this.waveManager.setForceSputter(true);
+        // Ensure a Wave instance exists so the WaveSprite can spawn
+        const origin = this.pickOriginSectionId();
+        this.waveManager.createWave(origin);
         if (waveBtn) {
           waveBtn.disabled = true;
           waveBtn.textContent = 'WAVE IN PROGRESS...';
         }
-        console.log('[DEBUG] Force Sputter initiated - will degrade strength on section B');
+        console.log(`[DEBUG] Force Sputter initiated - will degrade strength (origin ${origin})`);
       }
     };
 
     // Add keyboard shortcut for force sputter (press 'S')
     this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S).on('down', forceSputter);
 
+    // Add keyboard shortcut to toggle wave debug visualization (press 'W')
+    this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W).on('down', () => {
+      if (this.waveManager && this.waveManager.getWaveSprite) {
+        const waveSprite = this.waveManager.getWaveSprite();
+        if (waveSprite && typeof waveSprite.toggleDebugVisible === 'function') {
+          waveSprite.toggleDebugVisible();
+          console.log('[DEBUG] Wave debug visualization toggled');
+        }
+      }
+    });
+
     // Setup vendor button listeners
-    ['A', 'B', 'C'].forEach(section => {
-      document.getElementById(`v1-${section.toLowerCase()}`)?.addEventListener('click', () => {
-        this.vendorManager.placeVendor(0, section);
+    levelData.sections.forEach((sectionData, sectionIdx) => {
+      const section = sectionData.id.toLowerCase();
+      document.getElementById(`v1-${section}`)?.addEventListener('click', () => {
+        this.aiManager.assignVendorToSection(0, sectionIdx);
+        console.log(`[UI] Assigned vendor 0 to section ${sectionData.id} (index ${sectionIdx})`);
       });
-      document.getElementById(`v2-${section.toLowerCase()}`)?.addEventListener('click', () => {
-        this.vendorManager.placeVendor(1, section);
+      document.getElementById(`v2-${section}`)?.addEventListener('click', () => {
+        this.aiManager.assignVendorToSection(1, sectionIdx);
+        console.log(`[UI] Assigned vendor 1 to section ${sectionData.id} (index ${sectionIdx})`);
       });
     });
 
     // Listen to VendorManager events for visual feedback
-    this.vendorManager.on('vendorPlaced', (data: { vendorId: number; section: string }) => {
-      const sectionIndex = data.section.charCodeAt(0) - 65; // A=0, B=1, C=2
+    this.aiManager.on('vendorPlaced', (data: { vendorId: number; section: string }) => {
+      const sectionIndex = this.getSectionIndex(data.section);
       const section = this.sections[sectionIndex];
-      section.placedVendor(data.vendorId);
-      // Add "VENDOR HERE" text or icon at section position
-      this.add.text(section.x, section.y - 80, '🍺 VENDOR', {
-        fontSize: '20px'
-      }).setOrigin(0.5).setName(`vendor-${data.vendorId}-indicator`);
+      if (section) {
+        section.placedVendor(data.vendorId);
+        // Add "VENDOR HERE" text or icon at section position
+        this.add.text(section.x, section.y - 80, '🍺 VENDOR', {
+          fontSize: '20px'
+        }).setOrigin(0.5).setName(`vendor-${data.vendorId}-indicator`);
+      }
     });
 
-    this.vendorManager.on('serviceComplete', (data: { vendorId: number; section: string }) => {
+    this.aiManager.on('serviceComplete', (data: { vendorId: number; section: string }) => {
       // Remove indicator
       const indicator = this.children.getByName(`vendor-${data.vendorId}-indicator`);
       indicator?.destroy();
@@ -285,6 +441,7 @@ export class StadiumScene extends Phaser.Scene {
       if (this.waveStrengthMeter) {
         this.waveStrengthMeter.setVisible(true);
       }
+      // Note: WaveSprite now spawns when countdown reaches zero, not here
     });
 
     // Listen to wave strength changes
@@ -292,125 +449,157 @@ export class StadiumScene extends Phaser.Scene {
       this.updateWaveStrengthMeter(data.strength);
     });
 
+    // Grid-column-based wave participation (triggered as wave moves through grid)
+    this.waveManager.on('columnWaveReached', (data: { sectionId: string; gridCol: number; worldX: number; seatIds: string[]; seatCount: number; waveStrength?: number; visualState?: string }) => {
+      console.log(`[StadiumScene.columnWaveReached] Section ${data.sectionId}, gridCol ${data.gridCol}, ${data.seatIds.length} seats`);
+      
+      const sectionIndex = this.getSectionIndex(data.sectionId);
+      const section = this.sections[sectionIndex];
+      if (data.seatIds.length === 0) {
+        console.warn(`[StadiumScene.columnWaveReached] No seats for section ${data.sectionId} col ${data.gridCol}`);
+        return;
+      }
+      
+      const firstSeatId = data.seatIds[0];
+      console.log(`[StadiumScene.columnWaveReached] First seatId: ${firstSeatId}`);
+      const parts = firstSeatId.split('-');
+      console.log(`[StadiumScene.columnWaveReached] SeatId parts: ${parts.join(', ')}, length: ${parts.length}`);
+      
+      // SeatId format is: ${sectionId}-${rowIndex}-${col}
+      if (parts.length < 3) {
+        console.warn(`[StadiumScene.columnWaveReached] Invalid seatId format: ${firstSeatId}`);
+        return;
+      }
+      const columnIndex = parseInt(parts[2], 10);
+      if (isNaN(columnIndex)) {
+        console.warn(`[StadiumScene.columnWaveReached] Invalid columnIndex from seatId: ${firstSeatId}`);
+        return;
+      }
+
+      console.log(`[StadiumScene.columnWaveReached] Parsed columnIndex: ${columnIndex}`);
+
+      // Use waveStrength and visualState from event payload
+      const waveStrength = data.waveStrength ?? this.waveManager.getCurrentWaveStrength();
+      const visualState = (data.visualState as 'full' | 'sputter' | 'death' | undefined) ?? 'full';
+      const participationMultiplier = 1; // TODO: Apply boosters if needed
+      // Calculate participation for this specific column
+      const fanStates = section.calculateColumnParticipation(columnIndex, waveStrength * participationMultiplier);
+      console.log(`[StadiumScene.columnWaveReached] fanStates.length: ${fanStates.length}`);
+      
+      if (fanStates.length === 0) {
+        console.warn(`[StadiumScene.columnWaveReached] No fanStates for section ${data.sectionId} col ${columnIndex}`);
+        return;
+      }
+      
+      let columnParticipating = 0;
+      for (const st of fanStates) {
+        if (st.willParticipate) {
+          columnParticipating++;
+        }
+      }
+      const columnRate = fanStates.length > 0 ? columnParticipating / fanStates.length : 0;
+      const columnState = this.waveManager.classifyColumn(columnRate);
+      // Record column state for analytics
+      this.waveManager.recordColumnState(data.sectionId, columnIndex, columnRate, columnState);
+      this.waveManager.pushColumnParticipation(columnRate);
+      // Trigger animation for this column immediately (no await - fire and forget)
+      console.log(`[StadiumScene.columnWaveReached] Calling playColumnAnimation for ${fanStates.length} fans`);
+      section.playColumnAnimation(columnIndex, fanStates, visualState, waveStrength);
+      // Log every few columns to reduce spam
+      if (this.waveManager['currentGridColumnIndex'] % 5 === 0) {
+        console.log(`[Column Wave] Section ${data.sectionId} col ${columnIndex}: ${columnState} (${Math.round(columnRate*100)}%)`);
+      }
+    });
+
+    // Legacy section-wide wave event (kept for compatibility, but may be deprecated)
+    // Only use this to reset per-section fan state; actual animations happen per column
     this.waveManager.on('sectionWave', async (data: { section: string; strength: number; direction: 'left' | 'right' }) => {
       const sectionIndex = this.getSectionIndex(data.section);
       const section = this.sections[sectionIndex];
       section.resetFanWaveState();
-
-      const forced = this.waveManager.consumeForcedFlags();
-      let waveStrength = data.strength;
-      const direction = data.direction || 'right'; // Default to right if not specified
-      const cfg = gameBalance.waveClassification;
-      const baseRecoveryBonus = gameBalance.waveStrength.recoveryBonus;
-      const boosterType = this.waveManager.getLastBoosterType();
-      const participationMultiplier = boosterType === 'participation' ? this.waveManager.getWaveBoosterMultiplier() : 1;
-
-      if (forced.sputter) {
-        const degr = cfg.forcedSputterDegradationMin + Math.random() * (cfg.forcedSputterDegradationMax - cfg.forcedSputterDegradationMin);
-        waveStrength = Math.max(0, waveStrength - degr);
-        this.addDebugEvent(`[${data.section}] FORCED SPUTTER degrade=${Math.round(degr)}`);
-      }
-      if (forced.death) {
-        waveStrength = cfg.forcedDeathStrength;
-        this.addDebugEvent(`[${data.section}] FORCED DEATH strength=${waveStrength}`);
-      }
-
-      const rows = section.getRows();
-      const maxColumns = rows[0]?.getSeats().length ?? 8;
-      let totalFans = 0;
-      let totalParticipatingFans = 0;
-      let successCount = 0;
-      let sputterCount = 0;
-      let deathCount = 0;
-      let previousColumnState: 'success' | 'sputter' | 'death' = 'success';
-
-      // Determine column iteration order based on wave direction
-      const columnOrder = direction === 'left' 
-        ? Array.from({ length: maxColumns }, (_, i) => maxColumns - 1 - i) // Right to left: [7,6,5,4,3,2,1,0]
-        : Array.from({ length: maxColumns }, (_, i) => i); // Left to right: [0,1,2,3,4,5,6,7]
-
-      console.log(`[Wave Animation] Section ${data.section}: animating ${direction} (columns: ${columnOrder.slice(0, 3).join(',')}...)`);
-
-      for (let idx = 0; idx < maxColumns; idx++) {
-        const col = columnOrder[idx];
-        const fanStates = section.calculateColumnParticipation(col, waveStrength * participationMultiplier);
-        let columnParticipating = 0;
-        for (const st of fanStates) {
-          totalFans++;
-          if (st.willParticipate) {
-            totalParticipatingFans++;
-            columnParticipating++;
-          }
-        }
-        const columnRate = fanStates.length > 0 ? columnParticipating / fanStates.length : 0;
-        const columnState = this.waveManager.classifyColumn(columnRate);
-        this.waveManager.recordColumnState(data.section, col, columnRate, columnState);
-        this.waveManager.pushColumnParticipation(columnRate);
-
-        // Enhanced recovery (previous sputter -> current success)
-        if (previousColumnState === 'sputter' && columnState === 'success') {
-          const enhanced = this.waveManager.calculateEnhancedRecovery(previousColumnState, columnState); // returns recoveryPowerMultiplier or 0
-          if (enhanced > 0) {
-            const recoveryMultiplier = 1 + enhanced + (boosterType === 'recovery' ? (this.waveManager.getWaveBoosterMultiplier() - 1) : 0);
-            const bonus = baseRecoveryBonus * recoveryMultiplier;
-            waveStrength = Math.min(100, waveStrength + bonus);
-            this.waveManager.setWaveStrength(waveStrength);
-            this.addDebugEvent(`[${data.section}] Enhanced Recovery +${Math.round(bonus)} → ${Math.round(waveStrength)}`);
-          }
-        }
-
-        if (columnState === 'success') successCount++; else if (columnState === 'sputter') sputterCount++; else deathCount++;
-        previousColumnState = columnState;
-
-        let visualState: 'full' | 'sputter' | 'death' = columnState === 'success' ? 'full' : (columnState === 'sputter' ? 'sputter' : 'death');
-        await section.playColumnAnimation(col, fanStates, visualState, waveStrength);
-
-        if (idx < maxColumns - 1) {
-          await new Promise(res => this.time.delayedCall(gameBalance.waveTiming.columnDelay, res));
-        }
-      }
-
-      const participationRate = totalFans > 0 ? totalParticipatingFans / totalFans : 0;
-      let sectionState: 'success' | 'sputter' | 'death' = 'death';
-      if (successCount >= sputterCount && successCount >= deathCount) sectionState = 'success';
-      else if (sputterCount >= deathCount) sectionState = 'sputter';
-      else sectionState = 'death';
-      if (forced.death) sectionState = 'death';
-
-      if (sectionState === 'success') this.successStreak++; else this.successStreak = 0;
-
-      this.addDebugEvent(`[${data.section}] ${sectionState.toUpperCase()} cols S:${successCount} SP:${sputterCount} D:${deathCount} rate=${Math.round(participationRate*100)}%`);
-      this.waveManager.adjustWaveStrength(sectionState, participationRate);
-      this.waveManager.setLastSectionWaveState(sectionState);
-
-      const fans = section.getFans();
-      fans.forEach(f => {
-        if (f._lastWaveParticipated) {
-          f.pokeJiggle(sectionState === 'success' ? 0.9 : 0.45, sectionState === 'success' ? 900 : 700);
-        }
-      });
-
-      if (sectionState === 'success') {
-        section.flashSuccess();
-        if (this.successStreak >= 3) this.cameras.main.shake(200, 0.005);
-      } else {
-        section.flashFail();
-      }
-
-      this.updateDebugStats();
+      // Column-driven flow handles participation and animations; nothing else here
+      return;
     });
 
-    this.waveManager.on('waveComplete', () => {
+    // Section completion event - trigger visual effects
+    this.waveManager.on('sectionComplete', (data: { sectionId: string; state: 'success' | 'sputter' | 'death'; avgParticipation: number }) => {
+      const sectionIndex = this.getSectionIndex(data.sectionId);
+      const section = this.sections[sectionIndex];
+      
+      console.log(`[StadiumScene.sectionComplete] Section ${data.sectionId} ${data.state}`);
+      
+      // Trigger section flash based on result
+      if (data.state === 'success') {
+        section.playAnimation('flash-success');
+        // Trigger celebrate animation for random fans in the section
+        const fans = section.getFans();
+        const celebrateCount = Math.floor(fans.length * 0.3); // 30% of fans celebrate
+        const celebrateFans = fans.sort(() => Math.random() - 0.5).slice(0, celebrateCount);
+        celebrateFans.forEach((fan: any, idx: number) => {
+          fan.playAnimation('celebrate', { delayMs: idx * 50 });
+        });
+      } else if (data.state === 'death') {
+        section.playAnimation('flash-fail');
+      }
+      // No animation for sputter - it's just a weak success
+    });
+
+    this.waveManager.on('waveComplete', (data: { results: any[] }) => {
       this.gameState.incrementCompletedWaves();
       if (waveBtn) {
         waveBtn.disabled = false;
         waveBtn.textContent = 'START WAVE';
       }
-      this.successStreak = 0;
       // Hide wave strength meter
       if (this.waveStrengthMeter) {
         this.waveStrengthMeter.setVisible(false);
       }
+      
+      // Trigger celebration or grumpy animations based on section participation
+      const successfulSections = new Set(data.results.filter((r: any) => r.success).map((r: any) => r.section));
+      
+      this.sections.forEach((section, sectionIdx) => {
+        const sectionId = this.levelData?.sections[sectionIdx]?.id || String.fromCharCode(65 + sectionIdx);
+        const participated = successfulSections.has(sectionId);
+        const fans = section.getFans();
+        
+        if (participated) {
+          // Happy bounce for participating sections - randomized timing and subset
+          const celebratePercentage = 0.4 + Math.random() * 0.3; // 40-70% of fans celebrate
+          const celebrateCount = Math.floor(fans.length * celebratePercentage);
+          const celebrateFans = fans.sort(() => Math.random() - 0.5).slice(0, celebrateCount);
+          
+          celebrateFans.forEach((fan: any) => {
+            const randomDelay = Math.random() * 300; // Spread over 300ms
+            if (typeof fan.playAnimation === 'function') {
+              fan.playAnimation('celebrate', { delayMs: randomDelay });
+            }
+          });
+        } else {
+          // Grumpy jitter for non-participating sections - randomized timing and subset
+          const grumpyPercentage = 0.3 + Math.random() * 0.2; // 30-50% show grumpiness
+          const grumpyCount = Math.floor(fans.length * grumpyPercentage);
+          const grumpyFans = fans.sort(() => Math.random() - 0.5).slice(0, grumpyCount);
+          
+          grumpyFans.forEach((fan: any) => {
+            const randomDelay = Math.random() * 200; // Spread over 200ms
+            if (typeof fan.playAnimation === 'function') {
+              fan.playAnimation('grumpy', { delayMs: randomDelay });
+            }
+          });
+        }
+        
+        // Reset all fans to their original positions (after animations complete)
+        fans.forEach((fan: any) => {
+          if (typeof fan.resetPositionAndTweens === 'function') {
+            fan.resetPositionAndTweens();
+          }
+        });
+      });
+    });    // Full wave success celebration (camera shake) - scene-level effect
+    this.waveManager.on('waveFullSuccess', () => {
+      console.log('[StadiumScene] waveFullSuccess - triggering camera shake');
+      this.cameras.main.shake(200, 0.005);
     });
 
     // Create debug panel
@@ -419,6 +608,11 @@ export class StadiumScene extends Phaser.Scene {
 
 
   update(time: number, delta: number): void {
+    // Guard: ensure managers are initialized before update logic
+    if (!this.waveManager || !this.aiManager) {
+      return;
+    }
+
     // Debug: Log once to confirm update is running
     if (!this.hasLoggedUpdate) {
       console.log('[StadiumScene] UPDATE LOOP IS RUNNING');
@@ -432,7 +626,7 @@ export class StadiumScene extends Phaser.Scene {
       this.gameState.updateSession(delta);
       
       // Update session timer display
-      if (this.sessionTimerText && this.gameMode === 'run') {
+      if (this.sessionTimerText) {
         const timeRemaining = this.gameState.getSessionTimeRemaining();
         const seconds = Math.max(0, Math.ceil(timeRemaining / 1000));
         this.sessionTimerText.setText(`${seconds}s`);
@@ -442,26 +636,41 @@ export class StadiumScene extends Phaser.Scene {
     // Update fan stats (thirst decay, happiness, attention)
     // Only update stats when session is actually active (not during countdown)
     if (!this.demoMode && this.gameState.getSessionState() === 'active') {
-      this.sections.forEach(section => {
-        section.updateFanStats(delta);
+      // Get section actors from registry and update their fan stats
+      const sectionActors = this.actorRegistry.getByCategory('section');
+      sectionActors.forEach(actor => {
+        // Get environmental modifier for this section
+        const sectionId = (actor as any).data?.get('sectionId') || 'A';
+        const envModifier = this.gameState.getEnvironmentalModifier(sectionId);
+        (actor as any).updateFanStats(delta, envModifier);
       });
 
       // Sync section-level stats from fan aggregates for UI display
-      const sectionIds = ['A', 'B', 'C'];
-      for (let si = 0; si < 3; si++) {
-        const section = this.sections[si];
-        const sectionId = sectionIds[si];
-        const aggregate = section.getAggregateStats();
-        
-        // Update GameStateManager with aggregate values for UI display
-        this.gameState.updateSectionStat(sectionId, 'happiness', aggregate.happiness);
-        this.gameState.updateSectionStat(sectionId, 'thirst', aggregate.thirst);
-        this.gameState.updateSectionStat(sectionId, 'attention', aggregate.attention);
+      if (this.levelData) {
+        this.levelData.sections.forEach((sectionData: any, idx: number) => {
+          const sectionActor = sectionActors[idx];
+          if (!sectionActor) return;
+          const aggregate = (sectionActor as any).getAggregateStats();
+          
+          // Update GameStateManager with aggregate values for UI display
+          this.gameState.updateSectionStat(sectionData.id, 'happiness', aggregate.happiness);
+          this.gameState.updateSectionStat(sectionData.id, 'thirst', aggregate.thirst);
+          this.gameState.updateSectionStat(sectionData.id, 'attention', aggregate.attention);
+        });
       }
     }
 
+    // Update actor registry (for autonomous actor behaviors)
+    this.actorRegistry.update(delta);
+
     // Update vendor manager
-    this.vendorManager.update(delta);
+    this.aiManager.update(delta);
+    
+    // Update vendor visual positions
+    this.updateVendorPositions();
+
+    // Tick wave sprite movement and events (sprite-driven propagation)
+    this.waveManager.update(delta);
 
     // Check for autonomous wave triggering (only when session is active)
     if (gameBalance.waveAutonomous.enabled && 
@@ -471,7 +680,7 @@ export class StadiumScene extends Phaser.Scene {
       if (triggerSection) {
         const wave = this.waveManager.createWave(triggerSection);
         this.showIncomingCue(triggerSection);
-        console.log(`[Autonomous Wave] Started from section ${triggerSection}, Wave ID: ${wave.id}`);
+        console.log(`[Wave] Autonomous start section ${triggerSection} waveId=${wave.id}`);
       }
     }
 
@@ -497,6 +706,26 @@ export class StadiumScene extends Phaser.Scene {
 
     // Update visual displays
     this.updateDisplay();
+
+    // Keep labels and stats anchored to sections (in case layout shifts)
+    if (this.sections.length) {
+      const cfgHeight = 200; // matches sectionConfig.height
+      const statsOffset = gameBalance.waveAutonomous.sectionStatOffsetY;
+      for (let i = 0; i < this.sections.length && i < this.sectionLabels.length; i++) {
+        const sec = this.sections[i];
+        const label = this.sectionLabels[i];
+        label.setPosition(sec.x, sec.y - cfgHeight / 2 - 16);
+      }
+      if (this.sections[0] && this.sectionAText) {
+        this.sectionAText.setPosition(this.sections[0].x, this.sections[0].y + cfgHeight / 2 + statsOffset);
+      }
+      if (this.sections[1] && this.sectionBText) {
+        this.sectionBText.setPosition(this.sections[1].x, this.sections[1].y + cfgHeight / 2 + statsOffset);
+      }
+      if (this.sections[2] && this.sectionCText) {
+        this.sectionCText.setPosition(this.sections[2].x, this.sections[2].y + cfgHeight / 2 + statsOffset);
+      }
+    }
 
     // Update fans visuals based on their personal thirst
     this.sections.forEach(section => {
@@ -565,11 +794,15 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   /**
-   * Maps section ID to array index
-   * @param sectionId - The section identifier ('A', 'B', or 'C')
-   * @returns The section index (0, 1, or 2)
+   * Maps section ID to array index using level data
+   * @param sectionId - The section identifier
+   * @returns The section index
    */
   private getSectionIndex(sectionId: string): number {
+    if (this.levelData) {
+      return this.levelData.sections.findIndex((s: any) => s.id === sectionId);
+    }
+    // Fallback for legacy code
     const map: { [key: string]: number } = { 'A': 0, 'B': 1, 'C': 2 };
     return map[sectionId] || 0;
   }
@@ -585,7 +818,9 @@ export class StadiumScene extends Phaser.Scene {
 
     // Create overlay container with semi-transparent background
     this.sessionCountdownOverlay = this.add.container(0, 0);
+    this.sessionCountdownOverlay.setDepth(2000); // Render above vendors (depth 1000)
     const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
+    bg.setOrigin(0, 0)
     this.sessionCountdownOverlay.add(bg);
 
     const countdownText = this.add.text(centerX, centerY, '3', {
@@ -766,8 +1001,18 @@ export class StadiumScene extends Phaser.Scene {
       console.log('Session ended with score:', sessionScore);
     }
 
+    // Clean up actor registry
+    this.actorRegistry.clear();
+
     // Transition to ScoreReportScene
     this.scene.start('ScoreReportScene', { sessionScore });
+  }
+
+  /**
+   * Get public access to actor registry (for UI/debugger)
+   */
+  public getActorRegistry(): ActorRegistry {
+    return this.actorRegistry;
   }
 
   /**
@@ -819,7 +1064,7 @@ export class StadiumScene extends Phaser.Scene {
       const val = parseFloat(strengthInput.value);
       if (!isNaN(val)) {
         this.waveManager.setWaveStrength(val);
-        this.addDebugEvent(`[DEBUG] Override strength=${val}`);
+        console.log(`[DEBUG] Override strength=${val}`);
         this.updateDebugStats();
       }
     };
@@ -850,10 +1095,10 @@ export class StadiumScene extends Phaser.Scene {
       this.waveManager.setForceSputter(true);
       if (autoRecoverChk.checked) {
         this.waveManager.applyWaveBooster('recovery');
-        this.addDebugEvent('[DEBUG] Recovery booster applied');
+        console.log('[DEBUG] Recovery booster applied');
       }
       this.startWaveWithDisable(forceSputterBtn);
-      this.addDebugEvent('[DEBUG] Forced sputter requested');
+      console.log('[DEBUG] Forced sputter requested');
       this.updateDebugStats();
     };
     sputterRow.appendChild(forceSputterBtn);
@@ -868,8 +1113,13 @@ export class StadiumScene extends Phaser.Scene {
     forceDeathBtn.style.cssText = 'background:#400;border:1px solid #f00;color:#f00;font-size:11px;padding:2px 6px;cursor:pointer;flex:1;';
     forceDeathBtn.onclick = () => {
       this.waveManager.setForceDeath(true);
-      this.startWaveWithDisable(forceDeathBtn);
-      this.addDebugEvent('[DEBUG] Forced death requested');
+      // Ensure a Wave instance exists so the WaveSprite can spawn
+      const origin = this.pickOriginSectionId();
+      this.waveManager.createWave(origin);
+      // Briefly disable button to prevent rapid repeat
+      forceDeathBtn.disabled = true;
+      this.time.delayedCall(1500, () => { forceDeathBtn.disabled = false; });
+      console.log(`[DEBUG] Forced death requested (origin ${origin})`);
       this.updateDebugStats();
     };
     deathRow.appendChild(forceDeathBtn);
@@ -889,7 +1139,7 @@ export class StadiumScene extends Phaser.Scene {
       btn.style.cssText = `background:#111;border:1px solid ${b.color};color:${b.color};font-size:11px;padding:2px 6px;cursor:pointer;flex:1;`;
       btn.onclick = () => {
         this.waveManager.applyWaveBooster(b.key);
-        this.addDebugEvent(`[DEBUG] Booster applied: ${b.key}`);
+        console.log(`[DEBUG] Booster applied: ${b.key}`);
         this.updateDebugStats();
       };
       boosterRow.appendChild(btn);
@@ -927,7 +1177,17 @@ export class StadiumScene extends Phaser.Scene {
       });
     }
 
-    console.log('[DEBUG PANEL] Created. Press D to toggle. Press S to force sputter.');
+    // Add keyboard key for toggling wave sprite visibility (W key)
+    const wKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    if (wKey) {
+      wKey.on('down', () => {
+        const newValue = !gameBalance.waveSprite.visible;
+        gameBalance.waveSprite.visible = newValue;
+        console.log('[WAVE SPRITE]', newValue ? 'VISIBLE' : 'HIDDEN');
+      });
+    }
+
+    console.log('[DEBUG PANEL] Created. Press D to toggle. Press S to force sputter. Press W to toggle wave sprite.');
 
     // Clean up on scene shutdown
     this.events.on('shutdown', () => {
@@ -936,18 +1196,14 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   /**
-   * Update debug panel statistics display
+   * Update debug panel statistics display (displays wave stats and column grid)
    */
   private updateDebugStats(): void {
     const statsDiv = document.getElementById('debug-stats');
     if (!statsDiv) return;
 
     const score = this.waveManager.getScore();
-    const recentEvents = this.debugEventLog.slice(-8).reverse();
-    const eventsHtml = recentEvents.length > 0 
-      ? recentEvents.map(e => `<div>${e}</div>`).join('')
-      : '<div style="color: #666;">No events yet</div>';
-
+    
     // Column state grid (only in debug mode)
     let columnGridHtml = '';
     if (this.debugMode && gameBalance.waveClassification.enableColumnGrid) {
@@ -975,12 +1231,6 @@ export class StadiumScene extends Phaser.Scene {
 
     statsDiv.innerHTML = `
       <div><strong>Score:</strong> ${score}</div>
-      <div style="margin-top: 10px; border-top: 1px solid #00ff00; padding-top: 10px;">
-        <strong>Recent Events:</strong>
-        <div style="margin-top: 5px;">
-          ${eventsHtml}
-        </div>
-      </div>
       ${columnGridHtml}
     `;
   }
@@ -989,23 +1239,164 @@ export class StadiumScene extends Phaser.Scene {
   private startWaveWithDisable(btn: HTMLButtonElement): void {
     if (btn.disabled) return;
     btn.disabled = true;
-    this.waveManager.startWave();
+    // Create a wave from the best origin so WaveSprite will spawn
+    const origin = this.pickOriginSectionId();
+    this.waveManager.createWave(origin);
     this.time.delayedCall(1500, () => { btn.disabled = false; });
   }
 
-  /**
-   * Add event to debug log
-   */
-  private addDebugEvent(message: string): void {
-    this.debugEventLog.push(message);
-    // Keep only last 20 events
-    if (this.debugEventLog.length > 20) {
-      this.debugEventLog.shift();
+  /** Pick an origin section for debug starts (highest happiness, fallback 'A') */
+  private pickOriginSectionId(): string {
+    const sections = this.gameState.getSections();
+    if (!sections || sections.length === 0) return 'A';
+    let best = sections[0];
+    for (let i = 1; i < sections.length; i++) {
+      if (sections[i].happiness > best.happiness) best = sections[i];
     }
-    // Mirror to console for scrollable history
-    if (this.debugMode) {
-      // Unified prefix for easier grep
-      console.log(`[DBG] ${message}`);
+    return best.id;
+  }
+
+  /**
+   * Setup vendor event listeners
+   */
+  private setupVendorEventListeners(): void {
+    // Listen for vendor spawned events to create visual sprites
+    this.aiManager.on('vendorSpawned', (data: { vendorId: number; profile: any }) => {
+      console.log(`[Vendor] Spawned vendor ${data.vendorId}`);
+      const { vendorId, profile } = data;
+      
+      // Use vendor instance position (set from gridManager.gridToWorld)
+      const instance = this.aiManager.getVendorInstance(vendorId);
+      const startX = instance?.position.x ?? this.cameras.main.centerX;
+      const startY = instance?.position.y ?? 550;
+      const vendorSprite = new Vendor(this, startX, startY);
+      vendorSprite.setDepth(1000); // Render above fans
+      console.log(`[Vendor] Sprite created at (${startX}, ${startY})`);
+      this.vendorSprites.set(vendorId, vendorSprite);
+      console.log(`[Vendor] Total sprites: ${this.vendorSprites.size}`);
+      this.add.existing(vendorSprite);
+      console.log(`[Vendor] Profile type=${profile.type} quality=${profile.qualityTier}`);
+      this.rebuildVendorControls();
+    });
+
+    // Listen for vendor state changes to update visuals
+    this.aiManager.on('vendorReachedTarget', (data: { vendorId: number; position: any }) => {
+      console.log(`[Vendor] Vendor ${data.vendorId} reached target`);
+    });
+
+    this.aiManager.on('serviceComplete', (data: { vendorId: number; fanServed?: boolean }) => {
+      const sprite = this.vendorSprites.get(data.vendorId);
+      if (sprite) {
+        sprite.setMovementState('cooldown');
+      }
+      console.log(`[Vendor] Vendor ${data.vendorId} completed service`);
+    });
+
+    this.aiManager.on('vendorDistracted', (data: { vendorId: number }) => {
+      const sprite = this.vendorSprites.get(data.vendorId);
+      if (sprite) {
+        sprite.setMovementState('distracted');
+      }
+      console.log(`[Vendor] Vendor ${data.vendorId} got distracted!`);
+    });
+
+    // Vendor section assignment
+    this.aiManager.on('vendorSectionAssigned', (data: { vendorId: number; sectionIdx: number }) => {
+      const sectionId = this.levelData?.sections[data.sectionIdx]?.id || 'Unknown';
+      console.log(`[Vendor] Vendor ${data.vendorId} assigned to section ${sectionId}`);
+      // Update UI highlight
+      this.rebuildVendorControls();
+    });
+  }
+
+  /**
+   * Update vendor sprite positions to match their instance positions
+   */
+  private updateVendorPositions(): void {
+    for (const [vendorId, sprite] of this.vendorSprites) {
+      const instance = this.aiManager.getVendorInstance(vendorId);
+      if (!instance) continue;
+
+      // Update sprite position to match instance position
+      sprite.setPosition(instance.position.x, instance.position.y);
+
+      // Update sprite state to match vendor state
+      sprite.setMovementState(instance.state);
+    }
+  }
+
+  /**
+   * Dynamically rebuild vendor assignment controls based on active vendors
+   */
+  private rebuildVendorControls(): void {
+    const controlsRoot = document.getElementById('controls');
+    if (!controlsRoot) return;
+    // Clear previous dynamic vendor controls (keep wave button if present)
+    // Remove all children then recreate
+    controlsRoot.innerHTML = '';
+    // Optionally re-add wave button if it existed
+    const waveBtn = document.createElement('button');
+    waveBtn.id = 'wave-btn';
+    waveBtn.textContent = 'START WAVE';
+    waveBtn.style.display = 'none';
+    controlsRoot.appendChild(waveBtn);
+
+    const vendorInstances = Array.from(this.aiManager.getVendorInstances().entries());
+    vendorInstances.forEach(([vendorId, instance], idx) => {
+      const row = document.createElement('div');
+      row.className = 'vendor-controls';
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px;';
+      const label = document.createElement('span');
+      label.className = 'vendor-label';
+      label.textContent = `Vendor ${vendorId}:`;
+      label.style.cssText = 'font-size:12px;color:#ccc;';
+      row.appendChild(label);
+
+      // Determine serviceable sections (drink => all sections; later types may differ)
+      const serviceableSectionIndices: number[] = [0,1,2];
+      serviceableSectionIndices.forEach(sIdx => {
+        const sectionId = this.levelData?.sections[sIdx]?.id || sIdx.toString();
+        const btn = document.createElement('button');
+        btn.className = 'vendor-btn';
+        btn.textContent = `Section ${sectionId}`;
+        btn.style.cssText = 'background:#111;border:1px solid #555;color:#eee;font-size:11px;padding:2px 6px;cursor:pointer;';
+        if (instance.assignedSectionIdx === sIdx) {
+          btn.style.border = '1px solid #0ff';
+          btn.style.background = '#033';
+        }
+        btn.onclick = () => {
+          this.aiManager.assignVendorToSection(vendorId, sIdx);
+        };
+        row.appendChild(btn);
+      });
+
+      controlsRoot.appendChild(row);
+    });
+  }
+
+  /**
+   * Get AIManager instance for external access (e.g., GridOverlay)
+   */
+  public getAIManager(): AIManager {
+    return this.aiManager;
+  }
+
+  /**
+   * Set background alpha (skybox and ground) for debug visualization
+   */
+  public setBackgroundAlpha(alpha: number): void {
+    if (this.skyboxActor && this.skyboxActor.getSkybox) {
+      const skybox = this.skyboxActor.getSkybox();
+      if (skybox) {
+        skybox.setAlpha(alpha);
+      }
+    }
+    
+    if (this.groundActor && this.groundActor.getGround) {
+      const ground = this.groundActor.getGround();
+      if (ground) {
+        ground.setAlpha(alpha);
+      }
     }
   }
 }
