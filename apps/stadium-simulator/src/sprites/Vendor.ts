@@ -54,35 +54,6 @@ export class Vendor extends BaseActorContainer {
   }
 
   
-  /**
-   * Get behavior-modified movement speed
-   */
-  public getMovementSpeed(): number {
-    if (!this.personality) {
-      return 100; // Default speed
-    }
-    return this.personality.movement.speed;
-  }
-
-  /**
-   * Get pause duration at sections
-   */
-  public getPauseDuration(): number {
-    if (!this.personality) {
-      return 2000; // Default 2 seconds
-    }
-    return this.personality.movement.pauseDuration;
-  }
-
-  /**
-   * Get section preference weight for a given section
-   */
-  public getSectionPreference(sectionId: string): number {
-    if (!this.personality) {
-      return 1.0; // Neutral preference
-    }
-    return this.personality.movement.sectionPreferences[sectionId] || 1.0;
-  }
 
   /**
    * Apply visual customization based on personality
@@ -129,14 +100,7 @@ export class Vendor extends BaseActorContainer {
   }
 
   /**
-   * Get vendor's personality
-   */
-  public getPersonality(): VendorPersonality | null {
-    return this.personality;
-  }
-
-  /**
-   * Get vendor's unique ID
+   * Cleanup on destroy
    */
   public getVendorId(): string {
     return this.vendorId;

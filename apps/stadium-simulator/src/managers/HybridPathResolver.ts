@@ -348,6 +348,8 @@ export class HybridPathResolver {
           sectionIdx: i,
           x: currentBounds.x + currentBounds.width,
           y: (currentBounds.y + currentBounds.y + currentBounds.height) / 2,
+          gridRow: 0,
+          gridCol: 0
         });
 
         const topCorridorCurrentId = `corridor_top_${i}`;
@@ -556,7 +558,7 @@ export class HybridPathResolver {
         const GROUND_Y = 650; // Ground level Y coordinate
         
         // If vendor is significantly above ground and first node is ground type
-        if (fromY < GROUND_Y - 10 && firstNode.nodeType === 'ground') {
+        if (fromY < GROUND_Y - 10 && firstNode.type === 'ground') {
           // Add intermediate waypoint: move vertically to ground level first
           segments.push({
             nodeType: 'ground',
@@ -593,7 +595,7 @@ export class HybridPathResolver {
     console.log(`[HybridPathResolver] Total path segments: ${segments.length}`);
     if (segments.length > 0) {
       console.log('[HybridPathResolver] Segment details:', segments.map((s, i) => 
-        `${i}: ${s.nodeType} (${s.gridRow || '?'},${s.gridCol || '?'}) @ (${Math.round(s.x)},${Math.round(s.y)})`
+        `${i}: ${s.nodeType} (${s.rowIdx || '?'},${s.colIdx || '?'}) @ (${Math.round(s.x)},${Math.round(s.y)})`
       ).join('\n  '));
     }
 
@@ -728,6 +730,8 @@ export class HybridPathResolver {
         return `rowEntry_${node.colIdx === 0 ? 'left' : 'right'}_${node.sectionIdx}_${node.rowIdx}`;
       case 'seat':
         return `seat_${node.sectionIdx}_${node.rowIdx}_${node.colIdx}`;
+      case 'ground':
+        return `ground_${node.gridCol}`;
     }
   }
 
@@ -752,10 +756,15 @@ export class HybridPathResolver {
 
     // Delegate to GridPathfinder for zone-aware A* pathfinding
     const vendorProfile: VendorProfile = {
-      id: 'temp-vendor',
-      quality: 'good',
-      targetFan: null,
-      abilities: [],
+      id: 0,
+      type: 'drink',
+      qualityTier: 'good',
+      abilities: {
+        ignoreRowPenalty: false,
+        ignoreGrumpPenalty: false,
+        canEnterRows: true,
+        rangedOnly: false,
+      },
     };
 
     const gridPath = this.gridPathfinder.findPath(
@@ -785,19 +794,19 @@ export class HybridPathResolver {
 
     if (toZone === 'seat' || fromZone === 'seat') {
       // Try alternative boundary cells
-      const boundaries = this.gridManager.getBoundarySet('rowEntry');
+      const boundaries = this.gridManager.getBoundarySet('rowBoundary');
       
       if (boundaries.length > 0) {
         // Try each boundary in order of distance to target
         const sortedBoundaries = boundaries
           .map(b => ({
             boundary: b,
-            distance: Math.abs(b.gridRow - toGrid.row) + Math.abs(b.gridCol - toGrid.col),
+            distance: Math.abs(b.row - toGrid.row) + Math.abs(b.col - toGrid.col),
           }))
           .sort((a, b) => a.distance - b.distance);
 
         for (const { boundary } of sortedBoundaries) {
-          const boundaryWorld = this.gridManager.gridToWorld(boundary.gridRow, boundary.gridCol);
+          const boundaryWorld = this.gridManager.gridToWorld(boundary.row, boundary.col);
           
           // Try path through this boundary
           const pathToBoundary = this.gridPathfinder.findPath(
@@ -819,7 +828,7 @@ export class HybridPathResolver {
 
             if (pathFromBoundary.length > 0) {
               // Success! Combine paths (remove duplicate boundary cell)
-              console.log(`[HybridPathResolver] Used boundary fallback via (${boundary.gridRow},${boundary.gridCol})`);
+              console.log(`[HybridPathResolver] Used boundary fallback via (${boundary.row},${boundary.col})`);
               return [...pathToBoundary, ...pathFromBoundary.slice(1)];
             }
           }
@@ -832,12 +841,12 @@ export class HybridPathResolver {
         const sortedStairs = stairBoundaries
           .map(b => ({
             boundary: b,
-            distance: Math.abs(b.gridRow - toGrid.row) + Math.abs(b.gridCol - toGrid.col),
+            distance: Math.abs(b.row - toGrid.row) + Math.abs(b.col - toGrid.col),
           }))
           .sort((a, b) => a.distance - b.distance);
 
         for (const { boundary } of sortedStairs.slice(0, 2)) { // Try only closest 2
-          const boundaryWorld = this.gridManager.gridToWorld(boundary.gridRow, boundary.gridCol);
+          const boundaryWorld = this.gridManager.gridToWorld(boundary.row, boundary.col);
           
           const pathToBoundary = this.gridPathfinder.findPath(
             vendorProfile,
@@ -857,7 +866,7 @@ export class HybridPathResolver {
             );
 
             if (pathFromBoundary.length > 0) {
-              console.log(`[HybridPathResolver] Used stair boundary fallback via (${boundary.gridRow},${boundary.gridCol})`);
+              console.log(`[HybridPathResolver] Used stair boundary fallback via (${boundary.row},${boundary.col})`);
               return [...pathToBoundary, ...pathFromBoundary.slice(1)];
             }
           }
@@ -926,6 +935,7 @@ export class HybridPathResolver {
       stair: gameBalance.vendorMovement.baseSpeedStair,
       rowEntry: gameBalance.vendorMovement.baseSpeedRow,
       seat: gameBalance.vendorMovement.baseSpeedRow,
+      ground: gameBalance.vendorMovement.baseSpeedCorridor, // Ground uses same speed as corridor
     };
 
     cost = cost / speedModifiers[segment.nodeType];
