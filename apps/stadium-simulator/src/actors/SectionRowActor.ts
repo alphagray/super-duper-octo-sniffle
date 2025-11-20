@@ -1,4 +1,4 @@
-import { SceneryActor } from '@/actors/Actor';
+import { SceneryActor } from '@/actors/base/Actor';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import type { VendorAbilities } from '@/managers/interfaces/VendorTypes';
 import { gameBalance } from '@/config/gameBalance';

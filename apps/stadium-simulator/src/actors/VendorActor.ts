@@ -1,4 +1,4 @@
-import { AnimatedActor } from '@/actors/Actor';
+import { AnimatedActor } from '@/actors/base/Actor';
 import { Vendor } from '@/sprites/Vendor';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 

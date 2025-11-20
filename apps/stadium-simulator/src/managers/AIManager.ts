@@ -6,7 +6,7 @@ import type { GridManager } from './GridManager';
 import { gameBalance } from '@/config/gameBalance';
 import { HybridPathResolver } from './HybridPathResolver';
 import { GridPathfinder } from './GridPathfinder';
-import type { ActorRegistry } from '@/actors/ActorRegistry';
+import type { ActorRegistry } from '@/actors/base/ActorRegistry';
 
 /**
  * Represents a legacy vendor in the stadium (deprecated)

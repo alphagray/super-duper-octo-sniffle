@@ -1,7 +1,7 @@
 import { Fan } from './Fan';
 import type { VendorAbilities } from '@/managers/interfaces/VendorTypes';
 import { gameBalance } from '@/config/gameBalance';
-import { Actor } from '@/actors/Actor';
+import { Actor } from '@/actors/base/Actor';
 
 /**
  * SeatActor: Represents a seat in a stadium section row as an Actor.

@@ -1,4 +1,4 @@
-import { SceneryActor } from '@/actors/Actor';
+import { SceneryActor } from '@/actors/base/Actor';
 
 /**
  * SkyboxActor: Represents the sky background above the stadium.

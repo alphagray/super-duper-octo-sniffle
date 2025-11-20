@@ -5,7 +5,7 @@ import { gameBalance } from '@/config/gameBalance';
 import { Wave } from './Wave';
 import type { WaveType } from './Wave';
 import { WaveSprite } from '@/sprites/WaveSprite';
-import { ActorRegistry } from '@/actors/ActorRegistry';
+import { ActorRegistry } from '@/actors/base/ActorRegistry';
 
 interface WaveCalculationResult {
   sectionId: string;

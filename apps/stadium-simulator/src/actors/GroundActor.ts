@@ -1,4 +1,4 @@
-import { SceneryActor } from '@/actors/Actor';
+import { SceneryActor } from '@/actors/base/Actor';
 
 /**
  * GroundActor: Represents the ground/field area below the stadium sections.

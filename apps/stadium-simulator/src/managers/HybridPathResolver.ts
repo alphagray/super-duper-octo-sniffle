@@ -2,7 +2,7 @@ import type { VendorProfile, PathSegment, PathNodeType } from '@/managers/interf
 import type { StadiumSection } from '@/sprites/StadiumSection';
 import type { Fan } from '@/sprites/Fan';
 import type { GridManager } from '@/managers/GridManager';
-import type { ActorRegistry } from '@/actors/ActorRegistry';
+import type { ActorRegistry } from '@/actors/base/ActorRegistry';
 import { GridPathfinder } from '@/managers/GridPathfinder';
 import { gameBalance } from '@/config/gameBalance';
 
