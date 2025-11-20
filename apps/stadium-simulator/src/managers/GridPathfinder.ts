@@ -1,5 +1,6 @@
 import type { GridManager } from '@/managers/GridManager';
 import type { PathSegment, VendorProfile } from '@/managers/interfaces/VendorTypes';
+import type { ZoneType } from '@/managers/interfaces/ZoneConfig';
 import { gameBalance } from '@/config/gameBalance';
 
 /**
@@ -168,7 +169,11 @@ export class GridPathfinder {
         const neighborKey = `${neighbor.row},${neighbor.col}`;
 
         if (closedSet.has(neighborKey)) continue;
-        if (!this.isPassable(neighbor.row, neighbor.col)) continue;
+        
+        // Check directional passability (zone-aware)
+        if (!this.gridManager.isPassableDirection(currentRow, currentCol, neighbor.row, neighbor.col)) {
+          continue;
+        }
 
         const tentativeGScore = (gScore.get(current) || 0) + 
           this.getMovementCost(currentRow, currentCol, neighbor.row, neighbor.col);
@@ -239,31 +244,24 @@ export class GridPathfinder {
 
   /**
    * Get movement cost between two adjacent cells
+   * Uses zone costs from gameBalance configuration
    */
   private getMovementCost(fromRow: number, fromCol: number, toRow: number, toCol: number): number {
     const cellSize = this.gridManager.getWorldSize().cellSize;
-    const toType = this.getCellType(toRow, toCol);
+    const toZoneType = this.gridManager.getZoneType(toRow, toCol);
 
     // Base cost is cell size
     let cost = cellSize;
 
-    // Apply multipliers based on terrain type
-    switch (toType) {
-      case 'stair':
-        cost *= gameBalance.vendorMovement.stairTransitionCost;
-        break;
-      case 'corridor':
-        cost *= 0.8; // Corridors are fast
-        break;
-      case 'ground':
-        cost *= 0.7; // Ground is fastest
-        break;
-      case 'rowEntry':
-        cost *= 1.2; // Entering rows is slower
-        break;
-      case 'seat':
-        cost *= 2.0; // Moving through seats is very slow
-        break;
+    // Apply zone cost multipliers from gameBalance
+    if (toZoneType && gameBalance.zoneCosts[toZoneType] !== undefined) {
+      cost *= gameBalance.zoneCosts[toZoneType];
+    }
+
+    // Get terrain penalty if specified on the cell
+    const toCell = this.gridManager.getCell(toRow, toCol);
+    if (toCell?.terrainPenalty) {
+      cost += toCell.terrainPenalty;
     }
 
     return cost;
@@ -271,6 +269,8 @@ export class GridPathfinder {
 
   /**
    * Check if a grid cell is passable for vendors
+   * NOTE: This is now primarily used for start/end point validation.
+   * Neighbor validation uses GridManager.isPassableDirection() for directional checks.
    */
   private isPassable(row: number, col: number): boolean {
     const key = `${row},${col}`;
@@ -304,22 +304,11 @@ export class GridPathfinder {
 
   /**
    * Get the type of cell for cost calculation
+   * Now uses zone type from GridManager
    */
-  private getCellType(row: number, col: number): 'corridor' | 'stair' | 'ground' | 'rowEntry' | 'seat' {
-    const cell = this.gridManager.getCell(row, col);
-    if (!cell) return 'corridor';
-
-    // Check occupants for type hints
-    for (const occupant of cell.occupants.values()) {
-      if (occupant.type === 'stairs') return 'stair';
-      if (occupant.type === 'section') return 'seat';
-    }
-
-    // Determine by height level or position
-    if (cell.heightLevel < 0) return 'ground';
-    if (cell.heightLevel === 0) return 'corridor';
-    
-    return 'seat';
+  private getCellType(row: number, col: number): ZoneType {
+    const zoneType = this.gridManager.getZoneType(row, col);
+    return zoneType || 'corridor'; // Default to corridor if no zone type set
   }
 
   /**

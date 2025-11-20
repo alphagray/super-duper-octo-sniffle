@@ -50,6 +50,19 @@ export const gameBalance = {
   },
 
   /**
+   * Zone-based pathfinding costs
+   * Used in A* pathfinding to prefer certain zone types over others
+   */
+  zoneCosts: {
+    ground: 0.7, // Fast (vendors prefer walking on ground level)
+    corridor: 0.8, // Slightly slower (crowded concourse)
+    rowEntry: 1.0, // Normal cost (entry points to rows)
+    stair: 1.5, // Slower (vendors prefer to avoid stairs)
+    seat: 2.0, // Discouraged (can cut through but not ideal)
+    sky: 999, // Impassable (should never path through sky)
+  },
+
+  /**
    * Wave classification & debug / booster configuration (new)
    * Centralizes thresholds and tunables for per-column + per-section logic.
    */

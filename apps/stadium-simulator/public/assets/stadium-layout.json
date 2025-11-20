@@ -1,0 +1,216 @@
+{
+  "version": "1.0",
+  "gridDimensions": {
+    "rows": 24,
+    "cols": 32
+  },
+  "cellRanges": [
+    {
+      "label": "Sky zone - top half of grid",
+      "rowStart": 0,
+      "rowEnd": 13,
+      "colStart": 0,
+      "colEnd": 31,
+      "zoneType": "sky",
+      "passable": false
+    },
+    {
+      "label": "Corridor - bottom ground level for vendors",
+      "rowStart": 20,
+      "rowEnd": 23,
+      "colStart": 0,
+      "colEnd": 31,
+      "zoneType": "corridor",
+      "passable": true
+    },
+    {
+      "label": "Ground transition to sections",
+      "rowStart": 19,
+      "rowEnd": 19,
+      "colStart": 0,
+      "colEnd": 31,
+      "zoneType": "ground",
+      "passable": true
+    },
+    {
+      "label": "Section A - seat zone (rows 15-18, cols 2-9)",
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 2,
+      "colEnd": 9,
+      "zoneType": "seat",
+      "passable": false
+    },
+    {
+      "label": "Section A - row entry (left edge at col 1)",
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 1,
+      "colEnd": 1,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "passable": true
+    },
+    {
+      "label": "Stairs A-B (cols 10-11, rows 15-18)",
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 10,
+      "colEnd": 11,
+      "zoneType": "stair",
+      "passable": true
+    },
+    {
+      "label": "Stairs A-B landing (row 19, cols 10-11)",
+      "rowStart": 19,
+      "rowEnd": 19,
+      "colStart": 10,
+      "colEnd": 11,
+      "zoneType": "ground",
+      "transitionType": "stairLanding",
+      "passable": true
+    },
+    {
+      "label": "Section B - seat zone (rows 15-18, cols 12-19)",
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 12,
+      "colEnd": 19,
+      "zoneType": "seat",
+      "passable": false
+    },
+    {
+      "label": "Stairs B-C (cols 20-21, rows 15-18)",
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 20,
+      "colEnd": 21,
+      "zoneType": "stair",
+      "passable": true
+    },
+    {
+      "label": "Stairs B-C landing (row 19, cols 20-21)",
+      "rowStart": 19,
+      "rowEnd": 19,
+      "colStart": 20,
+      "colEnd": 21,
+      "zoneType": "ground",
+      "transitionType": "stairLanding",
+      "passable": true
+    },
+    {
+      "label": "Section C - seat zone (rows 15-18, cols 22-29)",
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 22,
+      "colEnd": 29,
+      "zoneType": "seat",
+      "passable": false
+    },
+    {
+      "label": "Section C - row entry (right edge at col 30)",
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 30,
+      "colEnd": 30,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "passable": true
+    },
+    {
+      "label": "Corridor entry zones (row 14, full width)",
+      "rowStart": 14,
+      "rowEnd": 14,
+      "colStart": 0,
+      "colEnd": 31,
+      "zoneType": "ground",
+      "transitionType": "corridorEntry",
+      "passable": true
+    }
+  ],
+  "cells": [
+    { "row": 15, "col": 1, "zoneType": "sky", "passable": false },
+    { "row": 16, "col": 1, "zoneType": "sky", "passable": false },
+    { "row": 17, "col": 1, "zoneType": "sky", "passable": false },
+    { "row": 18, "col": 1, "zoneType": "sky", "passable": false },
+    { "row": 15, "col": 30, "zoneType": "sky", "passable": false },
+    { "row": 16, "col": 30, "zoneType": "sky", "passable": false },
+    { "row": 17, "col": 30, "zoneType": "sky", "passable": false },
+    { "row": 18, "col": 30, "zoneType": "sky", "passable": false }
+  ],
+  "sections": [
+    {
+      "sectionId": "A",
+      "label": "Section A",
+      "gridBounds": {
+        "left": 2,
+        "top": 15,
+        "right": 9,
+        "bottom": 18
+      },
+      "rowCount": 4,
+      "seatsPerRow": 8
+    },
+    {
+      "sectionId": "B",
+      "label": "Section B",
+      "gridBounds": {
+        "left": 12,
+        "top": 15,
+        "right": 19,
+        "bottom": 18
+      },
+      "rowCount": 4,
+      "seatsPerRow": 8
+    },
+    {
+      "sectionId": "C",
+      "label": "Section C",
+      "gridBounds": {
+        "left": 22,
+        "top": 15,
+        "right": 29,
+        "bottom": 18
+      },
+      "rowCount": 4,
+      "seatsPerRow": 8
+    }
+  ],
+  "stairs": [
+    {
+      "stairId": "stairs-A-B",
+      "gridBounds": {
+        "left": 10,
+        "top": 15,
+        "width": 2,
+        "height": 4
+      },
+      "connectsSections": ["A", "B"]
+    },
+    {
+      "stairId": "stairs-B-C",
+      "gridBounds": {
+        "left": 20,
+        "top": 15,
+        "width": 2,
+        "height": 4
+      },
+      "connectsSections": ["B", "C"]
+    }
+  ],
+  "vendors": [
+    {
+      "id": "vendor-1",
+      "type": "drink",
+      "gridRow": 20,
+      "gridCol": 11
+    },
+    {
+      "id": "vendor-2",
+      "type": "food",
+      "gridRow": 20,
+      "gridCol": 20
+    }
+  ],
+  "fans": []
+}

@@ -70,10 +70,21 @@ export class StadiumScene extends Phaser.Scene {
 
   async create(): Promise<void> {
 
-    // Load level data (sections, seats, fans, vendors)
+    // Load level data (includes zone config, sections, seats, fans, vendors)
     const levelData = await LevelService.loadLevel();
     this.levelData = levelData; // Cache for later use
     console.log('[StadiumScene] Level data loaded:', levelData);
+
+    // Load zone configuration from level data
+    if (this.gridManager && levelData.zoneConfig) {
+      try {
+        console.log('[StadiumScene] Loading zone configuration from level data');
+        this.gridManager.loadZoneConfig(levelData.zoneConfig);
+      } catch (error) {
+        console.error('[StadiumScene] Error loading zone configuration:', error);
+        console.warn('[StadiumScene] Proceeding with default corridor zones');
+      }
+    }
 
     // Attach actorRegistry to the scene instance for WaveManager access
     (this as any).actorRegistry = this.actorRegistry;
@@ -289,6 +300,27 @@ export class StadiumScene extends Phaser.Scene {
         keyboard.addKey('V').on('down', () => {
           if (this.gridOverlay) {
             this.gridOverlay.toggleVendorPaths();
+          }
+        });
+
+        // Z key: Toggle zone visualization (NEW)
+        keyboard.addKey('Z').on('down', () => {
+          if (this.gridOverlay) {
+            this.gridOverlay.toggleZones();
+          }
+        });
+
+        // T key: Toggle transition markers (NEW)
+        keyboard.addKey('T').on('down', () => {
+          if (this.gridOverlay) {
+            this.gridOverlay.toggleTransitions();
+          }
+        });
+
+        // E key: Toggle directional edges (arrows) (NEW)
+        keyboard.addKey('E').on('down', () => {
+          if (this.gridOverlay) {
+            this.gridOverlay.toggleDirectional();
           }
         });
       }

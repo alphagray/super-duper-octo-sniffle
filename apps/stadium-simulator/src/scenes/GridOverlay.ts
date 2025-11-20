@@ -14,6 +14,10 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
   private stadiumScene?: Phaser.Scene;
   public showNodes: boolean = false;
   public showVendorPaths: boolean = false;
+  // Zone debug toggles
+  private showZones: boolean = true;
+  private showTransitions: boolean = true;
+  private showDirectional: boolean = false;
   private pulseAlpha: number = 0.5;
   private pulseDirection: number = 1;
 
@@ -78,6 +82,28 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     console.log(`[GridOverlay] Vendor paths: ${this.showVendorPaths ? 'ON' : 'OFF'}`);
   }
 
+  // Zone visualization toggles
+  public toggleZones(): void {
+    if (!this.visible) return;
+    this.showZones = !this.showZones;
+    this.needsRedraw = true;
+    console.log(`[GridOverlay] Zone overlay: ${this.showZones ? 'ON' : 'OFF'}`);
+  }
+
+  public toggleTransitions(): void {
+    if (!this.visible) return;
+    this.showTransitions = !this.showTransitions;
+    this.needsRedraw = true;
+    console.log(`[GridOverlay] Transition markers: ${this.showTransitions ? 'ON' : 'OFF'}`);
+  }
+
+  public toggleDirectional(): void {
+    if (!this.visible) return;
+    this.showDirectional = !this.showDirectional;
+    this.needsRedraw = true;
+    console.log(`[GridOverlay] Directional arrows: ${this.showDirectional ? 'ON' : 'OFF'}`);
+  }
+
   private setBackgroundVisible(visible: boolean): void {
     if (!this.stadiumScene) return;
     
@@ -127,6 +153,11 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     console.log(`[GridOverlay.redraw] Clearing and redrawing. Visible: ${this.visible}, Depth: ${this.depth}, Alpha: ${this.alpha}`);
 
     this.clear();
+
+    // Draw zones first so grid lines sit on top
+    if (this.showZones) {
+      this.renderZones(cellSize);
+    }
 
     this.lineStyle(gridLineWidth, gridColor, gridAlpha);
     this.drawGridLines(rows, cols, cellSize, origin.x, origin.y);
@@ -290,6 +321,117 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     }
     
     console.log(`[GridOverlay] Rendered ${pathsRendered} vendor paths`);
+  }
+
+  // ------------------------------------------------------------
+  // Zone Rendering
+  // ------------------------------------------------------------
+  private renderZones(cellSize: number): void {
+    const cells = this.grid.getAllCells();
+    // Zone color mapping
+    const ZONE_COLORS: Record<string, number> = {
+      ground: 0x2d5016,
+      corridor: 0x0044aa,
+      seat: 0x666666,
+      rowEntry: 0xffd400,
+      stair: 0xff8800,
+      sky: 0x001020,
+    };
+    const origin = this.grid.getOrigin();
+
+    cells.forEach(cell => {
+      const color = ZONE_COLORS[cell.zoneType] ?? 0x333333;
+      const bounds = this.grid.getCellBounds(cell.row, cell.col);
+      // Fill zone background with low alpha so grid is visible
+      this.fillStyle(color, 0.22);
+      this.fillRect(bounds.x, bounds.y, cellSize, cellSize);
+
+      // Draw transition markers
+      if (this.showTransitions && cell.transitionType) {
+        this.fillStyle(0xffffff, 0.85);
+        // small diamond
+        const cx = bounds.x + cellSize / 2;
+        const cy = bounds.y + cellSize / 2;
+        this.beginPath();
+        this.moveTo(cx, cy - 4);
+        this.lineTo(cx + 4, cy);
+        this.lineTo(cx, cy + 4);
+        this.lineTo(cx - 4, cy);
+        this.closePath();
+        this.fillPath();
+      }
+
+      // Directional arrows (outgoing) - optional
+      if (this.showDirectional) {
+        this.renderDirectionalArrows(cell, bounds.x, bounds.y, cellSize);
+      }
+    });
+  }
+
+  private renderDirectionalArrows(cell: any, x: number, y: number, size: number): void {
+    if (!cell.allowedOutgoing) return;
+    // Suppress directional arrow rendering for row entry boundary cells per design
+    if (cell.zoneType === 'rowEntry') return;
+    const arrowColor = 0x00ff00; // green
+    const centerX = x + size / 2;
+    const centerY = y + size / 2;
+    const offset = size / 2 - 5;
+    const headSize = 4;
+
+    // Helper to draw a filled arrow pointing from center towards target point
+    const drawArrow = (toX: number, toY: number, dir: CardinalDirection): void => {
+      this.fillStyle(arrowColor, 0.85);
+      this.beginPath();
+      // Shaft from center to slightly before arrow head
+      const shaftRatio = 0.65;
+      const shaftX = centerX + (toX - centerX) * shaftRatio;
+      const shaftY = centerY + (toY - centerY) * shaftRatio;
+      this.moveTo(shaftX, shaftY); // start polygon at shaft end
+      // Build triangle for head depending on direction
+      switch (dir) {
+        case 'top':
+          this.lineTo(toX, toY - headSize);
+          this.lineTo(toX - headSize, toY);
+          this.lineTo(toX + headSize, toY);
+          break;
+        case 'bottom':
+          this.lineTo(toX, toY + headSize);
+          this.lineTo(toX - headSize, toY);
+          this.lineTo(toX + headSize, toY);
+          break;
+        case 'left':
+          this.lineTo(toX - headSize, toY);
+          this.lineTo(toX, toY - headSize);
+          this.lineTo(toX, toY + headSize);
+          break;
+        case 'right':
+          this.lineTo(toX + headSize, toY);
+          this.lineTo(toX, toY - headSize);
+          this.lineTo(toX, toY + headSize);
+          break;
+      }
+      this.closePath();
+      this.fillPath();
+      // Draw shaft line (thin) in same color
+      this.lineStyle(1, arrowColor, 0.9);
+      this.beginPath();
+      this.moveTo(centerX, centerY);
+      this.lineTo(shaftX, shaftY);
+      this.strokePath();
+    };
+
+    if (cell.allowedOutgoing.top) {
+      drawArrow(centerX, centerY - offset, 'top');
+    }
+    if (cell.allowedOutgoing.bottom) {
+      drawArrow(centerX, centerY + offset, 'bottom');
+    }
+    if (cell.allowedOutgoing.left) {
+      drawArrow(centerX - offset, centerY, 'left');
+    }
+    if (cell.allowedOutgoing.right) {
+      drawArrow(centerX + offset, centerY, 'right');
+    }
   }
 }
 

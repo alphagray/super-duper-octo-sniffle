@@ -39,9 +39,9 @@ export interface RowEntryNode {
   type: 'rowEntry';
   sectionIdx: number;
   rowIdx: number;
-  colIdx: number;
+  entryCol: number; // interior row entry grid column (e.g. 11 or 20)
   gridRow: number;
-  gridCol: number;
+  gridCol: number; // duplicate of entryCol for convenience
   x: number; // cached world coordinate
   y: number; // cached world coordinate
 }
@@ -370,83 +370,82 @@ export class HybridPathResolver {
       }
     }
 
-    // Phase 3: Create row entry nodes for each section row (grid-based)
-    sections.forEach((section, sectionIdx) => {
-      const rows = section.getRows();
-
-      rows.forEach((row, rowIdx) => {
-        const seats = row.getSeats();
-        // Get row position from first seat's grid coordinates
-        const firstSeat = seats[0];
-        const lastSeat = seats[seats.length - 1];
-        if (!firstSeat || !lastSeat) return;
-        
-        const firstGrid = firstSeat.getGridPosition();
-        const lastGrid = lastSeat.getGridPosition();
-        
-        // Entry nodes at first and last columns of row
-        const leftEntryId = `rowEntry_left_${sectionIdx}_${rowIdx}`;
-        const rightEntryId = `rowEntry_right_${sectionIdx}_${rowIdx}`;
-        
-        const leftWorld = this.gridToWorldCentered(firstGrid.row, firstGrid.col);
-        const rightWorld = this.gridToWorldCentered(lastGrid.row, lastGrid.col);
-
-        nodes.set(leftEntryId, {
-          type: 'rowEntry',
-          sectionIdx,
-          rowIdx,
-          colIdx: 0,
-          gridRow: firstGrid.row,
-          gridCol: firstGrid.col,
-          x: leftWorld.x,
-          y: leftWorld.y,
+    // Phase 3: Create interior row entry nodes from GridManager boundary cells
+    if (this.gridManager) {
+      // Build lookup of seat rows (gridRow -> array of section row descriptors)
+      const seatRowMap = new Map<number, Array<{ sectionIdx: number; rowIdx: number; minCol: number; maxCol: number }>>();
+      sections.forEach((section, sectionIdx) => {
+        section.getRows().forEach((row, rowIdx) => {
+          const seats = row.getSeats();
+          if (seats.length === 0) return;
+          const firstGrid = seats[0].getGridPosition();
+          const lastGrid = seats[seats.length - 1].getGridPosition();
+          const arr = seatRowMap.get(firstGrid.row) || [];
+          arr.push({ sectionIdx, rowIdx, minCol: firstGrid.col, maxCol: lastGrid.col });
+          seatRowMap.set(firstGrid.row, arr);
         });
-
-        nodes.set(rightEntryId, {
-          type: 'rowEntry',
-          sectionIdx,
-          rowIdx,
-          colIdx: seats.length - 1,
-          gridRow: lastGrid.row,
-          gridCol: lastGrid.col,
-          x: rightWorld.x,
-          y: rightWorld.y,
-        });
-
-        // Connect row entries to corridors ONLY if adjacent
-        // First row connects to top corridor, last row connects to front corridor
-        const isFirstRow = rowIdx === 0;
-        const isLastRow = rowIdx === rows.length - 1;
-        const entryToCorridor = gameBalance.vendorMovement.rowEntryToCorridor || 50;
-        
-        if (isFirstRow) {
-          // First row connects to top corridor (above section)
-          const topCorridorId = `corridor_top_${sectionIdx}`;
-          this.addEdge(edges, leftEntryId, topCorridorId, entryToCorridor);
-          this.addEdge(edges, topCorridorId, leftEntryId, entryToCorridor);
-          this.addEdge(edges, rightEntryId, topCorridorId, entryToCorridor);
-          this.addEdge(edges, topCorridorId, rightEntryId, entryToCorridor);
-        }
-        
-        if (isLastRow) {
-          // Last row connects to front corridor (below section)
-          const frontCorridorId = `corridor_front_${sectionIdx}`;
-          this.addEdge(edges, leftEntryId, frontCorridorId, entryToCorridor);
-          this.addEdge(edges, frontCorridorId, leftEntryId, entryToCorridor);
-          this.addEdge(edges, rightEntryId, frontCorridorId, entryToCorridor);
-          this.addEdge(edges, frontCorridorId, rightEntryId, entryToCorridor);
-        }
-
-        // Connect left and right entries (traversing the row)
-        const rowTraverseCost = seats.length * gameBalance.vendorMovement.baseSpeedRow;
-        this.addEdge(edges, leftEntryId, rightEntryId, rowTraverseCost);
-        this.addEdge(edges, rightEntryId, leftEntryId, rowTraverseCost);
       });
 
-      // NOTE: Do NOT connect row entries vertically within sections
-      // Vendors must use corridors and stairs to move between rows
-      // This enforces proper pathfinding through the stadium architecture
-    });
+      const boundaryCells = this.gridManager.getBoundarySet('rowBoundary');
+      boundaryCells.forEach(cell => {
+        const candidates = seatRowMap.get(cell.row);
+        if (!candidates) return;
+        candidates.forEach(c => {
+          const dist = Math.min(Math.abs(cell.col - c.minCol), Math.abs(cell.col - c.maxCol));
+          if (dist <= 2) { // treat as valid entry for this row
+            const world = this.gridToWorldCentered(cell.row, cell.col);
+            const nodeId = `rowEntry_${c.sectionIdx}_${c.rowIdx}_${cell.col}`;
+            if (!nodes.has(nodeId)) {
+              nodes.set(nodeId, {
+                type: 'rowEntry',
+                sectionIdx: c.sectionIdx,
+                rowIdx: c.rowIdx,
+                entryCol: cell.col,
+                gridRow: cell.row,
+                gridCol: cell.col,
+                x: world.x,
+                y: world.y,
+              });
+            }
+          }
+        });
+      });
+
+      // Connect row entry nodes to corridors & horizontally across same row
+      sections.forEach((section, sectionIdx) => {
+        const rows = section.getRows();
+        rows.forEach((row, rowIdx) => {
+          const entryIds = Array.from(nodes.keys()).filter(id => id.startsWith(`rowEntry_${sectionIdx}_${rowIdx}_`));
+          const isFirstRow = rowIdx === 0;
+          const isLastRow = rowIdx === rows.length - 1;
+          const entryToCorridor = gameBalance.vendorMovement.rowEntryToCorridor || 50;
+          entryIds.forEach(entryId => {
+            if (isFirstRow) {
+              const topCorridorId = `corridor_top_${sectionIdx}`;
+              this.addEdge(edges, entryId, topCorridorId, entryToCorridor);
+              this.addEdge(edges, topCorridorId, entryId, entryToCorridor);
+            }
+            if (isLastRow) {
+              const frontCorridorId = `corridor_front_${sectionIdx}`;
+              this.addEdge(edges, entryId, frontCorridorId, entryToCorridor);
+              this.addEdge(edges, frontCorridorId, entryId, entryToCorridor);
+            }
+          });
+          for (let i = 0; i < entryIds.length - 1; i++) {
+            const fromId = entryIds[i];
+            const toId = entryIds[i + 1];
+            const fromNode = nodes.get(fromId)!;
+            const toNode = nodes.get(toId)!;
+            const distance = Math.abs(fromNode.x - toNode.x) + Math.abs(fromNode.y - toNode.y);
+            const traverseCost = distance * gameBalance.vendorMovement.baseSpeedRow;
+            this.addEdge(edges, fromId, toId, traverseCost);
+            this.addEdge(edges, toId, fromId, traverseCost);
+          }
+        });
+      });
+    } else {
+      console.warn('[HybridPathResolver] GridManager unavailable - skipping interior row entry construction');
+    }
 
     // Phase 4: Use GridManager to refine costs if available
     if (this.gridManager) {
@@ -511,26 +510,25 @@ export class HybridPathResolver {
       }];
     }
 
-    // If target is a seat, find the appropriate row entry node instead
+    // If target is a seat, route to nearest interior row entry node for its row/section
     let actualTargetNode = toNode;
     if (toNode.type === 'seat') {
-      // Determine which row entry (left or right) is closer to the seat
-      const leftEntryId = `rowEntry_left_${toNode.sectionIdx}_${toNode.rowIdx}`;
-      const rightEntryId = `rowEntry_right_${toNode.sectionIdx}_${toNode.rowIdx}`;
-      
-      const leftEntry = this.graph.nodes.get(leftEntryId);
-      const rightEntry = this.graph.nodes.get(rightEntryId);
-      
-      if (leftEntry && rightEntry) {
-        // Choose the entry point on the same side as the seat (or closer)
-        const seatIsOnLeft = toNode.colIdx < 4; // Assuming ~8 seats per row, midpoint is 4
-        actualTargetNode = seatIsOnLeft ? leftEntry : rightEntry;
-      } else if (leftEntry) {
-        actualTargetNode = leftEntry;
-      } else if (rightEntry) {
-        actualTargetNode = rightEntry;
+      const prefix = `rowEntry_${toNode.sectionIdx}_${toNode.rowIdx}_`;
+      const candidates: NavigationNode[] = [];
+      for (const [id, node] of this.graph.nodes.entries()) {
+        if (id.startsWith(prefix) && node.type === 'rowEntry') {
+          candidates.push(node);
+        }
       }
-      // If neither entry exists, fall back to original seat node (will fail gracefully)
+      if (candidates.length > 0) {
+        let closest = candidates[0];
+        let minDist = this.calculateDistance(toNode.x, toNode.y, closest.x, closest.y);
+        for (let i = 1; i < candidates.length; i++) {
+          const d = this.calculateDistance(toNode.x, toNode.y, candidates[i].x, candidates[i].y);
+          if (d < minDist) { minDist = d; closest = candidates[i]; }
+        }
+        actualTargetNode = closest;
+      }
     }
 
     // Find node ID for target
@@ -729,7 +727,7 @@ export class HybridPathResolver {
       case 'stair':
         return `stair_${node.side}_${node.sectionIdx}`;
       case 'rowEntry':
-        return `rowEntry_${node.colIdx === 0 ? 'left' : 'right'}_${node.sectionIdx}_${node.rowIdx}`;
+        return `rowEntry_${node.sectionIdx}_${node.rowIdx}_${node.entryCol}`;
       case 'seat':
         return `seat_${node.sectionIdx}_${node.rowIdx}_${node.colIdx}`;
     }
@@ -812,7 +810,15 @@ export class HybridPathResolver {
                                     node.type === 'corridor' ? 'corridor' :
                                     node.type === 'ground' ? 'ground' : 'seat';
     
-    const colIdx = 'colIdx' in node ? node.colIdx : 0;
+    let colIdx = 0;
+    if (node.type === 'rowEntry') {
+      colIdx = (node as RowEntryNode).entryCol;
+    } else if ('colIdx' in node) {
+      // seat node retains original seat column index
+      // corridor nodes use center colIdx
+      // stair/ground nodes default to 0
+      colIdx = (node as any).colIdx ?? 0;
+    }
     const rowIdx = (node.type === 'rowEntry' || node.type === 'seat') ? node.rowIdx : 0;
     const sectionIdx = 'sectionIdx' in node ? node.sectionIdx : 0;
     

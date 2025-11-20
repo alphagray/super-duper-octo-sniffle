@@ -1,6 +1,7 @@
 // LevelService.ts
-// Mocks loading a level with 3 sections, each 4x8 seats, each seat with a fan
+// Loads level data from stadium-layout.json and converts to game-ready format
 
+import type { StadiumSceneConfig } from '@/managers/interfaces/ZoneConfig';
 
 export interface FanData {
   id: string;
@@ -35,28 +36,138 @@ export interface SectionData {
   fans: FanData[];
 }
 
-
 export interface LevelData {
   sections: SectionData[];
   vendors: VendorData[];
   stairs: StairData[];
+  zoneConfig: StadiumSceneConfig;
 }
 
 export class LevelService {
-  // Simulate async API call
+  /**
+   * Load level data from stadium-layout.json
+   * Converts JSON config to game-ready LevelData format
+   */
   static async loadLevel(): Promise<LevelData> {
-    // Section layout: 3 sections, each 8x4, with stairs directly adjacent
-    // Section A: gridLeft 2-9 (8 columns, with left gutter)
-    // Stairs A-B: gridLeft 10-11 (2 columns, directly after A)
-    // Section B: gridLeft 12-19 (8 columns, directly after stairs)
-    // Stairs B-C: gridLeft 20-21 (2 columns, directly after B)
-    // Section C: gridLeft 22-29 (8 columns, directly after stairs)
+    try {
+      const response = await fetch('assets/stadium-layout.json');
+      if (!response.ok) {
+        throw new Error(`Failed to load stadium layout: ${response.statusText}`);
+      }
+      
+      const config: StadiumSceneConfig = await response.json();
+      console.log('[LevelService] Loaded stadium configuration from JSON');
+
+      // Reconfigure rowEntry ranges: remove outer edge entries & add interior entries adjacent to stairs
+      // Assumptions: seat rows span grid rows 15-18, stair columns at 10-11 and 20-21, we place rowEntry at columns 11 and 20.
+      if (Array.isArray(config.cellRanges)) {
+        const cellRanges = config.cellRanges as any[];
+        const beforeCount = cellRanges.length;
+        const filtered = cellRanges.filter(r => r.zoneType !== 'rowEntry');
+        config.cellRanges = filtered;
+        const removed = beforeCount - filtered.length;
+        // Add new interior rowEntry ranges (one per seat row per interior stair edge column)
+        const rowEntryRowsTop = 15;
+        const rowEntryRowsBottom = 18; // inclusive
+        const interiorColumns = [11, 20];
+        interiorColumns.forEach(col => {
+          (config.cellRanges as any[]).push({
+            zoneType: 'rowEntry',
+            transitionType: 'rowBoundary',
+            startRow: rowEntryRowsTop,
+            endRow: rowEntryRowsBottom,
+            startCol: col,
+            endCol: col
+          } as any);
+        });
+        console.log(`[LevelService] Reconfigured rowEntry ranges: removed ${removed}, added ${interiorColumns.length} columns spanning rows ${rowEntryRowsTop}-${rowEntryRowsBottom}`);
+      } else {
+        // Initialize if absent and add ranges
+        config.cellRanges = [];
+        const rowEntryRowsTop = 15;
+        const rowEntryRowsBottom = 18;
+        [11, 20].forEach(col => {
+          config.cellRanges!.push({
+            zoneType: 'rowEntry',
+            transitionType: 'rowBoundary',
+            startRow: rowEntryRowsTop,
+            endRow: rowEntryRowsBottom,
+            startCol: col,
+            endCol: col
+          } as any);
+        });
+        console.log('[LevelService] Initialized cellRanges with interior rowEntry ranges');
+      }
+      
+      // Convert sections to LevelData format
+      const sections: SectionData[] = (config.sections || []).map((sectionDesc) => {
+        const fans: FanData[] = [];
+        
+        // Generate fan data for each seat in the section
+        for (let row = 0; row < sectionDesc.rowCount; row++) {
+          for (let col = 0; col < sectionDesc.seatsPerRow; col++) {
+            fans.push({
+              id: `${sectionDesc.sectionId}-${row}-${col}`,
+              row,
+              col
+            });
+          }
+        }
+        
+        return {
+          id: sectionDesc.sectionId,
+          label: sectionDesc.label,
+          gridTop: sectionDesc.gridBounds.top,
+          gridLeft: sectionDesc.gridBounds.left,
+          gridRight: sectionDesc.gridBounds.right,
+          gridBottom: sectionDesc.gridBounds.bottom,
+          fans
+        };
+      });
+      
+      // Convert stairs to LevelData format
+      const stairs: StairData[] = (config.stairs || []).map((stairDesc) => ({
+        id: stairDesc.stairId,
+        gridLeft: stairDesc.gridBounds.left,
+        gridTop: stairDesc.gridBounds.top,
+        width: stairDesc.gridBounds.width,
+        height: stairDesc.gridBounds.height,
+        connectsSections: stairDesc.connectsSections as [string, string] || ['', '']
+      }));
+      
+      // Vendors are already in correct format
+      const vendors: VendorData[] = config.vendors || [];
+      
+      // Simulate network delay
+      await new Promise(res => setTimeout(res, 10));
+      
+      return { 
+        sections, 
+        vendors, 
+        stairs,
+        zoneConfig: config
+      };
+      
+    } catch (error) {
+      console.error('[LevelService] Error loading level data:', error);
+      console.warn('[LevelService] Falling back to mock data');
+      
+      // Fallback to original mock data
+      return this.loadMockLevel();
+    }
+  }
+  
+  /**
+   * Fallback mock data if JSON loading fails
+   */
+  private static async loadMockLevel(): Promise<LevelData> {
     const sectionConfigs = [
       { id: 'A', label: 'Section A', left: 2 },
       { id: 'B', label: 'Section B', left: 12 },
       { id: 'C', label: 'Section C', left: 22 }
     ];
-    const sections: SectionData[] = sectionConfigs.map((cfg, idx) => {
+    
+    const sections: SectionData[] = sectionConfigs.map((cfg) => {
       const fans: FanData[] = [];
       for (let row = 0; row < 4; row++) {
         for (let col = 0; col < 8; col++) {
@@ -78,11 +189,10 @@ export class LevelService {
       };
     });
     
-    // Mock stairs: 2 stairways connecting sections (abutting section borders)
     const stairs: StairData[] = [
       {
         id: 'stairs-A-B',
-        gridLeft: 10,  // Directly after Section A (2-9)
+        gridLeft: 10,
         gridTop: 15,
         width: 2,
         height: 4,
@@ -90,7 +200,7 @@ export class LevelService {
       },
       {
         id: 'stairs-B-C',
-        gridLeft: 20, // Directly after Section B (12-19)
+        gridLeft: 20,
         gridTop: 15,
         width: 2,
         height: 4,
@@ -98,15 +208,24 @@ export class LevelService {
       }
     ];
     
-    // Mock vendors: 2 vendors at fixed grid positions (updated for new layout)
-    // Canvas is 1024x768, cellSize is 32 -> grid is 32x24
-    // Center of grid: row 12, col 16
     const vendors: VendorData[] = [
-      { id: 'vendor-1', type: 'drink', gridRow: 20, gridCol: 11 },  // Center of canvas
-      { id: 'vendor-2', type: 'food', gridRow: 20, gridCol: 20 }   // Slightly right of center
+      { id: 'vendor-1', type: 'drink', gridRow: 20, gridCol: 11 },
+      { id: 'vendor-2', type: 'food', gridRow: 20, gridCol: 20 }
     ];
-    // Simulate network delay
+    
+    // Create minimal zone config for fallback
+    const zoneConfig: StadiumSceneConfig = {
+      version: '1.0',
+      gridDimensions: { rows: 24, cols: 32 },
+      cellRanges: [],
+      cells: [],
+      sections: [],
+      stairs: [],
+      vendors: [],
+      fans: []
+    };
+    
     await new Promise(res => setTimeout(res, 10));
-    return { sections, vendors, stairs };
+    return { sections, vendors, stairs, zoneConfig };
   }
 }
