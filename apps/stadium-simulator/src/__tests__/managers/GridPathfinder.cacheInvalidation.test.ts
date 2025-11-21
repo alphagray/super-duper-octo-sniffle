@@ -42,18 +42,6 @@ describe('GridPathfinder - Cache Invalidation', () => {
   });
 
   it('should recalculate paths after zone config changes', () => {
-    const vendorProfile = {
-      id: 1,
-      type: 'drink' as const,
-      qualityTier: 'good' as const,
-      abilities: {
-        ignoreRowPenalty: false,
-        ignoreGrumpPenalty: false,
-        canEnterRows: true,
-        rangedOnly: false,
-      },
-    };
-
     // Initial config: open corridor
     const config1: StadiumSceneConfig = {
       gridConfig: { rows: 12, cols: 16, cellSize: 32 },
@@ -76,7 +64,7 @@ describe('GridPathfinder - Cache Invalidation', () => {
 
     const fromWorld = gridManager.gridToWorld(5, 2);
     const toWorld = gridManager.gridToWorld(5, 10);
-    const path1 = gridPathfinder.findPath(vendorProfile, fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
+    const path1 = gridPathfinder.findPath(fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
 
     expect(path1.length).toBeGreaterThan(0);
 
@@ -109,7 +97,7 @@ describe('GridPathfinder - Cache Invalidation', () => {
     gridManager.loadZoneConfig(config2);
 
     // Path should now fail because sky blocks the route
-    const path2 = gridPathfinder.findPath(vendorProfile, fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
+    const path2 = gridPathfinder.findPath(fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
 
     expect(path2.length).toBe(0);
   });

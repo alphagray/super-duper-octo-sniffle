@@ -82,20 +82,23 @@ export type FanType = 'normal' | 'grumpy' | 'super';
  * Fan initial stats
  */
 export interface FanInitialStats {
-  happiness?: number;
-  thirst?: number;
-  attention?: number;
+  happiness: number;
+  thirst: number;
+  attention: number;
 }
 
 /**
  * Fan occupancy descriptor
  */
 export interface FanDescriptor {
+  id: string;
+  type: string; // 'default', 'grump', etc. - matches FanType but allows extensibility
   sectionId: string;
-  rowIdx: number;
-  seatIdx: number;
-  fanType?: FanType;
-  initialStats?: FanInitialStats;
+  row: number; // row within section (0-based)
+  col: number; // column within section (0-based)
+  gridRow: number; // absolute grid row
+  gridCol: number; // absolute grid column
+  initialStats: FanInitialStats;
 }
 
 /**

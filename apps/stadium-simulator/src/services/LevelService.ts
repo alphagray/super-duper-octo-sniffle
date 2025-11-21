@@ -1,14 +1,11 @@
 // LevelService.ts
 // Loads level configuration from JSON including grid zones, sections, stairs, and fan population
 
-import type { StadiumSceneConfig } from '@/managers/interfaces/ZoneConfig';
+import type { StadiumSceneConfig, FanDescriptor } from '@/managers/interfaces/ZoneConfig';
+import { gameBalance } from '@/config/gameBalance';
 
-export interface FanData {
-  id: string;
-  row: number;
-  col: number;
-  // Add more fan properties as needed
-}
+// Re-export FanDescriptor as FanData for backward compatibility
+export type FanData = FanDescriptor;
 
 export interface VendorData {
   id: string;
@@ -60,21 +57,17 @@ export class LevelService {
       
       const stadiumConfig: StadiumSceneConfig = await response.json();
       
-      // Build legacy section data from stadiumConfig for backwards compatibility
-      const sections: SectionData[] = (stadiumConfig.sections || []).map(section => {
-        const fans: FanData[] = [];
-        
-        // Generate fan data from section configuration
-        for (let row = 0; row < section.rows; row++) {
-          for (let col = 0; col < section.seatsPerRow; col++) {
-            fans.push({
-              id: `${section.id}-${row}-${col}`,
-              row,
-              col
-            });
-          }
+      // Group fans by section from stadium config
+      const fansBySection = new Map<string, FanData[]>();
+      (stadiumConfig.fans || []).forEach(fan => {
+        if (!fansBySection.has(fan.sectionId)) {
+          fansBySection.set(fan.sectionId, []);
         }
-        
+        fansBySection.get(fan.sectionId)!.push(fan);
+      });
+      
+      // Build section data from stadiumConfig with fans from JSON
+      const sections: SectionData[] = (stadiumConfig.sections || []).map(section => {
         return {
           id: section.id,
           label: section.label,
@@ -82,7 +75,7 @@ export class LevelService {
           gridLeft: section.gridBounds.left,
           gridRight: section.gridBounds.left + section.gridBounds.width - 1,
           gridBottom: section.gridBounds.top + section.gridBounds.height - 1,
-          fans
+          fans: fansBySection.get(section.id) || []
         };
       });
       
@@ -137,14 +130,25 @@ export class LevelService {
       { id: 'B', label: 'Section B', left: 12 },
       { id: 'C', label: 'Section C', left: 22 }
     ];
-    const sections: SectionData[] = sectionConfigs.map((cfg, idx) => {
+    const sections: SectionData[] = sectionConfigs.map((cfg) => {
       const fans: FanData[] = [];
       for (let row = 0; row < 4; row++) {
         for (let col = 0; col < 8; col++) {
+          const gridRow = 15 + row;
+          const gridCol = cfg.left + col;
           fans.push({
             id: `${cfg.id}-${row}-${col}`,
+            type: 'normal',
+            sectionId: cfg.id,
             row,
-            col
+            col,
+            gridRow,
+            gridCol,
+            initialStats: {
+              happiness: gameBalance.fanStats.initialHappiness,
+              thirst: gameBalance.fanStats.initialThirstMin,
+              attention: gameBalance.fanStats.initialAttention,
+            },
           });
         }
       }

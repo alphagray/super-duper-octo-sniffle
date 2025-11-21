@@ -1,18 +1,20 @@
 import type { GameStateManager } from './GameStateManager';
-import type { VendorProfile, VendorState, VendorType, VendorQualityTier, VendorAbilities, PathSegment } from '@/managers/interfaces/VendorTypes';
-import type { Fan } from '@/sprites/Fan';
+import type { VendorProfile, VendorState, VendorType, VendorQualityTier, VendorAbilities, GridPathCell } from '@/managers/interfaces/VendorTypes';
+import type { Fan } from '@/sprites/Fan'; // Visual only; stat access removed
 import type { StadiumSection } from '@/sprites/StadiumSection';
 import type { GridManager } from './GridManager';
 import { gameBalance } from '@/config/gameBalance';
-import { HybridPathResolver } from './HybridPathResolver';
-import { GridPathfinder } from './GridPathfinder';
+import { PathfindingService } from '@/services/PathfindingService';
 import type { ActorRegistry } from '@/actors/base/ActorRegistry';
+import { DrinkVendorActor } from '@/actors/DrinkVendorActor';
+import { DrinkVendorBehavior } from '@/actors/behaviors/DrinkVendorBehavior';
+import { Vendor } from '@/sprites/Vendor';
 
 /**
  * Represents a legacy vendor in the stadium (deprecated)
  * @deprecated Use VendorProfile and VendorInstance instead
  */
-export interface Vendor {
+export interface LegacyVendor {
   /** Unique identifier for the vendor */
   id: number;
   /** Current section the vendor is serving (null if not serving) */
@@ -27,13 +29,13 @@ export interface Vendor {
 
 /**
  * Runtime vendor instance with profile and state
+ * @deprecated Use DrinkVendorActor with DrinkVendorBehavior instead
  */
 export interface VendorInstance {
   profile: VendorProfile;
   state: VendorState;
   position: { x: number; y: number };
-  currentPath?: PathSegment[];
-  currentSegmentIndex: number;
+  // Note: currentPath is now stored on VendorActor itself, not here
   targetFan?: Fan;
   targetPosition?: { sectionIdx: number; rowIdx: number; colIdx: number };
   assignedSectionIdx?: number; // Restrict targeting to a specific section when set
@@ -50,13 +52,14 @@ export interface VendorInstance {
  * Coordinates with GridManager for pathfinding and spatial queries
  */
 export class AIManager {
-  private vendors: Map<number, VendorInstance>;
-  private legacyVendors: Vendor[]; // backward compatibility
+  private vendors: Map<number, VendorInstance>; // @deprecated Legacy instances
+  private vendorActors: Map<number, DrinkVendorActor> = new Map(); // New actor-based vendors
+  private legacyVendors: LegacyVendor[]; // backward compatibility
   private gameState: GameStateManager;
   private eventListeners: Map<string, Array<Function>>;
-  private pathResolver?: HybridPathResolver;
-  private gridPathfinder?: GridPathfinder;
-  private sections: StadiumSection[];
+  private pathfindingService?: PathfindingService;
+  private sections: StadiumSection[]; // @deprecated Use sectionActors
+  private sectionActors: any[] = []; // SectionActor[] (avoiding circular import)
   private gridManager?: GridManager;
   private actorRegistry?: ActorRegistry;
   private nextVendorId: number = 0;
@@ -95,23 +98,47 @@ export class AIManager {
   /**
    * Initialize sections for vendor pathfinding
    * @param sections Array of StadiumSection objects
+   * @deprecated Use setSectionActors instead
    */
   public initializeSections(sections: StadiumSection[]): void {
     this.sections = sections;
-    this.pathResolver = new HybridPathResolver(sections, this.gridManager, this.actorRegistry);
-    
-    // Initialize grid-based pathfinder if grid manager available
-    if (this.gridManager) {
-      this.gridPathfinder = new GridPathfinder(this.gridManager);
-      console.log('[AIManager] Grid-based pathfinder initialized');
-    }
   }
 
   /**
-   * Get path resolver for external access (e.g., GridOverlay debug visualization)
+   * Set SectionActor instances for actor-based access
+   * @param sectionActors Array of SectionActor instances
    */
-  public getPathResolver(): HybridPathResolver | undefined {
-    return this.pathResolver;
+  public setSectionActors(sectionActors: any[]): void {
+    this.sectionActors = sectionActors;
+  }
+
+  /**
+   * Get SectionActor array (for behaviors)
+   */
+  public getSectionActors(): any[] {
+    return this.sectionActors;
+  }
+
+  /**
+   * Get all vendor actors
+   */
+  public getVendorActors(): Map<number, DrinkVendorActor> {
+    return this.vendorActors;
+  }
+
+  /**
+   * Get pathfinding service for external access (e.g., GridOverlay debug visualization)
+   */
+  public getPathfindingService(): PathfindingService | undefined {
+    return this.pathfindingService;
+  }
+
+  /**
+   * Attach an externally managed PathfindingService instance.
+   */
+  public attachPathfindingService(service: PathfindingService): void {
+    this.pathfindingService = service;
+    console.log('[AIManager] PathfindingService attached');
   }
 
   /**
@@ -157,6 +184,51 @@ export class AIManager {
   }
 
   /**
+   * Spawn a vendor actor with behavior
+   * @param vendorSprite The Phaser vendor sprite to wrap
+   * @param type Vendor type ('drink' or 'rangedAoE')
+   * @param quality Quality tier
+   * @returns Object containing the vendor actor and profile ID
+   */
+  public spawnVendor(
+    vendorSprite: Vendor,
+    type: VendorType = 'drink',
+    quality: VendorQualityTier = 'good'
+  ): { actor: DrinkVendorActor; id: number } {
+    const profile = this.createVendor(type, quality);
+    const actorId = `actor:vendor-${profile.id}`;
+    
+    // Create behavior with dependencies
+    const behavior = new DrinkVendorBehavior(
+      null as any, // Will set vendor actor reference after creation
+      this,
+      this.gridManager!,
+      this.actorRegistry!,
+      this.pathfindingService
+    );
+    
+    // Create vendor actor
+    const vendorActor = new DrinkVendorActor(
+      actorId,
+      vendorSprite,
+      behavior,
+      'vendor',
+      false // Disable logging for now
+    );
+    
+    // Set circular reference in behavior
+    (behavior as any).vendorActor = vendorActor;
+    
+    // Register actor
+    this.actorRegistry?.register(vendorActor);
+    this.vendorActors.set(profile.id, vendorActor);
+    
+    console.log(`[AIManager] Spawned vendor ${profile.id} as actor ${actorId}`);
+    
+    return { actor: vendorActor, id: profile.id };
+  }
+
+  /**
    * Spawn initial vendors for a session
    * @param count Number of vendors to spawn
    * @param type Vendor type (default: from sessionDefaults)
@@ -181,7 +253,6 @@ export class AIManager {
         profile,
         state: 'idle',
         position: { x: 0, y: 0 }, // will be set when placed
-        currentSegmentIndex: 0,
         scanTimer: 0,
         stateTimer: 0,
         distractionCheckTimer: 0,
@@ -194,14 +265,6 @@ export class AIManager {
       // Emit vendor spawned event
       this.emit('vendorSpawned', { vendorId: profile.id, profile });
     }
-  }
-
-  /**
-   * Get the grid pathfinder for debug visualization
-   * @returns GridPathfinder instance or undefined
-   */
-  public getGridPathfinder(): GridPathfinder | undefined {
-    return this.gridPathfinder;
   }
 
   /**
@@ -240,8 +303,7 @@ export class AIManager {
     instance.assignedSectionIdx = sectionIdx;
     instance.targetFan = undefined;
     instance.targetPosition = undefined;
-    instance.currentPath = undefined;
-    instance.currentSegmentIndex = 0;
+    // TODO: Path management now handled by VendorActor, not VendorInstance
     instance.state = 'idle'; // ensure target selection occurs
     instance.scanTimer = 0; // force immediate scan
     console.log(`[AIManager] Vendor ${vendorId} assigned to section ${sectionIdx}`);
@@ -250,194 +312,74 @@ export class AIManager {
 
   /**
    * Select next drink target for a vendor
-   * Scans all sections for thirsty fans above decay threshold
+   * @deprecated Use DrinkVendorBehavior.selectTarget() directly
    * @param vendorId Vendor ID
    * @returns Target fan or null if none found
    */
   public selectNextDrinkTarget(vendorId: number): { fan: Fan; sectionIdx: number; rowIdx: number; colIdx: number } | null {
+    // Delegate to wrapper which uses behavior system
+    return this.selectNextDrinkTargetWrapper(vendorId);
+  }
+
+  /**
+   * Select next drink target for a vendor (wrapper)
+   * @deprecated Use DrinkVendorBehavior.selectTarget() directly
+   * @param vendorId Vendor ID
+   * @returns Target fan or null if none found
+   */
+  public selectNextDrinkTargetWrapper(vendorId: number): { fan: Fan; sectionIdx: number; rowIdx: number; colIdx: number } | null {
     const instance = this.vendors.get(vendorId);
     if (!instance) return null;
 
-    const candidates: Array<{ fan: Fan; sectionIdx: number; rowIdx: number; colIdx: number; x: number; y: number; thirst: number }> = [];
-
-    let totalFans = 0;
-    
-    // Scan sections; if vendor has assignment restrict to that section
-    for (let sIdx = 0; sIdx < this.sections.length; sIdx++) {
-      if (instance.assignedSectionIdx !== undefined && instance.assignedSectionIdx !== sIdx) {
-        continue;
-      }
-      const section = this.sections[sIdx];
-      const rows = section.getRows();
-      
-      for (let rIdx = 0; rIdx < rows.length; rIdx++) {
-        const row = rows[rIdx];
-        const seats = row.getSeats();
-        
-        for (let cIdx = 0; cIdx < seats.length; cIdx++) {
-          const seat = seats[cIdx];
-          if (!seat.isEmpty()) {
-            const fan = seat.getFan();
-            totalFans++;
-            if (fan) {
-              // Use grid position to get world coordinates
-              const gridPos = seat.getGridPosition();
-              const worldPos = this.gridManager 
-                ? this.gridManager.gridToWorld(gridPos.row, gridPos.col)
-                : { x: section.x, y: section.y };
-              candidates.push({
-                fan,
-                sectionIdx: sIdx,
-                rowIdx: rIdx,
-                colIdx: cIdx,
-                x: worldPos.x,
-                y: worldPos.y,
-                thirst: fan.getThirst()
-              });
-            }
-          }
+    // Get vendor actor and delegate to behavior if available
+    const vendorActor = this.actorRegistry?.get(`actor:vendor-${vendorId}`) as any; // VendorActor
+    if (vendorActor && vendorActor.getBehavior && vendorActor.getBehavior()) {
+      const behavior = vendorActor.getBehavior();
+      if ('selectTarget' in behavior) {
+        const target = behavior.selectTarget();
+        if (target) {
+          return {
+            fan: target.fan,
+            sectionIdx: target.sectionIdx,
+            rowIdx: target.rowIdx,
+            colIdx: target.colIdx
+          };
         }
       }
     }
 
-    if (candidates.length === 0) {
-      // if (Math.random() < 0.02) {
-      //   console.log(`[AIManager] Vendor ${vendorId} scan: ${totalFans} fans, 0 candidates (no fans found)`);
-      // }
-      return null;
-    }
-
-    // Score candidates: distance + thirst weight
-    // Lower score is better (closer + thirstier)
-    const scoredCandidates = candidates.map(c => {
-      const dx = c.x - instance.position.x;
-      const dy = c.y - instance.position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      // Thirst ranges 0-100. We want high thirst to reduce score.
-      // Distance might be 0-1000+. Normalize both to similar scale.
-      const normalizedDistance = distance / 32; // Divide by cell size to get grid distance
-      const thirstPriority = (100 - c.thirst) / 10; // High thirst = low score
-      
-      return {
-        ...c,
-        score: normalizedDistance + thirstPriority
-      };
-    });
-
-    // Sort by score (ascending - lower is better)
-    scoredCandidates.sort((a, b) => a.score - b.score);
-
-    // if (Math.random() < 0.02) { // Log occasionally
-    //   const best = scoredCandidates[0];
-    //   console.log(`[AIManager] Vendor ${vendorId} scan: ${totalFans} fans, ${candidates.length} candidates, best: thirst=${best.thirst}, dist=${Math.sqrt((best.x-instance.position.x)**2 + (best.y-instance.position.y)**2).toFixed(0)}`);
-    // }
-
-    // Return highest-priority target
-    const best = scoredCandidates[0];
-    return {
-      fan: best.fan,
-      sectionIdx: best.sectionIdx,
-      rowIdx: best.rowIdx,
-      colIdx: best.colIdx,
-    };
+    return null;
   }
 
   /**
    * Advance vendor movement along current path
+   * @deprecated Movement is now handled by VendorActor.updateMovement()
    * @param vendorId Vendor ID
    * @param deltaTime Time elapsed in milliseconds
    */
   public advanceMovement(vendorId: number, deltaTime: number): void {
-    const instance = this.vendors.get(vendorId);
-    if (!instance || (instance.state !== 'movingToFan' && instance.state !== 'movingToSection') || !instance.currentPath) return;
-
-    const currentSegment = instance.currentPath[instance.currentSegmentIndex];
-    if (!currentSegment) return;
-
-    // Calculate movement speed based on segment type and vendor quality
-    const speedModifiers = {
-      corridor: gameBalance.vendorMovement.baseSpeedCorridor,
-      stair: gameBalance.vendorMovement.baseSpeedStair,
-      rowEntry: gameBalance.vendorMovement.baseSpeedRow,
-      seat: gameBalance.vendorMovement.baseSpeedRow,
-      ground: gameBalance.vendorMovement.baseSpeedCorridor * 1.5, // Fast diagonal movement on ground
-    };
-
-    const baseSpeed = speedModifiers[currentSegment.nodeType];
-    const qualityConfig = gameBalance.vendorQuality[instance.profile.qualityTier];
-    const effectiveSpeed = baseSpeed * qualityConfig.efficiencyModifier;
-
-    // Movement along path segments (pixels per second)
-    const deltaSeconds = deltaTime / 1000;
-    const moveDistance = effectiveSpeed * deltaSeconds;
-
-    // Calculate distance and direction to next waypoint
-    const dx = currentSegment.x - instance.position.x;
-    const dy = currentSegment.y - instance.position.y;
-    const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
-
-    if (distanceToTarget <= moveDistance) {
-      // Reached segment target - snap to exact position
-      instance.position.x = currentSegment.x;
-      instance.position.y = currentSegment.y;
-      instance.currentSegmentIndex++;
-
-      // Check if path complete
-      if (instance.currentSegmentIndex >= instance.currentPath.length) {
-        // Reached final destination
-        instance.state = 'serving';
-        instance.stateTimer = gameBalance.vendorTypes.drink.serviceTime;
-        this.emit('vendorReachedTarget', { vendorId, position: instance.position });
-      }
-    } else {
-      // GRID-ALIGNED MOVEMENT: Move horizontally OR vertically, not diagonally
-      // Prioritize the axis with greater distance
-      const absDx = Math.abs(dx);
-      const absDy = Math.abs(dy);
-      
-      if (absDx > absDy) {
-        // Move horizontally
-        const direction = dx > 0 ? 1 : -1;
-        instance.position.x += direction * Math.min(moveDistance, absDx);
-      } else {
-        // Move vertically
-        const direction = dy > 0 ? 1 : -1;
-        instance.position.y += direction * Math.min(moveDistance, absDy);
-      }
-    }
+    // Movement is now handled by VendorActor instances
+    // This stub remains for backward compatibility
   }
 
   /**
    * Serve a fan with drink
+   * @deprecated Service is now handled directly by DrinkVendorBehavior
    * @param vendorId Vendor ID
-   * @param fan Fan to serve
+   * @param fan Fan to serve (deprecated, use targetPosition instead)
    */
   public serveFan(vendorId: number, fan: Fan): void {
-    const instance = this.vendors.get(vendorId);
-    if (!instance) return;
-
-    // Call fan's drinkServed method
-    fan.drinkServed();
-
-    // Transition to cooldown
-    instance.state = 'cooldown';
-    instance.stateTimer = gameBalance.vendorTypes.drink.serviceTime; // reuse as cooldown
-    instance.lastServiceTime = Date.now();
-    instance.targetFan = undefined;
-    instance.currentPath = undefined;
-    instance.currentSegmentIndex = 0;
-
-    // Emit service complete event
-    this.emit('serviceComplete', { vendorId, fanServed: true });
+    // Service is now handled directly by behaviors
+    // This stub remains for backward compatibility
+    console.log(`[AIManager] serveFan called (deprecated) - service handled by behavior`);
   }
 
   /**
    * Returns all legacy vendors
    * @returns Array of all vendors
-   * @deprecated Use getVendorInstances instead
+   * @deprecated Use getVendorActors instead
    */
-  public getVendors(): Vendor[] {
+  public getVendors(): LegacyVendor[] {
     return this.legacyVendors;
   }
 
@@ -446,9 +388,9 @@ export class AIManager {
    * @param id - The vendor identifier
    * @returns The vendor object
    * @throws Error if vendor not found
-   * @deprecated Use getVendorInstance instead
+   * @deprecated Use getVendorActor instead
    */
-  public getVendor(id: number): Vendor {
+  public getVendor(id: number): LegacyVendor {
     const vendor = this.legacyVendors.find((v) => v.id === id);
     if (!vendor) {
       throw new Error(`Vendor ${id} not found`);
@@ -482,237 +424,15 @@ export class AIManager {
   }
 
   /**
-   * Updates all vendors based on time elapsed
-   * Handles state machine transitions, movement, serving, and cooldowns
-   * @param deltaTime - Time elapsed in milliseconds
+   * Update method (deprecated - actors update themselves via ActorRegistry)
+   * @deprecated Vendors now update autonomously via DrinkVendorActor.update()
+   * @param deltaTime Time elapsed in milliseconds
    */
   public update(deltaTime: number): void {
-    // Log occasionally to confirm update is running
-    // if (Math.random() < 0.01) { // ~1% chance per frame
-    //   console.log('[AIManager.update] Running with', this.vendors.size, 'vendors, delta:', deltaTime.toFixed(2));
-    //   // Log vendor states
-    //   for (const [id, v] of this.vendors) {
-    //     console.log(`  Vendor ${id}: state=${v.state}, scanTimer=${v.scanTimer.toFixed(2)}, pos=(${v.position.x.toFixed(1)},${v.position.y.toFixed(1)})`);
-    //   }
-    // }
+    // Note: New vendor actors update themselves via ActorRegistry.update()
+    // No manager orchestration needed - actors are fully autonomous
     
-    // Update new profile-based vendors
-    for (const [vendorId, instance] of this.vendors) {
-      try {
-        // Update state timers
-        if (instance.stateTimer > 0) {
-          instance.stateTimer -= deltaTime;
-        }
-
-        instance.distractionCheckTimer -= deltaTime;
-
-        // State machine
-        switch (instance.state) {
-        case 'idle':
-          // Attempt scan when timer elapses
-          instance.scanTimer -= deltaTime;
-          // if (Math.random() < 0.005) { // Log occasionally
-          //   console.log(`[AIManager] Vendor ${vendorId} idle, scanTimer: ${instance.scanTimer.toFixed(2)}`);
-          // }
-          if (instance.scanTimer <= 0) {
-            // console.log(`[AIManager] Vendor ${vendorId} scanning for targets...`);
-            this.emit('vendorScanAttempt', { vendorId, assignedSectionIdx: instance.assignedSectionIdx });
-            if (instance.profile.type === 'drink') {
-              const target = this.selectNextDrinkTarget(vendorId);
-              if (target) {
-                instance.targetFan = target.fan;
-                instance.targetPosition = {
-                  sectionIdx: target.sectionIdx,
-                  rowIdx: target.rowIdx,
-                  colIdx: target.colIdx,
-                };
-                this.emit('vendorTargetSelected', { vendorId, sectionIdx: target.sectionIdx, rowIdx: target.rowIdx, colIdx: target.colIdx });
-                instance.state = 'scanningInSection';
-              } else {
-                this.emit('vendorNoTarget', { vendorId, assignedSectionIdx: instance.assignedSectionIdx });
-                // schedule next scan
-                instance.scanTimer = 1000; // 1s until next attempt
-              }
-            }
-          }
-          break;
-
-        case 'scanningInSection':
-          // Plan path to target using pathfinding
-          // console.log(`[AIManager] Vendor ${vendorId} planning path. Has gridPathfinder: ${!!this.gridPathfinder}, Has pathResolver: ${!!this.pathResolver}, Has target: ${!!instance.targetPosition}`);
-          
-          if ((!this.gridPathfinder && !this.pathResolver) || !instance.targetPosition) {
-            console.warn(`[AIManager] Cannot plan path - missing pathfinder or targetPosition for vendor ${vendorId}`);
-            instance.state = 'idle';
-            break;
-          }
-
-          const targetSection = this.sections[instance.targetPosition.sectionIdx];
-          if (!targetSection) {
-            console.warn(`[AIManager] Invalid target section index ${instance.targetPosition.sectionIdx}`);
-            instance.state = 'idle';
-            break;
-          }
-
-          // Get target world position from section seat
-          const targetRow = targetSection.getRows()[instance.targetPosition.rowIdx];
-          const targetSeat = targetRow?.getSeats()[instance.targetPosition.colIdx];
-          if (!targetSeat) {
-            console.warn(`[AIManager] Invalid target seat position`);
-            instance.state = 'idle';
-            break;
-          }
-
-          const targetWorldPos = this.gridManager 
-            ? targetSeat.getWorldPosition(this.gridManager)
-            : targetSeat.getPosition();
-          
-          // Vendors can't enter seat cells - find nearest passable cell
-          let finalTargetX = targetWorldPos.x;
-          let finalTargetY = targetWorldPos.y;
-          
-          if (this.gridManager) {
-            const seatGrid = this.gridManager.worldToGrid(targetWorldPos.x, targetWorldPos.y);
-            if (seatGrid) {
-              // Find nearest passable cell (row entry or corridor)
-              // Check cells around the seat in expanding radius
-              let found = false;
-              for (let radius = 1; radius <= 3 && !found; radius++) {
-                for (let dr = -radius; dr <= radius && !found; dr++) {
-                  for (let dc = -radius; dc <= radius && !found; dc++) {
-                    if (Math.abs(dr) !== radius && Math.abs(dc) !== radius) continue; // Only check perimeter
-                    const checkRow = seatGrid.row + dr;
-                    const checkCol = seatGrid.col + dc;
-                    const cell = this.gridManager.getCell(checkRow, checkCol);
-                    if (cell && cell.passable) {
-                      const passableWorld = this.gridManager.gridToWorld(checkRow, checkCol);
-                      finalTargetX = passableWorld.x;
-                      finalTargetY = passableWorld.y;
-                      found = true;
-                    }
-                  }
-                }
-              }
-              if (!found) {
-                console.warn(`[AIManager] No passable cell found near target seat for vendor ${vendorId}`);
-                instance.state = 'idle';
-                instance.scanTimer = 2000;
-                break;
-              }
-            }
-          }
-          
-          // Use grid-based A* pathfinding if available, otherwise fall back to navigation graph
-          let pathSegments: PathSegment[] = [];
-          
-          if (this.gridPathfinder && this.gridManager) {
-            // Grid-based A* pathfinding (preferred)
-            pathSegments = this.gridPathfinder.findPath(
-              instance.profile,
-              instance.position.x,
-              instance.position.y,
-              finalTargetX,
-              finalTargetY
-            );
-          } else if (this.pathResolver) {
-            // Fallback to navigation graph pathfinding
-            const targetNode = {
-              type: 'seat' as const,
-              sectionIdx: instance.targetPosition.sectionIdx,
-              rowIdx: instance.targetPosition.rowIdx,
-              colIdx: instance.targetPosition.colIdx,
-              gridRow: instance.targetPosition.rowIdx,
-              gridCol: instance.targetPosition.colIdx,
-              x: targetWorldPos.x,
-              y: targetWorldPos.y,
-              cost: 0,
-              heightLevel: 0
-            };
-            
-            pathSegments = this.pathResolver.planPath(
-              instance.profile,
-              instance.position.x,
-              instance.position.y,
-              targetNode
-            );
-          }
-          
-          const path = pathSegments && pathSegments.length > 0 
-            ? { segments: pathSegments, totalCost: pathSegments.reduce((sum, s) => sum + s.cost, 0) }
-            : null;
-
-          if (!path || path.segments.length === 0) {
-            console.warn(`[AIManager] No path found for vendor ${vendorId} from (${instance.position.x}, ${instance.position.y}) to (${targetWorldPos.x}, ${targetWorldPos.y})`);
-            instance.state = 'idle';
-            instance.scanTimer = 2000; // Try again in 2s
-            break;
-          }
-
-          instance.currentPath = path.segments;
-          instance.currentSegmentIndex = 0;
-          instance.state = 'movingToFan';
-          
-          // Debug: Log path details
-          // console.log(`[AIManager] Vendor ${vendorId} path planned:`, {
-          //   segmentCount: path.segments.length,
-          //   totalCost: path.totalCost,
-          //   segments: path.segments.map(s => `${s.nodeType}(${Math.round(s.x)},${Math.round(s.y)})`).join(' -> ')
-          // });
-          
-          this.emit('vendorPathPlanned', { vendorId, segmentCount: path.segments.length, totalCost: path.totalCost });
-          break;
-
-        case 'movingToSection':
-        case 'movingToFan':
-          this.advanceMovement(vendorId, deltaTime);
-          break;
-
-        case 'serving':
-          if (instance.stateTimer <= 0 && instance.targetFan) {
-            this.serveFan(vendorId, instance.targetFan);
-          }
-          break;
-
-        case 'cooldown':
-          if (instance.stateTimer <= 0) {
-            instance.state = 'idle';
-          }
-          break;
-
-        case 'distracted':
-          if (instance.stateTimer <= 0) {
-            instance.state = 'idle';
-          }
-          break;
-
-        case 'rangedCharging':
-          // TODO: Implement ranged vendor charging
-          break;
-      }
-
-      // Check for distraction (quality-based)
-      // TODO: Re-enable once pathfinding is implemented
-      /*
-      if (instance.distractionCheckTimer <= 0) {
-        instance.distractionCheckTimer = gameBalance.vendorQuality.distractionCheckInterval;
-        const qualityConfig = gameBalance.vendorQuality[instance.profile.qualityTier];
-        
-        if (Math.random() < qualityConfig.distractionChance) {
-          instance.state = 'distracted';
-          instance.stateTimer = gameBalance.vendorQuality.distractionDuration;
-          this.emit('vendorDistracted', { vendorId });
-        }
-      }
-      */
-      } catch (error) {
-        console.error(`[AIManager] Error updating vendor ${vendorId}:`, error);
-        // Reset to idle state on error to prevent stuck vendors
-        instance.state = 'idle';
-        instance.scanTimer = 2000;
-      }
-    }
-
-    // Update legacy vendors for backward compatibility
+    // Update legacy vendors for backward compatibility only
     for (const vendor of this.legacyVendors) {
       if (vendor.isServing) {
         vendor.serviceTimer -= deltaTime;
@@ -731,23 +451,6 @@ export class AIManager {
     }
   }
 
-  /**
-   * Checks if any vendor is currently serving in the specified section
-   * @param sectionId - The section identifier (A, B, or C)
-   * @returns true if any vendor is serving in that section, false otherwise
-   * @deprecated Legacy method for backward compatibility
-   */
-  public isVendorInSection(sectionId: string): boolean {
-    return this.legacyVendors.some(
-      (vendor) => vendor.isServing && vendor.currentSection === sectionId
-    );
-  }
-
-  /**
-   * Registers an event listener
-   * @param event - The event name
-   * @param callback - The callback function to invoke
-   */
   public on(event: string, callback: Function): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, []);

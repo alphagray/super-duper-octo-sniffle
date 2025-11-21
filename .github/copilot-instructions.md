@@ -164,7 +164,9 @@ import { ActorRegistry } from '@/actors/ActorRegistry';
 ## Current State & Recent Changes
 
 - **Actor System**: Fully implemented with adapters for FanActor, VendorActor, SectionActor, WaveSpriteActor
-- **Vendor Integration**: Phase 3 complete; vendors spawn, pathfind (stubbed linear), serve fans, emit events
+- **Behavior-Driven Architecture**: DrinkVendorBehavior handles AI targeting via SectionActor queries; actors drive visual updates
+- **Fan Logic Migration**: All fan game logic moved from Fan sprite to FanActor (stats, wave participation, terrain penalties)
+- **Vendor Integration**: Vendors spawn, pathfind (stubbed linear), select targets via behaviors, serve fans via FanActor.drinkServed
 - **Code Reorganization**: Interfaces moved to `{namespace}/interfaces/`, helpers to `{namespace}/helpers/`
 - **Test Cleanup**: Most old tests deleted except AnnouncerService.test.ts; focus on manual testing for now
 - **Eternal Mode**: Removed; only run mode (100-second sessions) supported
@@ -173,7 +175,8 @@ import { ActorRegistry } from '@/actors/ActorRegistry';
 
 - [ ] Complete HybridPathResolver A* pathfinding (currently linear)
 - [ ] Vendor collision detection + navigation graph refinement
-- [ ] Mascot special abilities
+- [ ] Remove deprecated AIManager.scanningInSection sprite access when behaviors handle pathfinding state
+- [ ] Mascot special abilities via MascotBehavior
 - [ ] Menu and GameOverScene UI implementations
 - [ ] Pixel art asset creation + sprite sheet integration
 - [ ] Audio event triggers (Howler.js 8-bit sounds)

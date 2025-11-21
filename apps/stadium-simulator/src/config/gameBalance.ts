@@ -396,6 +396,28 @@ export const gameBalance = {
       happinessBoost: 15, // points added to happiness
       canEnterRows: true, // allowed to navigate section rows
       rangedOnly: false, // must approach fans directly
+      
+      // Targeting configuration
+      targeting: {
+        thirstWeight: 1.0, // weight for average thirst in cluster scoring
+        clusterSizeWeight: 0.5, // weight for cluster size
+        distanceWeight: 0.3, // penalty weight for distance to cluster
+        clusterRadius: 3, // Manhattan radius for fan grouping
+        minimumServeThirst: 25, // minimum fan thirst to warrant service
+      },
+      
+      // Seat assignment retry configuration
+      retry: {
+        maxAttempts: 3, // max seat assignment attempts before recall
+        logOnlyFinalFailure: true, // only log warning on 3rd failure
+      },
+      
+      // Patrol behavior configuration
+      patrol: {
+        enabled: true, // enable patrol when unassigned
+        intervalMs: 4000, // time between random waypoint selections
+        zones: ['corridor', 'ground'] as const, // allowed patrol zones
+      },
     },
     
     // Ranged AoE vendor (t-shirt cannon, front-only service)
@@ -442,6 +464,7 @@ export const gameBalance = {
     logPathPlanning: true, // log path calculation details
     logTargetSelection: true, // log target scoring
     logMovement: false, // log movement updates (verbose)
+    logAccessSelection: true, // log vertical access helper selections
     renderPaths: true, // draw debug lines for paths
     renderAoE: true, // draw AoE radius circles
   },

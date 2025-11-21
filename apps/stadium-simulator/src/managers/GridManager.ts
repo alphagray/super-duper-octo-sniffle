@@ -31,7 +31,7 @@ export interface GridNeighbor {
   cost: number;
 }
 
-interface GridCell {
+interface GridCellData {
   row: number;
   col: number;
   passable: boolean;
@@ -65,7 +65,7 @@ export class GridManager extends BaseManager {
   private readonly centerY: number;
   private readonly rows: number;
   private readonly cols: number;
-  private cells: GridCell[][] = [];
+  private cells: GridCellData[][] = [];
   private pendingRedraw: boolean = false;
   
   // Zone and boundary caches
@@ -156,12 +156,12 @@ export class GridManager extends BaseManager {
     return { x: this.offsetX, y: this.offsetY };
   }
 
-  public getCell(row: number, col: number): GridCell | null {
+  public getCell(row: number, col: number): GridCellData | null {
     if (!this.isValidCell(row, col)) return null;
     return this.cells[row][col];
   }
 
-  public getCellAtWorld(x: number, y: number): GridCell | null {
+  public getCellAtWorld(x: number, y: number): GridCellData | null {
     const coords = this.worldToGrid(x, y);
     if (!coords) return null;
     return this.getCell(coords.row, coords.col);
@@ -264,7 +264,7 @@ export class GridManager extends BaseManager {
     this.addOccupant(coords.row, coords.col, occupant);
   }
 
-  public getAllCells(): GridCell[] {
+  public getAllCells(): GridCellData[] {
     return this.cells.flat();
   }
 
@@ -281,7 +281,7 @@ export class GridManager extends BaseManager {
   private buildGrid(): void {
     this.cells = [];
     for (let row = 0; row < this.rows; row++) {
-      const rowCells: GridCell[] = [];
+      const rowCells: GridCellData[] = [];
       for (let col = 0; col < this.cols; col++) {
         rowCells.push({
           row,
@@ -327,7 +327,7 @@ export class GridManager extends BaseManager {
     }
   }
 
-  private recalculateWallsForCell(cell: GridCell): void {
+  private recalculateWallsForCell(cell: GridCellData): void {
     const desiredWalls: Record<CardinalDirection, boolean> = {
       top: cell.defaultWalls.top,
       right: cell.defaultWalls.right,
@@ -512,7 +512,7 @@ export class GridManager extends BaseManager {
    * Apply zone properties to a cell from a descriptor
    */
   private applyCellProperties(
-    cell: GridCell,
+    cell: GridCellData,
     props: { 
       zoneType: ZoneType; 
       transitionType?: TransitionType; 
@@ -752,7 +752,7 @@ export class GridManager extends BaseManager {
   /**
    * Check if zone transition is allowed between two cells
    */
-  private isZoneTransitionAllowed(fromCell: GridCell, toCell: GridCell): boolean {
+  private isZoneTransitionAllowed(fromCell: GridCellData, toCell: GridCellData): boolean {
     const fromZone = fromCell.zoneType;
     const toZone = toCell.zoneType;
 
@@ -780,5 +780,68 @@ export class GridManager extends BaseManager {
 
     // All other transitions allowed (corridor <-> ground, rowEntry <-> corridor, etc.)
     return true;
+  }
+
+  /**
+   * Get nearest vertical access point (corridor or ground) for a given seat position
+   * Evaluates corridor (row 14) and top ground (row 19) at the same column
+   * Returns the closest passable access point using Manhattan distance
+   * 
+   * @param seatRow Row of the seat position
+   * @param seatCol Column of the seat position
+   * @returns Access cell info or null if both candidates blocked
+   */
+  public getNearestVerticalAccess(
+    seatRow: number,
+    seatCol: number
+  ): { row: number; col: number; zone: 'corridor' | 'ground' } | null {
+    // Hardcoded zone row indices based on stadium layout
+    const corridorRow = 14;
+    const topGroundRow = 19;
+
+    // Evaluate corridor candidate
+    const corridorCell = this.getCell(corridorRow, seatCol);
+    const corridorValid = corridorCell && 
+                         corridorCell.passable && 
+                         corridorCell.zoneType === 'corridor';
+
+    // Evaluate ground candidate
+    const groundCell = this.getCell(topGroundRow, seatCol);
+    const groundValid = groundCell && 
+                       groundCell.passable && 
+                       groundCell.zoneType === 'ground';
+
+    // If both blocked, return null
+    if (!corridorValid && !groundValid) {
+      return null;
+    }
+
+    // If only one valid, return it
+    if (corridorValid && !groundValid) {
+      if (gameBalance.vendorDebug.logAccessSelection) {
+        console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): corridor (${corridorRow},${seatCol})`);
+      }
+      return { row: corridorRow, col: seatCol, zone: 'corridor' };
+    }
+
+    if (groundValid && !corridorValid) {
+      if (gameBalance.vendorDebug.logAccessSelection) {
+        console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): ground (${topGroundRow},${seatCol})`);
+      }
+      return { row: topGroundRow, col: seatCol, zone: 'ground' };
+    }
+
+    // Both valid - pick closest by Manhattan distance (vertical only since column is same)
+    const corridorDistance = Math.abs(seatRow - corridorRow);
+    const groundDistance = Math.abs(seatRow - topGroundRow);
+
+    const chosen = corridorDistance <= groundDistance ? 'corridor' : 'ground';
+    const chosenRow = chosen === 'corridor' ? corridorRow : topGroundRow;
+
+    if (gameBalance.vendorDebug.logAccessSelection) {
+      console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): ${chosen} (${chosenRow},${seatCol}) - distances: corridor=${corridorDistance}, ground=${groundDistance}`);
+    }
+
+    return { row: chosenRow, col: seatCol, zone: chosen };
   }
 }

@@ -1,4 +1,5 @@
 import { ActorLogger } from '@/sprites/helpers/ActorLogger';
+import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
 
 /**
  * Actor: Root abstraction for all game entities.
@@ -90,10 +91,90 @@ export abstract class Actor {
  * AnimatedActor: Dynamic entity with internal state that affects gameplay.
  * Examples: Fan (happiness/thirst/attention), Vendor (movement), Mascot (abilities).
  * Must implement per-frame update and visual refresh.
+ * 
+ * Optional pathfinding capabilities:
+ * - Actors that need pathfinding can use setPath/getPath/clearPath methods
+ * - Path tracking fields are optional (undefined until setPath is called)
+ * - Movement execution is handled by subclasses (e.g., VendorActor.updateMovement)
  */
 export abstract class AnimatedActor extends Actor {
+  /**
+   * Current path the actor is following (optional, for actors that move)
+   * Set via setPath(), cleared via clearPath()
+   */
+  protected currentPath?: GridPathCell[];
+  
+  /**
+   * Current index in the path (0-based)
+   * Only meaningful when currentPath is defined
+   */
+  protected currentPathIndex: number = 0;
+
   constructor(id: string, type: string, category: string, x: number = 0, y: number = 0, enableLogging = false) {
     super(id, type, category, x, y, enableLogging);
+  }
+
+  /**
+   * Set a path for the actor to follow
+   * Resets path index to 0
+   * 
+   * @param path - Array of grid cells representing the path
+   */
+  public setPath(path: GridPathCell[]): void {
+    this.currentPath = path;
+    this.currentPathIndex = 0;
+  }
+
+  /**
+   * Get the current path (if any)
+   * 
+   * @returns Current path or undefined if no path is set
+   */
+  public getPath(): GridPathCell[] | undefined {
+    return this.currentPath;
+  }
+
+  /**
+   * Clear the current path
+   * Resets path and index
+   */
+  public clearPath(): void {
+    this.currentPath = undefined;
+    this.currentPathIndex = 0;
+  }
+
+  /**
+   * Advance to the next cell in the path
+   * 
+   * @returns true if advanced to next cell, false if at end of path or no path set
+   */
+  public advanceToNextCell(): boolean {
+    if (!this.currentPath || this.currentPathIndex >= this.currentPath.length - 1) {
+      return false;
+    }
+    this.currentPathIndex++;
+    return true;
+  }
+
+  /**
+   * Check if the actor is at the end of its path
+   * 
+   * @returns true if at last cell or no path set
+   */
+  public isAtPathEnd(): boolean {
+    if (!this.currentPath || this.currentPath.length === 0) {
+      return true;
+    }
+    return this.currentPathIndex >= this.currentPath.length - 1;
+  }
+
+  /**
+   * Get the current path index
+   * 
+   * @returns Current index in the path (0-based)
+   */
+  public getCurrentPathIndex(): number {
+    return this.currentPathIndex;
   }
 
   public abstract update(delta: number): void;

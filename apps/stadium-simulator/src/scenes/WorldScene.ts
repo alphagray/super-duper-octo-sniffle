@@ -14,6 +14,7 @@ export interface WorldSceneInitData {
 export class WorldScene extends Phaser.Scene {
   private gridManager!: GridManager;
   private debugMode: boolean = false;
+  private gridOverlay!: GridOverlay;
 
   constructor() {
     super({ key: 'WorldScene' });

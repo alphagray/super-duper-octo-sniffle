@@ -2,27 +2,14 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { GridManager } from '@/managers/GridManager';
 import { GridPathfinder } from '@/managers/GridPathfinder';
 import type { StadiumSceneConfig } from '@/managers/interfaces/ZoneConfig';
-import type { VendorProfile } from '@/managers/interfaces/VendorTypes';
 
 describe('GridPathfinder - Manhattan Pathfinding', () => {
   let gridManager: GridManager;
   let gridPathfinder: GridPathfinder;
-  let vendorProfile: VendorProfile;
 
   beforeEach(() => {
     gridManager = new GridManager({ width: 512, height: 384, cellSize: 32 });
     gridPathfinder = new GridPathfinder(gridManager);
-    vendorProfile = {
-      id: 1,
-      type: 'drink',
-      qualityTier: 'good',
-      abilities: {
-        ignoreRowPenalty: false,
-        ignoreGrumpPenalty: false,
-        canEnterRows: true,
-        rangedOnly: false,
-      },
-    };
   });
 
   it('should generate axis-aligned paths (no diagonals)', () => {
@@ -48,7 +35,7 @@ describe('GridPathfinder - Manhattan Pathfinding', () => {
     // Find path from (2,2) to (8,8)
     const fromWorld = gridManager.gridToWorld(2, 2);
     const toWorld = gridManager.gridToWorld(8, 8);
-    const path = gridPathfinder.findPath(vendorProfile, fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
+    const path = gridPathfinder.findPath(fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
 
     expect(path.length).toBeGreaterThan(0);
 
@@ -57,8 +44,8 @@ describe('GridPathfinder - Manhattan Pathfinding', () => {
       const from = path[i - 1];
       const to = path[i];
 
-      const rowDiff = Math.abs(to.rowIdx! - from.rowIdx!);
-      const colDiff = Math.abs(to.colIdx! - from.colIdx!);
+      const rowDiff = Math.abs(to.row - from.row);
+      const colDiff = Math.abs(to.col - from.col);
 
       // Exactly one of rowDiff or colDiff should be 1, the other 0
       const isAxisAligned = (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
@@ -103,12 +90,12 @@ describe('GridPathfinder - Manhattan Pathfinding', () => {
     // Try to path from corridor to seat
     const fromWorld = gridManager.gridToWorld(3, 4);
     const toWorld = gridManager.gridToWorld(5, 4);
-    const path = gridPathfinder.findPath(vendorProfile, fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
+    const path = gridPathfinder.findPath(fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
 
     expect(path.length).toBeGreaterThan(0);
 
     // Path should go through rowEntry at (4,4)
-    const passesRowEntry = path.some(seg => seg.rowIdx === 4 && seg.colIdx === 4);
+    const passesRowEntry = path.some(seg => seg.row === 4 && seg.col === 4);
     expect(passesRowEntry).toBe(true);
   });
 
@@ -143,7 +130,7 @@ describe('GridPathfinder - Manhattan Pathfinding', () => {
     // Try to path from corridor to sky (should fail)
     const fromWorld = gridManager.gridToWorld(5, 5);
     const toWorld = gridManager.gridToWorld(5, 10);
-    const path = gridPathfinder.findPath(vendorProfile, fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
+    const path = gridPathfinder.findPath(fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
 
     expect(path.length).toBe(0);
   });
@@ -185,12 +172,12 @@ describe('GridPathfinder - Manhattan Pathfinding', () => {
     // Pathfinding should prefer ground over seat due to lower cost
     const fromWorld = gridManager.gridToWorld(5, 0);
     const toWorld = gridManager.gridToWorld(5, 15);
-    const path = gridPathfinder.findPath(vendorProfile, fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
+    const path = gridPathfinder.findPath(fromWorld.x, fromWorld.y, toWorld.x, toWorld.y);
 
     expect(path.length).toBeGreaterThan(0);
 
     // Path should stay in corridor (all rowIdx should be 5)
-    const staysInCorridor = path.every(seg => seg.rowIdx === 5);
+      const staysInCorridor = path.every(seg => seg.row === 5);
     expect(staysInCorridor).toBe(true);
   });
 });

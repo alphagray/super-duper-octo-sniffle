@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { gameBalance } from '@/config/gameBalance';
 import { BaseActorContainer } from './helpers/BaseActor';
 
 /**
@@ -7,8 +6,13 @@ import { BaseActorContainer } from './helpers/BaseActor';
  * - top: square (head), randomly colored between pale yellow and medium brown
  * - bottom: taller rectangle (body) that is white by default and shifts orange/red
  *
- * The Fan supports:
- * - setIntensity(value) where value is 0..1 (driven by thirst/distracted)
+ * ARCHITECTURE NOTE:
+ * Fan sprite is responsible for visual rendering and animations ONLY.
+ * Game logic should be handled by FanActor, but for backward compatibility,
+ * this sprite temporarily contains stat getters/setters that will be migrated.
+ *
+ * Supports:
+ * - setIntensity(value) where value is 0..1 (driven by thirst from FanActor)
  * - jiggle when intensity > 0
  * - playWave(delay, intensity) to perform the quick up/down motion with variable intensity
  */
@@ -21,25 +25,12 @@ export class Fan extends BaseActorContainer {
   private jiggleTimer?: Phaser.Time.TimerEvent;
   private baseIntensity: number = 0;
 
-  // Fan-level stats
-  private happiness: number;
-  private thirst: number;
-  private attention: number;
-
-  // Randomized thirst growth rate (environmental sensitivity)
-  private thirstMultiplier: number;
-
-  // Grump/difficult terrain stats (foundation for future grump type)
-  private disgruntlement: number = 0; // only grows for future grump type
-  private disappointment: number = 0; // dynamic accumulator for unhappiness condition
-
-  public _lastWaveParticipated: boolean = false;
-
-  // Wave participation properties
-  private waveStrengthModifier: number = 0;
-  private attentionFreezeUntil: number = 0;
-  private thirstFreezeUntil: number = 0;
+  // TEMPORARY: These will be migrated to FanActor
+  // Keeping for backward compatibility during refactor
+  private _stats = { happiness: 50, thirst: 0, attention: 100 };
+  private _thirstMultiplier: number = 1.0;
   public reducedEffort: boolean = false;
+  public _lastWaveParticipated: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, size = 28) {
     // We'll shift the container origin so local (0,0) sits at the bottom extremity
@@ -69,24 +60,19 @@ export class Fan extends BaseActorContainer {
     this.add([this.top, this.bottom]);
     scene.add.existing(this);
 
-    // Initialize stats with fixed values for more reliable participation
-    this.happiness = gameBalance.fanStats.initialHappiness;
-    this.thirst = Math.random() * (gameBalance.fanStats.initialThirstMax - gameBalance.fanStats.initialThirstMin) + gameBalance.fanStats.initialThirstMin;
-    this.attention = gameBalance.fanStats.initialAttention;
-    
-    // Randomize thirst growth rate: 0.5x to 1.5x (bell curve centered at 1.0)
-    // Using normal distribution approximation with 3 random values
+    // Initialize default stats (will be overridden by setters if needed)
     const r1 = Math.random();
     const r2 = Math.random();
     const r3 = Math.random();
-    const bellCurve = (r1 + r2 + r3) / 3; // Average of 3 randoms approximates normal distribution
-    this.thirstMultiplier = 0.5 + bellCurve; // Maps 0-1 to 0.5-1.5
+    const bellCurve = (r1 + r2 + r3) / 3;
+    this._thirstMultiplier = 0.5 + bellCurve;
   }
 
-  public setIntensity(v?: number) {
-    // If no value provided, use personal thirst as intensity
-    const intensity = v !== undefined ? v : this.thirst / 100;
-    const t = Phaser.Math.Clamp(intensity, 0, 1);
+  // NOTE: All stat/gameplay logic removed. Sprite remains purely visual.
+
+  public setIntensity(v: number) {
+    // Intensity drives visual color change only
+    const t = Phaser.Math.Clamp(v, 0, 1);
 
     // Bottom color: interpolate from white -> orange -> red
     const color = Fan.lerpColor(0xffffff, 0xff8c00, t <= 0.6 ? t / 0.6 : 1);
@@ -482,193 +468,6 @@ export class Fan extends BaseActorContainer {
     const b = 0xa67c52;
     const t = Math.random();
     return Fan.lerpColor(a, b, t);
-  }
-
-  // === Fan Stat Methods ===
-
-  /**
-   * Get all fan stats
-   */
-  public getStats(): { happiness: number; thirst: number; attention: number } {
-    return {
-      happiness: this.happiness,
-      thirst: this.thirst,
-      attention: this.attention
-    };
-  }
-
-  /**
-   * Get individual stat values
-   */
-  public getThirst(): number {
-    return this.thirst;
-  }
-
-  public getThirstMultiplier(): number {
-    return this.thirstMultiplier;
-  }
-
-  public getHappiness(): number {
-    return this.happiness;
-  }
-
-  public getAttention(): number {
-    return this.attention;
-  }
-
-  /**
-   * Vendor serves this fan a drink
-   */
-  public drinkServed(): void {
-    this.thirst = 0;
-    this.happiness = Math.min(100, this.happiness + 15);
-    // Freeze thirst growth for a short duration
-    this.thirstFreezeUntil = this.scene.time.now + gameBalance.fanStats.thirstFreezeDuration;
-  }
-
-  /**
-   * Fan successfully participates in a wave
-   * Resets attention and freezes attention decay temporarily
-   * Also resets reducedEffort flag to clean up peer-pressure state
-   */
-  public onWaveParticipation(success: boolean): void {
-    if (success) {
-      this.attention = 100;
-      this.attentionFreezeUntil = this.scene.time.now + gameBalance.fanStats.attentionFreezeDuration;
-      // Reset reduced effort flag after wave participation
-      this.reducedEffort = false;
-    }
-  }
-
-  /**
-   * Update fan stats over time
-   */
-  public updateStats(deltaTime: number, environmentalModifier: number = 1.0): void {
-    // Convert ms to seconds for easier rate calculations
-    const deltaSeconds = deltaTime / 1000;
-
-    // Attention freeze logic
-    if (this.attentionFreezeUntil && this.scene.time.now < this.attentionFreezeUntil) {
-      // Do not decrease attention while frozen
-    } else {
-      // Attention decays slightly over time (configurable)
-      this.attention = Math.max(
-        gameBalance.fanStats.attentionMinimum,
-        this.attention - deltaSeconds * gameBalance.fanStats.attentionDecayRate
-      );
-    }
-
-    // Thirst freeze logic (separate timer from attention freeze)
-    if (this.thirstFreezeUntil && this.scene.time.now < this.thirstFreezeUntil) {
-      // Do not increase thirst while frozen
-    } else {
-      // Fans get thirstier over time (configurable, with per-fan multiplier and environmental modifier)
-      // environmentalModifier: < 1.0 = shade/cool, 1.0 = normal, > 1.0 = hot/sunny
-      const totalMultiplier = this.thirstMultiplier * environmentalModifier;
-      this.thirst = Math.min(100, this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate * totalMultiplier);
-    }
-
-    // Thirsty fans get less happy (configurable rate)
-    if (this.thirst > 50) {
-      this.happiness = Math.max(0, this.happiness - deltaSeconds * gameBalance.fanStats.happinessDecayRate);
-    }
-
-    // Disappointment accumulation (future grump-only feature)
-    // Only accumulates when thirst > 50 AND happiness is actively decaying
-    // Currently disabled via grumpConfig.disappointmentGrowthRate = 0
-    if (this.thirst > 50 && this.happiness < gameBalance.grumpConfig.unhappyThreshold) {
-      this.disappointment = Math.min(
-        100,
-        this.disappointment + deltaSeconds * gameBalance.grumpConfig.disappointmentGrowthRate
-      );
-    } else {
-      // Gradually reduce disappointment when conditions improve
-      this.disappointment = Math.max(0, this.disappointment - deltaSeconds * 0.5);
-    }
-  }
-
-  /**
-   * Calculate this fan's chance to participate in the wave
-   * @param sectionBonus - Bonus from section aggregate stats
-   * @returns Success chance as percentage (0-100)
-   */
-  public calculateWaveChance(sectionBonus: number): number {
-    // Base chance from personal stats
-    // Happiness and attention help, thirst hurts
-    const baseChance =
-      this.happiness * gameBalance.fanStats.waveChanceHappinessWeight +
-      this.attention * gameBalance.fanStats.waveChanceAttentionWeight -
-      this.thirst * gameBalance.fanStats.waveChanceThirstPenalty;
-
-    // Apply section bonus and wave strength modifier
-    let totalChance = baseChance + sectionBonus + this.waveStrengthModifier;
-
-    // Flat bonus to make success more likely
-    totalChance += gameBalance.fanStats.waveChanceFlatBonus;
-
-    return Math.max(0, Math.min(100, totalChance));
-  }
-
-  /**
-   * Set the wave strength modifier (applied to participation chance)
-   * @param modifier - The modifier value
-   */
-  public setWaveStrengthModifier(modifier: number): void {
-    this.waveStrengthModifier = modifier;
-  }
-
-  /**
-   * Roll to see if this fan participates in the wave
-   * @param sectionBonus - Bonus from section aggregate stats
-   * @returns true if fan participates, false otherwise
-   */
-  public rollForWaveParticipation(sectionBonus: number): boolean {
-    const chance = this.calculateWaveChance(sectionBonus);
-    const result = Math.random() * 100 < chance;
-    this._lastWaveParticipated = result;
-    return result;
-  }
-
-  // === Grump/Difficult Terrain Methods (Foundation) ===
-
-  /**
-   * Check if this fan qualifies as difficult terrain for vendor pathfinding
-   * Based on happiness threshold or disappointment threshold
-   * @returns true if fan is difficult terrain, false otherwise
-   */
-  public isDifficultTerrain(): boolean {
-    return (
-      this.happiness < gameBalance.grumpConfig.unhappyThreshold ||
-      this.disappointment > gameBalance.grumpConfig.disappointmentThreshold
-    );
-  }
-
-  /**
-   * Get the terrain penalty multiplier for this fan
-   * Used by vendor pathfinding to calculate movement penalties
-   * @returns Penalty multiplier (1.0 for normal, higher for difficult terrain)
-   */
-  public getTerrainPenaltyMultiplier(): number {
-    if (this.isDifficultTerrain()) {
-      return gameBalance.vendorMovement.grumpPenaltyMultiplier;
-    }
-    return 1.0;
-  }
-
-  /**
-   * Get disgruntlement level (future grump-only stat)
-   * @returns Current disgruntlement value
-   */
-  public getDisgruntlement(): number {
-    return this.disgruntlement;
-  }
-
-  /**
-   * Get disappointment level (dynamic unhappiness accumulator)
-   * @returns Current disappointment value
-   */
-  public getDisappointment(): number {
-    return this.disappointment;
   }
 
   /**

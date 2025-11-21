@@ -3,7 +3,9 @@ import Phaser from 'phaser';
 import { gameBalance } from '@/config/gameBalance';
 import { GridManager, CardinalDirection } from '@/managers/GridManager';
 import type { AIManager } from '@/managers/AIManager';
-import type { HybridPathResolver } from '@/managers/HybridPathResolver';
+// HybridPathResolver import removed during generic pathfinding refactor
+import type { PathfindingService } from '@/services/PathfindingService';
+import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
 
 export class GridOverlay extends Phaser.GameObjects.Graphics {
   private readonly grid: GridManager;
@@ -12,6 +14,7 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
   private readonly gridChangedHandler: () => void;
   private aiManager?: AIManager;
   private stadiumScene?: Phaser.Scene;
+  private pathfindingService?: PathfindingService;
   public showNodes: boolean = false;
   public showVendorPaths: boolean = false;
   public showZones: boolean = false;
@@ -19,6 +22,8 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
   public showDirectionalEdges: boolean = false;
   private pulseAlpha: number = 0.5;
   private pulseDirection: number = 1;
+  private pathHistory: Array<{ path: GridPathCell[]; success: boolean; fromX: number; fromY: number; toX: number; toY: number }> = [];
+  private readonly maxHistory: number = 5;
 
   constructor(scene: Phaser.Scene, grid: GridManager) {
     super(scene);
@@ -43,6 +48,31 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     
     // Subscribe to vendor path planning events
     aiManager.on('vendorPathPlanned', () => {
+      if (this.showVendorPaths) {
+        this.needsRedraw = true;
+      }
+    });
+  }
+
+  /**
+   * Attach PathfindingService to enable generic path visualization.
+   */
+  public setPathfindingService(service: PathfindingService): void {
+    this.pathfindingService = service;
+    // Subscribe to pathCalculated events from underlying GridPathfinder
+    service.on('pathCalculated', (evt: { path: GridPathCell[]; success: boolean; fromX: number; fromY: number; toX: number; toY: number }) => {
+      // Maintain history buffer
+      this.pathHistory.push({
+        path: evt.path,
+        success: evt.success,
+        fromX: evt.fromX,
+        fromY: evt.fromY,
+        toX: evt.toX,
+        toY: evt.toY,
+      });
+      if (this.pathHistory.length > this.maxHistory) {
+        this.pathHistory.shift();
+      }
       if (this.showVendorPaths) {
         this.needsRedraw = true;
       }
@@ -78,7 +108,7 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     if (!this.visible) return; // Only toggle if grid is visible
     this.showVendorPaths = !this.showVendorPaths;
     this.needsRedraw = true;
-    console.log(`[GridOverlay] Vendor paths: ${this.showVendorPaths ? 'ON' : 'OFF'}`);
+    console.log(`[GridOverlay] Paths: ${this.showVendorPaths ? 'ON' : 'OFF'}`);
   }
 
   public toggleZones(): void {
@@ -173,16 +203,15 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
       this.renderDirectionalEdges(cellSize);
     }
 
-    // Render navigation nodes and edges if enabled
+    // Legacy navigation graph removed; showNodes currently has no effect
     if (this.showNodes) {
-      console.log('[GridOverlay.redraw] Rendering navigation nodes...');
-      this.renderNavigationNodes();
+      // Placeholder: could repurpose to highlight passable cells or path endpoints
     }
 
     // Render vendor paths if enabled
     if (this.showVendorPaths) {
-      console.log('[GridOverlay.redraw] Rendering vendor paths...');
-      this.renderVendorPaths();
+      console.log('[GridOverlay.redraw] Rendering recent paths...');
+      this.renderRecentPaths();
     }
     
     console.log('[GridOverlay.redraw] Redraw complete');
@@ -366,142 +395,46 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     });
   }
 
-  private renderNavigationNodes(): void {
-    if (!this.aiManager) {
-      console.warn('[GridOverlay] Cannot render nodes: no AIManager');
-      return;
-    }
-    
-    const pathResolver = this.aiManager.getPathResolver();
-    if (!pathResolver) {
-      console.warn('[GridOverlay] Cannot render nodes: no PathResolver');
-      return;
-    }
-    
-    const graph = pathResolver.getGraph();
-    if (!graph) {
-      console.warn('[GridOverlay] Cannot render nodes: no navigation graph');
-      return;
-    }
 
-    console.log(`[GridOverlay] Rendering ${graph.nodes.size} navigation nodes, ${graph.edges.size} edge sources`);
-
-    // Define colors for each node type
-    const nodeColors = {
-      corridor: 0x0099ff,   // Blue
-      stair: 0xffff00,      // Yellow
-      rowEntry: 0x00ff00,   // Green
-      seat: 0xff00ff,       // Purple
-      ground: 0xff8800,     // Orange
-    };
-
-    // First, draw edges (connections between nodes)
-    this.lineStyle(1, 0x666666, 0.3);
-    let edgesDrawn = 0;
-    for (const [nodeId, edges] of graph.edges.entries()) {
-      const fromNode = graph.nodes.get(nodeId);
-      if (!fromNode) continue;
-
-      for (const edge of edges) {
-        const toNode = graph.nodes.get(edge.targetNodeId);
-        if (!toNode) continue;
-
+  /**
+   * Render recent generic paths from pathHistory.
+   * Success paths are green, failed attempts red outline from start to end.
+   */
+  private renderRecentPaths(): void {
+    if (this.pathHistory.length === 0) return;
+    let rendered = 0;
+    this.pathHistory.forEach((entry, idx) => {
+      if (!entry.path || entry.path.length === 0) {
+        // Failed path attempt: draw red dashed line start->end
+        this.lineStyle(2, 0xff0000, 0.8);
         this.beginPath();
-        this.moveTo(fromNode.x, fromNode.y);
-        this.lineTo(toNode.x, toNode.y);
+        this.moveTo(entry.fromX, entry.fromY);
+        this.lineTo(entry.toX, entry.toY);
         this.strokePath();
-        edgesDrawn++;
+        return;
       }
-    }
-    console.log(`[GridOverlay] Drew ${edgesDrawn} edges`);
-
-    // Then, draw nodes (so they appear on top of edges)
-    let nodesDrawn = 0;
-    for (const [nodeId, node] of graph.nodes.entries()) {
-      const color = nodeColors[node.type] || 0xffffff;
-      this.fillStyle(color, 0.8);
-      this.fillCircle(node.x, node.y, 6);
-      nodesDrawn++;
-    }
-    console.log(`[GridOverlay] Drew ${nodesDrawn} nodes`);
-  }
-
-  private renderVendorPaths(): void {
-    if (!this.aiManager) {
-      console.warn('[GridOverlay] Cannot render vendor paths: no AIManager');
-      return;
-    }
-    
-    const vendors = this.aiManager.getVendorInstances();
-    console.log(`[GridOverlay] Rendering paths for ${vendors.size} vendors`);
-    
-    let pathsRendered = 0;
-    for (const [vendorId, instance] of vendors.entries()) {
-      if (!instance.currentPath || instance.currentPath.length === 0) continue;
-
-      pathsRendered++;
-      console.log(`[GridOverlay] Vendor ${vendorId} path: ${instance.currentPath.length} segments, current index: ${instance.currentSegmentIndex}`);
-
-      // Check for illegal steps (directional passability violations)
-      const illegalSegments: number[] = [];
-      for (let i = 1; i < instance.currentPath.length; i++) {
-        const from = instance.currentPath[i - 1];
-        const to = instance.currentPath[i];
-        
-        // Check if this step is legal
-        if (from.gridRow !== undefined && from.gridCol !== undefined &&
-            to.gridRow !== undefined && to.gridCol !== undefined) {
-          const isLegal = this.grid.isPassableDirection(from.gridRow, from.gridCol, to.gridRow, to.gridCol);
-          if (!isLegal) {
-            illegalSegments.push(i - 1);
-            console.warn(`[GridOverlay] Illegal step detected: (${from.gridRow},${from.gridCol}) -> (${to.gridRow},${to.gridCol})`);
-          }
-        }
-      }
-
-      // Draw path segments (green for legal, red for illegal)
-      for (let i = 0; i < instance.currentPath.length - 1; i++) {
-        const from = instance.currentPath[i];
-        const to = instance.currentPath[i + 1];
-        
-        const isIllegal = illegalSegments.includes(i);
-        const color = isIllegal ? 0xff0000 : 0x00ff00;
-        const width = isIllegal ? 6 : 4;
-        
-        this.lineStyle(width, color, 1.0);
+      // Choose color cycling for differentiation
+      const colors = [0x00ff00, 0x00ccff, 0xffaa00, 0xff00ff, 0xffffff];
+      const color = colors[idx % colors.length];
+      for (let i = 0; i < entry.path.length - 1; i++) {
+        const from = entry.path[i];
+        const to = entry.path[i + 1];
+        this.lineStyle(3, color, 0.9);
         this.beginPath();
         this.moveTo(from.x, from.y);
         this.lineTo(to.x, to.y);
         this.strokePath();
-        
-        // Draw X marker on illegal segments
-        if (isIllegal) {
-          const midX = (from.x + to.x) / 2;
-          const midY = (from.y + to.y) / 2;
-          const size = 8;
-          
-          this.lineStyle(3, 0xff0000, 1.0);
-          this.beginPath();
-          this.moveTo(midX - size, midY - size);
-          this.lineTo(midX + size, midY + size);
-          this.strokePath();
-          
-          this.beginPath();
-          this.moveTo(midX + size, midY - size);
-          this.lineTo(midX - size, midY + size);
-          this.strokePath();
-        }
       }
-
-      // Highlight current target segment with pulsing circle
-      const currentSegment = instance.currentPath[instance.currentSegmentIndex];
-      if (currentSegment) {
-        this.fillStyle(0xffff00, this.pulseAlpha);
-        this.fillCircle(currentSegment.x, currentSegment.y, 8);
-      }
-    }
-    
-    console.log(`[GridOverlay] Rendered ${pathsRendered} vendor paths`);
+      // Highlight start and end cells
+      const start = entry.path[0];
+      const end = entry.path[entry.path.length - 1];
+      this.fillStyle(color, 0.6);
+      this.fillCircle(start.x, start.y, 6);
+      this.fillStyle(0xffff00, this.pulseAlpha);
+      this.fillCircle(end.x, end.y, 7);
+      rendered++;
+    });
+    console.log(`[GridOverlay] Rendered ${rendered} recent paths (history size=${this.pathHistory.length})`);
   }
 }
 

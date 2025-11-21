@@ -18,6 +18,7 @@ import { FanActor } from '@/actors/FanActor';
 import { GridManager } from '@/managers/GridManager';
 import { LevelService } from '@/services/LevelService';
 import { GridOverlay } from '@/scenes/GridOverlay';
+import { PathfindingService } from '@/services/PathfindingService';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -50,6 +51,7 @@ export class StadiumScene extends Phaser.Scene {
   private skyboxActor?: any;
   private groundActor?: any;
   private gridOverlay?: GridOverlay;
+  private pathfindingService?: PathfindingService;
 
   constructor() {
     super({ key: 'StadiumScene' });
@@ -137,6 +139,14 @@ export class StadiumScene extends Phaser.Scene {
     // Initialize AIManager
     this.aiManager = new AIManager(this.gameState, 2, this.gridManager, this.actorRegistry);
 
+    // Initialize shared PathfindingService once and attach it everywhere
+    if (this.gridManager) {
+      this.pathfindingService = new PathfindingService(this.gridManager);
+      this.aiManager.attachPathfindingService(this.pathfindingService);
+    } else {
+      console.warn('[StadiumScene] Cannot initialize PathfindingService without GridManager');
+    }
+
     // Create SectionActors from level data (Actor-first, data-driven!)
     const sectionActors: SectionActor[] = [];
     levelData.sections.forEach((sectionData) => {
@@ -196,6 +206,7 @@ export class StadiumScene extends Phaser.Scene {
 
     // Initialize AIManager with sections for pathfinding
     this.aiManager.initializeSections(this.sections);
+    this.aiManager.setSectionActors(sectionActors);
 
     // Listen to vendor events BEFORE spawning (important!)
     this.setupVendorEventListeners();
@@ -203,29 +214,20 @@ export class StadiumScene extends Phaser.Scene {
     // Spawn vendors at positions from level data
     if (levelData.vendors && this.gridManager) {
       levelData.vendors.forEach((vendorData, idx) => {
-        const profile = this.aiManager.createVendor(vendorData.type as any, 'good');
         const worldPos = this.gridManager!.gridToWorld(vendorData.gridRow, vendorData.gridCol);
-        console.log(`[Vendor Init] Vendor ${profile.id} at grid (${vendorData.gridRow}, ${vendorData.gridCol}) -> world (${worldPos.x}, ${worldPos.y})`);
+        console.log(`[Vendor Init] Spawning vendor at grid (${vendorData.gridRow}, ${vendorData.gridCol}) -> world (${worldPos.x}, ${worldPos.y})`);
         
-        const instance = {
-          profile,
-          state: 'idle' as VendorState,
-          position: { x: worldPos.x, y: worldPos.y },
-          currentSegmentIndex: 0,
-          scanTimer: 0,
-          stateTimer: 0,
-          distractionCheckTimer: 0,
-          attentionAuraActive: false,
-          lastServiceTime: 0,
-        };
-        this.aiManager.getVendorInstances().set(profile.id, instance);
-        
-        // Directly create vendor sprite for initialization (no need for event)
+        // Create vendor sprite
         const vendorSprite = new Vendor(this, worldPos.x, worldPos.y);
         vendorSprite.setDepth(1000); // Render above fans
         this.add.existing(vendorSprite);
-        this.vendorSprites.set(profile.id, vendorSprite);
-        console.log(`[Vendor Init] Created sprite for vendor ${profile.id}, total sprites: ${this.vendorSprites.size}`);
+        
+        // Spawn vendor actor with behavior
+        const { actor: vendorActor, id: vendorId } = this.aiManager.spawnVendor(vendorSprite, vendorData.type as any, 'good');
+        
+        // Store sprite for UI controls
+        this.vendorSprites.set(vendorId, vendorSprite);
+        console.log(`[Vendor Init] Created vendor actor ${vendorId}, total sprites: ${this.vendorSprites.size}`);
       });
       
       // Rebuild vendor controls to show buttons immediately
@@ -281,6 +283,9 @@ export class StadiumScene extends Phaser.Scene {
       this.gridOverlay = new GridOverlay(this, this.gridManager);
       this.gridOverlay.setStadiumScene(this);
       this.gridOverlay.setAIManager(this.aiManager);
+      if (this.pathfindingService) {
+        this.gridOverlay.setPathfindingService(this.pathfindingService);
+      }
       
       // Setup keyboard toggles for grid overlay
       const keyboard = this.input.keyboard;

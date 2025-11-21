@@ -985,5 +985,1351 @@
         "C"
       ]
     }
+  ],
+  "fans": [
+    {
+      "id": "fan-A-0-0",
+      "type": "default",
+      "sectionId": "A",
+      "row": 0,
+      "col": 0,
+      "gridRow": 15,
+      "gridCol": 2,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-0-1",
+      "type": "default",
+      "sectionId": "A",
+      "row": 0,
+      "col": 1,
+      "gridRow": 15,
+      "gridCol": 3,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-0-2",
+      "type": "default",
+      "sectionId": "A",
+      "row": 0,
+      "col": 2,
+      "gridRow": 15,
+      "gridCol": 4,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-0-3",
+      "type": "default",
+      "sectionId": "A",
+      "row": 0,
+      "col": 3,
+      "gridRow": 15,
+      "gridCol": 5,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-0-4",
+      "type": "default",
+      "sectionId": "A",
+      "row": 0,
+      "col": 4,
+      "gridRow": 15,
+      "gridCol": 6,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-0-5",
+      "type": "default",
+      "sectionId": "A",
+      "row": 0,
+      "col": 5,
+      "gridRow": 15,
+      "gridCol": 7,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-0-6",
+      "type": "default",
+      "sectionId": "A",
+      "row": 0,
+      "col": 6,
+      "gridRow": 15,
+      "gridCol": 8,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-0-7",
+      "type": "default",
+      "sectionId": "A",
+      "row": 0,
+      "col": 7,
+      "gridRow": 15,
+      "gridCol": 9,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-1-0",
+      "type": "default",
+      "sectionId": "A",
+      "row": 1,
+      "col": 0,
+      "gridRow": 16,
+      "gridCol": 2,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-1-1",
+      "type": "default",
+      "sectionId": "A",
+      "row": 1,
+      "col": 1,
+      "gridRow": 16,
+      "gridCol": 3,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-1-2",
+      "type": "default",
+      "sectionId": "A",
+      "row": 1,
+      "col": 2,
+      "gridRow": 16,
+      "gridCol": 4,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-1-3",
+      "type": "default",
+      "sectionId": "A",
+      "row": 1,
+      "col": 3,
+      "gridRow": 16,
+      "gridCol": 5,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-1-4",
+      "type": "default",
+      "sectionId": "A",
+      "row": 1,
+      "col": 4,
+      "gridRow": 16,
+      "gridCol": 6,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-1-5",
+      "type": "default",
+      "sectionId": "A",
+      "row": 1,
+      "col": 5,
+      "gridRow": 16,
+      "gridCol": 7,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-1-6",
+      "type": "default",
+      "sectionId": "A",
+      "row": 1,
+      "col": 6,
+      "gridRow": 16,
+      "gridCol": 8,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-1-7",
+      "type": "default",
+      "sectionId": "A",
+      "row": 1,
+      "col": 7,
+      "gridRow": 16,
+      "gridCol": 9,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-2-0",
+      "type": "default",
+      "sectionId": "A",
+      "row": 2,
+      "col": 0,
+      "gridRow": 17,
+      "gridCol": 2,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-2-1",
+      "type": "default",
+      "sectionId": "A",
+      "row": 2,
+      "col": 1,
+      "gridRow": 17,
+      "gridCol": 3,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-2-2",
+      "type": "default",
+      "sectionId": "A",
+      "row": 2,
+      "col": 2,
+      "gridRow": 17,
+      "gridCol": 4,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-2-3",
+      "type": "default",
+      "sectionId": "A",
+      "row": 2,
+      "col": 3,
+      "gridRow": 17,
+      "gridCol": 5,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-2-4",
+      "type": "default",
+      "sectionId": "A",
+      "row": 2,
+      "col": 4,
+      "gridRow": 17,
+      "gridCol": 6,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-2-5",
+      "type": "default",
+      "sectionId": "A",
+      "row": 2,
+      "col": 5,
+      "gridRow": 17,
+      "gridCol": 7,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-2-6",
+      "type": "default",
+      "sectionId": "A",
+      "row": 2,
+      "col": 6,
+      "gridRow": 17,
+      "gridCol": 8,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-2-7",
+      "type": "default",
+      "sectionId": "A",
+      "row": 2,
+      "col": 7,
+      "gridRow": 17,
+      "gridCol": 9,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-3-0",
+      "type": "default",
+      "sectionId": "A",
+      "row": 3,
+      "col": 0,
+      "gridRow": 18,
+      "gridCol": 2,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-3-1",
+      "type": "default",
+      "sectionId": "A",
+      "row": 3,
+      "col": 1,
+      "gridRow": 18,
+      "gridCol": 3,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-3-2",
+      "type": "default",
+      "sectionId": "A",
+      "row": 3,
+      "col": 2,
+      "gridRow": 18,
+      "gridCol": 4,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-3-3",
+      "type": "default",
+      "sectionId": "A",
+      "row": 3,
+      "col": 3,
+      "gridRow": 18,
+      "gridCol": 5,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-3-4",
+      "type": "default",
+      "sectionId": "A",
+      "row": 3,
+      "col": 4,
+      "gridRow": 18,
+      "gridCol": 6,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-3-5",
+      "type": "default",
+      "sectionId": "A",
+      "row": 3,
+      "col": 5,
+      "gridRow": 18,
+      "gridCol": 7,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-3-6",
+      "type": "default",
+      "sectionId": "A",
+      "row": 3,
+      "col": 6,
+      "gridRow": 18,
+      "gridCol": 8,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-A-3-7",
+      "type": "default",
+      "sectionId": "A",
+      "row": 3,
+      "col": 7,
+      "gridRow": 18,
+      "gridCol": 9,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-0-0",
+      "type": "default",
+      "sectionId": "B",
+      "row": 0,
+      "col": 0,
+      "gridRow": 15,
+      "gridCol": 12,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-0-1",
+      "type": "default",
+      "sectionId": "B",
+      "row": 0,
+      "col": 1,
+      "gridRow": 15,
+      "gridCol": 13,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-0-2",
+      "type": "default",
+      "sectionId": "B",
+      "row": 0,
+      "col": 2,
+      "gridRow": 15,
+      "gridCol": 14,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-0-3",
+      "type": "default",
+      "sectionId": "B",
+      "row": 0,
+      "col": 3,
+      "gridRow": 15,
+      "gridCol": 15,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-0-4",
+      "type": "default",
+      "sectionId": "B",
+      "row": 0,
+      "col": 4,
+      "gridRow": 15,
+      "gridCol": 16,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-0-5",
+      "type": "default",
+      "sectionId": "B",
+      "row": 0,
+      "col": 5,
+      "gridRow": 15,
+      "gridCol": 17,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-0-6",
+      "type": "default",
+      "sectionId": "B",
+      "row": 0,
+      "col": 6,
+      "gridRow": 15,
+      "gridCol": 18,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-0-7",
+      "type": "default",
+      "sectionId": "B",
+      "row": 0,
+      "col": 7,
+      "gridRow": 15,
+      "gridCol": 19,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-1-0",
+      "type": "default",
+      "sectionId": "B",
+      "row": 1,
+      "col": 0,
+      "gridRow": 16,
+      "gridCol": 12,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-1-1",
+      "type": "default",
+      "sectionId": "B",
+      "row": 1,
+      "col": 1,
+      "gridRow": 16,
+      "gridCol": 13,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-1-2",
+      "type": "default",
+      "sectionId": "B",
+      "row": 1,
+      "col": 2,
+      "gridRow": 16,
+      "gridCol": 14,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-1-3",
+      "type": "default",
+      "sectionId": "B",
+      "row": 1,
+      "col": 3,
+      "gridRow": 16,
+      "gridCol": 15,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-1-4",
+      "type": "default",
+      "sectionId": "B",
+      "row": 1,
+      "col": 4,
+      "gridRow": 16,
+      "gridCol": 16,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-1-5",
+      "type": "default",
+      "sectionId": "B",
+      "row": 1,
+      "col": 5,
+      "gridRow": 16,
+      "gridCol": 17,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-1-6",
+      "type": "default",
+      "sectionId": "B",
+      "row": 1,
+      "col": 6,
+      "gridRow": 16,
+      "gridCol": 18,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-1-7",
+      "type": "default",
+      "sectionId": "B",
+      "row": 1,
+      "col": 7,
+      "gridRow": 16,
+      "gridCol": 19,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-2-0",
+      "type": "default",
+      "sectionId": "B",
+      "row": 2,
+      "col": 0,
+      "gridRow": 17,
+      "gridCol": 12,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-2-1",
+      "type": "default",
+      "sectionId": "B",
+      "row": 2,
+      "col": 1,
+      "gridRow": 17,
+      "gridCol": 13,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-2-2",
+      "type": "default",
+      "sectionId": "B",
+      "row": 2,
+      "col": 2,
+      "gridRow": 17,
+      "gridCol": 14,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-2-3",
+      "type": "default",
+      "sectionId": "B",
+      "row": 2,
+      "col": 3,
+      "gridRow": 17,
+      "gridCol": 15,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-2-4",
+      "type": "default",
+      "sectionId": "B",
+      "row": 2,
+      "col": 4,
+      "gridRow": 17,
+      "gridCol": 16,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-2-5",
+      "type": "default",
+      "sectionId": "B",
+      "row": 2,
+      "col": 5,
+      "gridRow": 17,
+      "gridCol": 17,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-2-6",
+      "type": "default",
+      "sectionId": "B",
+      "row": 2,
+      "col": 6,
+      "gridRow": 17,
+      "gridCol": 18,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-2-7",
+      "type": "default",
+      "sectionId": "B",
+      "row": 2,
+      "col": 7,
+      "gridRow": 17,
+      "gridCol": 19,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-3-0",
+      "type": "default",
+      "sectionId": "B",
+      "row": 3,
+      "col": 0,
+      "gridRow": 18,
+      "gridCol": 12,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-3-1",
+      "type": "default",
+      "sectionId": "B",
+      "row": 3,
+      "col": 1,
+      "gridRow": 18,
+      "gridCol": 13,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-3-2",
+      "type": "default",
+      "sectionId": "B",
+      "row": 3,
+      "col": 2,
+      "gridRow": 18,
+      "gridCol": 14,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-3-3",
+      "type": "default",
+      "sectionId": "B",
+      "row": 3,
+      "col": 3,
+      "gridRow": 18,
+      "gridCol": 15,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-3-4",
+      "type": "default",
+      "sectionId": "B",
+      "row": 3,
+      "col": 4,
+      "gridRow": 18,
+      "gridCol": 16,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-3-5",
+      "type": "default",
+      "sectionId": "B",
+      "row": 3,
+      "col": 5,
+      "gridRow": 18,
+      "gridCol": 17,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-3-6",
+      "type": "default",
+      "sectionId": "B",
+      "row": 3,
+      "col": 6,
+      "gridRow": 18,
+      "gridCol": 18,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-B-3-7",
+      "type": "default",
+      "sectionId": "B",
+      "row": 3,
+      "col": 7,
+      "gridRow": 18,
+      "gridCol": 19,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-0-0",
+      "type": "default",
+      "sectionId": "C",
+      "row": 0,
+      "col": 0,
+      "gridRow": 15,
+      "gridCol": 22,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-0-1",
+      "type": "default",
+      "sectionId": "C",
+      "row": 0,
+      "col": 1,
+      "gridRow": 15,
+      "gridCol": 23,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-0-2",
+      "type": "default",
+      "sectionId": "C",
+      "row": 0,
+      "col": 2,
+      "gridRow": 15,
+      "gridCol": 24,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-0-3",
+      "type": "default",
+      "sectionId": "C",
+      "row": 0,
+      "col": 3,
+      "gridRow": 15,
+      "gridCol": 25,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-0-4",
+      "type": "default",
+      "sectionId": "C",
+      "row": 0,
+      "col": 4,
+      "gridRow": 15,
+      "gridCol": 26,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-0-5",
+      "type": "default",
+      "sectionId": "C",
+      "row": 0,
+      "col": 5,
+      "gridRow": 15,
+      "gridCol": 27,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-0-6",
+      "type": "default",
+      "sectionId": "C",
+      "row": 0,
+      "col": 6,
+      "gridRow": 15,
+      "gridCol": 28,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-0-7",
+      "type": "default",
+      "sectionId": "C",
+      "row": 0,
+      "col": 7,
+      "gridRow": 15,
+      "gridCol": 29,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-1-0",
+      "type": "default",
+      "sectionId": "C",
+      "row": 1,
+      "col": 0,
+      "gridRow": 16,
+      "gridCol": 22,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-1-1",
+      "type": "default",
+      "sectionId": "C",
+      "row": 1,
+      "col": 1,
+      "gridRow": 16,
+      "gridCol": 23,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-1-2",
+      "type": "default",
+      "sectionId": "C",
+      "row": 1,
+      "col": 2,
+      "gridRow": 16,
+      "gridCol": 24,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-1-3",
+      "type": "default",
+      "sectionId": "C",
+      "row": 1,
+      "col": 3,
+      "gridRow": 16,
+      "gridCol": 25,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-1-4",
+      "type": "default",
+      "sectionId": "C",
+      "row": 1,
+      "col": 4,
+      "gridRow": 16,
+      "gridCol": 26,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-1-5",
+      "type": "default",
+      "sectionId": "C",
+      "row": 1,
+      "col": 5,
+      "gridRow": 16,
+      "gridCol": 27,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-1-6",
+      "type": "default",
+      "sectionId": "C",
+      "row": 1,
+      "col": 6,
+      "gridRow": 16,
+      "gridCol": 28,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-1-7",
+      "type": "default",
+      "sectionId": "C",
+      "row": 1,
+      "col": 7,
+      "gridRow": 16,
+      "gridCol": 29,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-2-0",
+      "type": "default",
+      "sectionId": "C",
+      "row": 2,
+      "col": 0,
+      "gridRow": 17,
+      "gridCol": 22,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-2-1",
+      "type": "default",
+      "sectionId": "C",
+      "row": 2,
+      "col": 1,
+      "gridRow": 17,
+      "gridCol": 23,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-2-2",
+      "type": "default",
+      "sectionId": "C",
+      "row": 2,
+      "col": 2,
+      "gridRow": 17,
+      "gridCol": 24,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-2-3",
+      "type": "default",
+      "sectionId": "C",
+      "row": 2,
+      "col": 3,
+      "gridRow": 17,
+      "gridCol": 25,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-2-4",
+      "type": "default",
+      "sectionId": "C",
+      "row": 2,
+      "col": 4,
+      "gridRow": 17,
+      "gridCol": 26,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-2-5",
+      "type": "default",
+      "sectionId": "C",
+      "row": 2,
+      "col": 5,
+      "gridRow": 17,
+      "gridCol": 27,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-2-6",
+      "type": "default",
+      "sectionId": "C",
+      "row": 2,
+      "col": 6,
+      "gridRow": 17,
+      "gridCol": 28,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-2-7",
+      "type": "default",
+      "sectionId": "C",
+      "row": 2,
+      "col": 7,
+      "gridRow": 17,
+      "gridCol": 29,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-3-0",
+      "type": "default",
+      "sectionId": "C",
+      "row": 3,
+      "col": 0,
+      "gridRow": 18,
+      "gridCol": 22,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-3-1",
+      "type": "default",
+      "sectionId": "C",
+      "row": 3,
+      "col": 1,
+      "gridRow": 18,
+      "gridCol": 23,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-3-2",
+      "type": "default",
+      "sectionId": "C",
+      "row": 3,
+      "col": 2,
+      "gridRow": 18,
+      "gridCol": 24,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-3-3",
+      "type": "default",
+      "sectionId": "C",
+      "row": 3,
+      "col": 3,
+      "gridRow": 18,
+      "gridCol": 25,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-3-4",
+      "type": "default",
+      "sectionId": "C",
+      "row": 3,
+      "col": 4,
+      "gridRow": 18,
+      "gridCol": 26,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-3-5",
+      "type": "default",
+      "sectionId": "C",
+      "row": 3,
+      "col": 5,
+      "gridRow": 18,
+      "gridCol": 27,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-3-6",
+      "type": "default",
+      "sectionId": "C",
+      "row": 3,
+      "col": 6,
+      "gridRow": 18,
+      "gridCol": 28,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    },
+    {
+      "id": "fan-C-3-7",
+      "type": "default",
+      "sectionId": "C",
+      "row": 3,
+      "col": 7,
+      "gridRow": 18,
+      "gridCol": 29,
+      "initialStats": {
+        "happiness": 70,
+        "thirst": 15,
+        "attention": 70
+      }
+    }
   ]
 }
