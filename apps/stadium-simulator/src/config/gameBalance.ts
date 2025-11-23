@@ -473,6 +473,18 @@ export const gameBalance = {
   },
 
   /**
+   * Ripple propagation configuration
+   * Controls cascading engagement effects when fans catch t-shirts
+   */
+  ripplePropagation: {
+    enabled: true, // master toggle for ripple system
+    baseEffect: 40, // attention boost at epicenter (0-100)
+    maxRadius: 4, // maximum Manhattan distance for ripple spread
+    disinterestedBonus: 5, // extra attention boost for disinterested fans
+    decayType: 'linear' as const, // decay function: 'linear' | 'exponential'
+  },
+
+  /**
    * Visual environment configuration
    */
   visual: {

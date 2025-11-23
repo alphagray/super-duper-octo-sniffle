@@ -542,6 +542,29 @@ export class Fan extends BaseActorContainer {
   }
 
   /**
+   * Modify fan stats with automatic clamping to valid range (0-100)
+   * @param stats - Object containing absolute values for stats to update
+   * @example
+   * fan.modifyStats({ attention: 75, happiness: 80 }); // Set attention to 75, happiness to 80
+   * fan.modifyStats({ attention: fan.getAttention() + 10 }); // Increase attention by 10
+   */
+  public modifyStats(stats: {
+    happiness?: number;
+    thirst?: number;
+    attention?: number;
+  }): void {
+    if (stats.happiness !== undefined) {
+      this.happiness = Math.max(0, Math.min(100, stats.happiness));
+    }
+    if (stats.thirst !== undefined) {
+      this.thirst = Math.max(0, Math.min(100, stats.thirst));
+    }
+    if (stats.attention !== undefined) {
+      this.attention = Math.max(0, Math.min(100, stats.attention));
+    }
+  }
+
+  /**
    * Check if this fan is in a disinterested state
    * Only checks every 500ms to avoid performance hit
    * @returns true if fan is disinterested (attention < 30 AND happiness < 40)
