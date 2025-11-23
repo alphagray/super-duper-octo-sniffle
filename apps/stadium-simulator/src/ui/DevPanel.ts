@@ -16,6 +16,7 @@
 import { AIContentManager } from '@/systems/AIContentManager';
 import type { GameAIContent, ContentMetadata } from '@/types/personalities';
 import { getCurrentEpoch } from '@/config/ai-config';
+import type { MascotImpactMetrics, ShotImpactRecord } from '@/systems/MascotAnalytics';
 
 /**
  * DevPanel Manager Class
@@ -26,6 +27,11 @@ export class DevPanel {
   private isVisible: boolean = false;
   private contentManager: AIContentManager;
   private currentContent: GameAIContent | null = null;
+  
+  // Mascot analytics tracking
+  private mascotMetrics: Map<string, MascotImpactMetrics> = new Map();
+  private mascotShotRecords: Map<string, ShotImpactRecord[]> = new Map();
+  private activeMascotSections: Set<string> = new Set();
 
   private constructor() {
     this.contentManager = AIContentManager.getInstance('development');
@@ -138,6 +144,32 @@ export class DevPanel {
   }
 
   /**
+   * Update mascot analytics data
+   * Called when mascot emits 'mascotAnalytics' event
+   */
+  public updateMascotAnalytics(metrics: MascotImpactMetrics, shotRecords?: ShotImpactRecord[]): void {
+    this.mascotMetrics.set(metrics.sectionId, metrics);
+    
+    if (shotRecords) {
+      this.mascotShotRecords.set(metrics.sectionId, shotRecords);
+    }
+    
+    // Track active sections (metrics from last 60 seconds)
+    const now = Date.now();
+    this.activeMascotSections.clear();
+    this.mascotMetrics.forEach((m, sectionId) => {
+      if (now - m.timestamp < 60000) { // 60 seconds
+        this.activeMascotSections.add(sectionId);
+      }
+    });
+    
+    // Refresh display if panel is visible
+    if (this.isVisible) {
+      this.renderContent();
+    }
+  }
+
+  /**
    * Refresh content display
    */
   private async refreshContent(): Promise<void> {
@@ -193,6 +225,8 @@ export class DevPanel {
           ${this.currentContent.crowdChatter ? `<div><strong>Crowd Chatter:</strong> ${this.currentContent.crowdChatter.length}</div>` : ''}
         </div>
       </div>
+
+      ${this.renderMascotAnalytics()}
 
       ${this.renderPersonalitiesPreview()}
 
@@ -308,6 +342,93 @@ export class DevPanel {
             `).join('')}
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Render mascot analytics section
+   */
+  private renderMascotAnalytics(): string {
+    if (this.mascotMetrics.size === 0) {
+      return `
+        <div style="margin-bottom: 16px;">
+          <h3 style="margin: 0 0 8px 0; color: #ff6b6b; font-size: 14px;">🎯 Mascot Analytics</h3>
+          <div style="background: rgba(255, 107, 107, 0.1); padding: 8px; border-radius: 4px;">
+            <div style="text-align: center; color: #888; font-size: 11px;">No mascot data yet. Activate mascots to see metrics.</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Get the most recent metrics for display
+    const recentMetrics = Array.from(this.mascotMetrics.entries())
+      .sort((a, b) => b[1].timestamp - a[1].timestamp);
+
+    return `
+      <div style="margin-bottom: 16px;">
+        <h3 style="margin: 0 0 8px 0; color: #ff6b6b; font-size: 14px;">🎯 Mascot Analytics</h3>
+        
+        ${recentMetrics.map(([sectionId, metrics]) => {
+          const isActive = this.activeMascotSections.has(sectionId);
+          const shotRecords = this.mascotShotRecords.get(sectionId) || [];
+          const timeSince = Math.floor((Date.now() - metrics.timestamp) / 1000);
+          
+          const improvementColor = metrics.participationImprovement >= 15 ? '#0f0' : 
+                                   metrics.participationImprovement >= 10 ? '#ff0' : 
+                                   metrics.participationImprovement > 0 ? '#ffa500' : '#f00';
+          
+          return `
+            <div style="margin-bottom: 12px; background: rgba(255, 107, 107, 0.1); padding: 8px; border-radius: 4px; border-left: 3px solid ${isActive ? '#0f0' : '#666'};">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong>Section ${sectionId}</strong>
+                <span style="font-size: 10px; color: #888;">${isActive ? '🟢 Active' : `${timeSince}s ago`}</span>
+              </div>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; margin-bottom: 6px;">
+                <div><strong>Activations:</strong> ${metrics.activationCount}</div>
+                <div><strong>Shots:</strong> ${metrics.totalShotsFired}</div>
+                <div><strong>Fans Hit:</strong> ${metrics.totalFansAffected}</div>
+                <div><strong>Boost:</strong> +${metrics.totalAttentionBoost}</div>
+              </div>
+              
+              <div style="background: rgba(0, 0, 0, 0.3); padding: 6px; border-radius: 3px; margin-bottom: 6px;">
+                <div style="font-size: 11px; margin-bottom: 3px;">
+                  <strong>Wave Participation:</strong>
+                </div>
+                <div style="font-size: 10px;">
+                  Before: ${metrics.waveParticipationBefore.toFixed(1)}% → After: ${metrics.waveParticipationAfter.toFixed(1)}%
+                </div>
+                <div style="font-size: 11px; font-weight: bold; color: ${improvementColor};">
+                  ${metrics.participationImprovement >= 0 ? '+' : ''}${metrics.participationImprovement.toFixed(1)}% improvement
+                </div>
+              </div>
+              
+              ${metrics.disinterestedReEngaged > 0 ? `
+                <div style="font-size: 10px; color: #0ff;">
+                  ✨ Re-engaged ${metrics.disinterestedReEngaged} disinterested fan${metrics.disinterestedReEngaged !== 1 ? 's' : ''}
+                </div>
+              ` : ''}
+              
+              ${shotRecords.length > 0 ? `
+                <div style="margin-top: 6px;">
+                  <div style="display: flex; align-items: center; cursor: pointer; padding: 2px; font-size: 11px;">
+                    <span class="dev-panel-toggle" data-target="shots-${sectionId}" style="margin-right: 4px; user-select: none;">▶</span>
+                    <strong>Shot Breakdown (${shotRecords.length})</strong>
+                  </div>
+                  <div id="shots-${sectionId}" data-visible="false" style="display: none; padding-left: 12px; margin-top: 4px;">
+                    ${shotRecords.map(shot => `
+                      <div style="font-size: 10px; margin-bottom: 3px; padding: 3px; background: rgba(0, 0, 0, 0.2); border-radius: 2px;">
+                        <strong>Shot ${shot.shotNumber}:</strong> ${shot.fansAffected} fans, avg boost ${shot.averageBoost.toFixed(1)}
+                        ${shot.disinterestedHit > 0 ? ` (${shot.disinterestedHit} disinterested)` : ''}
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
       </div>
     `;
   }

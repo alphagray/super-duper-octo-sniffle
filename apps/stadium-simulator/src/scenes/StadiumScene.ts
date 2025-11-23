@@ -7,6 +7,7 @@ import { Vendor } from '@/sprites/Vendor';
 import { Mascot } from '@/sprites/Mascot';
 import { VendorState } from '@/managers/interfaces';
 import { AnnouncerService } from '@/managers/AnnouncerService';
+import { DevPanel } from '@/ui/DevPanel';
 
 import { gameBalance } from '@/config/gameBalance';
 import { ActorRegistry } from '@/actors/ActorRegistry';
@@ -333,6 +334,14 @@ export class StadiumScene extends Phaser.Scene {
 
       mascot.on('cannonMissed', (data: any) => {
         console.log(`[Cannon] Shot missed - ${data.reason}`);
+      });
+
+      // Forward mascot analytics to DevPanel
+      mascot.on('mascotAnalytics', (data: { metrics: any, shotRecords: any }) => {
+        if (!import.meta.env.PROD) {
+          const devPanel = DevPanel.getInstance();
+          devPanel.updateMascotAnalytics(data.metrics, data.shotRecords);
+        }
       });
 
       console.log(`[Mascot] Created mascot ${index} for section ${section.getId()}`);

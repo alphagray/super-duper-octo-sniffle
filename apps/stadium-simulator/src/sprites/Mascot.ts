@@ -7,6 +7,7 @@ import { BaseActorSprite } from './helpers/BaseActor';
 import { MascotPerimeterPath } from './MascotPerimeterPath';
 import { MascotTargetingAI } from '@/systems/MascotTargetingAI';
 import { RipplePropagationEngine } from '@/systems/RipplePropagationEngine';
+import { MascotAnalytics } from '@/systems/MascotAnalytics';
 import { CatchParticles } from '@/components/CatchParticles';
 import { gameBalance } from '@/config/gameBalance';
 
@@ -48,6 +49,9 @@ export class Mascot extends BaseActorSprite {
   private shotCooldown: number = 0;
   private isCharging: boolean = false;
   private chargingStartTime: number = 0;
+
+  // Analytics tracking
+  private analytics: MascotAnalytics | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number,
         personality?: MascotPersonality,
@@ -238,6 +242,11 @@ export class Mascot extends BaseActorSprite {
     );
     this.targetingAI.reset();
 
+    // Initialize analytics
+    this.analytics = new MascotAnalytics(section.getId() || 'unknown');
+    this.analytics.recordBaseline(section);
+    this.analytics.recordActivation();
+
     // Position at starting point
     const pos = this.perimeterPath.getCurrentPosition();
     this.setPosition(pos.x, pos.y);
@@ -251,6 +260,19 @@ export class Mascot extends BaseActorSprite {
    * Deactivate mascot and start cooldown
    */
   private deactivate(): void {
+    // Record final participation metrics
+    if (this.analytics && this.assignedSection) {
+      this.analytics.recordPostMascotParticipation(this.assignedSection);
+
+      // Log report if reporting is enabled
+      if (gameBalance.mascotAnalytics?.reportingEnabled !== false) {
+        console.log(this.analytics.generateReport());
+      }
+
+      // Emit analytics event for external systems
+      this.emit('mascotAnalytics', this.analytics.getMetrics());
+    }
+
     this.isActive = false;
     this.perimeterPath = null;
 
@@ -270,6 +292,7 @@ export class Mascot extends BaseActorSprite {
     this.shotsRemaining = 0;
     this.isCharging = false;
 
+    this.analytics = null;
     this.setVisible(false);
     console.log(`[Mascot ${this.mascotId}] Deactivated, cooldown: ${this.movementCooldown}ms`);
   }
@@ -473,6 +496,12 @@ export class Mascot extends BaseActorSprite {
     // Apply combined ripple effects
     this.rippleEngine.applyCombinedRipples(combinedEffects);
 
+    // Record shot impact for analytics
+    if (this.analytics) {
+      const shotNumber = gameBalance.mascotCannon.maxShotsPerActivation - this.shotsRemaining + 1;
+      this.analytics.recordCannonShot(shotNumber, ripples);
+    }
+
     // Show catch particles
     // Re-engagement animations will trigger automatically when stats improve
     catchers.forEach(catcher => {
@@ -568,5 +597,12 @@ export class Mascot extends BaseActorSprite {
    */
   public __TEST_setCooldown(ms: number): void {
     this.movementCooldown = ms;
+  }
+
+  /**
+   * Get current analytics (useful for dev tools)
+   */
+  public getAnalytics(): MascotAnalytics | null {
+    return this.analytics;
   }
 }

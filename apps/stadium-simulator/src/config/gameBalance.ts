@@ -550,6 +550,17 @@ export const gameBalance = {
     // Performance
     maxSimultaneousParticleEmitters: 10,
   },
+
+  /**
+   * Mascot analytics configuration
+   * Controls tracking and reporting of mascot effectiveness and wave impact
+   */
+  mascotAnalytics: {
+    participationThreshold: 50, // % chance = "likely to participate"
+    reEngagementAttentionThreshold: 30, // attention threshold for re-engagement
+    reportingEnabled: true, // Toggle console reports
+    trackingWindowMs: 30000, // 30 seconds after mascot
+  },
 };
 
 export type GameBalance = typeof gameBalance;
