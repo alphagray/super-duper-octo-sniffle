@@ -658,6 +658,12 @@ export class StadiumScene extends Phaser.Scene {
           this.gameState.updateSectionStat(sectionData.id, 'attention', aggregate.attention);
         });
       }
+
+      // Check disinterested state for all fans (~500ms intervals)
+      // This uses time-based throttling to avoid checking every frame
+      this.sections.forEach(section => {
+        section.getFans().forEach(fan => fan.checkDisinterestedState());
+      });
     }
 
     // Update actor registry (for autonomous actor behaviors)

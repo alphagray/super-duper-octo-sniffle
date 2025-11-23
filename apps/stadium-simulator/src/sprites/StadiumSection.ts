@@ -161,6 +161,31 @@ export class StadiumSection extends Phaser.GameObjects.Container {
   }
 
   /**
+   * Get all disinterested fans in this section
+   * @returns Array of fans that are disinterested
+   */
+  public getDisinterestedFans(): Fan[] {
+    return this.getFans().filter(fan => fan.getIsDisinterested());
+  }
+
+  /**
+   * Get count of disinterested fans in this section
+   * @returns Number of disinterested fans
+   */
+  public getDisinterestedCount(): number {
+    return this.getDisinterestedFans().length;
+  }
+
+  /**
+   * Get percentage of disinterested fans in this section
+   * @returns Percentage of disinterested fans (0-100)
+   */
+  public getDisinterestedPercentage(): number {
+    const total = this.getFans().length;
+    return total > 0 ? (this.getDisinterestedCount() / total) * 100 : 0;
+  }
+
+  /**
    * @deprecated Use SectionActor.resetFanWaveState() instead.
    * Temporary delegation for backwards compatibility.
    */
