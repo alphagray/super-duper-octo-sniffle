@@ -485,6 +485,36 @@ export const gameBalance = {
   },
 
   /**
+   * Mascot T-Shirt Cannon configuration
+   * Controls targeting AI and firing mechanics for mascot t-shirt cannon
+   */
+  mascotCannon: {
+    // Shot timing and quantity
+    minShotsPerActivation: 3, // minimum shots during mascot activation
+    maxShotsPerActivation: 5, // maximum shots during mascot activation
+    minShotInterval: 3000, // minimum ms between shots
+    maxShotInterval: 5000, // maximum ms between shots
+
+    // Global boosts (applied to ALL fans in section on successful hit)
+    globalAttentionBoost: 5, // attention points added to all section fans
+    globalHappinessBoost: 3, // happiness points added to all section fans
+
+    // Targeting mechanics
+    minCatchersPerShot: 1, // minimum fans who catch per shot
+    maxCatchersPerShot: 3, // maximum fans who catch per shot (AOE cluster)
+    disinterestedTargetingWeight: 3.0, // multiplier for disinterested fan selection (3x more likely)
+    distanceWeight: 0.5, // weight for distance from mascot (farther = higher priority)
+
+    // Timing and animation
+    chargeDuration: 1500, // ms mascot pauses to charge before firing
+    targetingPreviewDuration: 1000, // ms targeting indicator shown before fire
+    projectileFlightTime: 1000, // ms delay before effects apply (projectile travel time)
+
+    // Performance
+    maxSimultaneousMascots: 5, // maximum mascots that can fire simultaneously
+  },
+
+  /**
    * Visual environment configuration
    */
   visual: {

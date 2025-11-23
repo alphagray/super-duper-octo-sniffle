@@ -2,8 +2,12 @@ import Phaser from 'phaser';
 import type { MascotPersonality, MascotAbility, AbilityEffect } from '@/types/personalities';
 import type { DialogueManager } from '@/systems/DialogueManager';
 import type { StadiumSection } from './StadiumSection';
+import type { Fan } from './Fan';
 import { BaseActorSprite } from './helpers/BaseActor';
 import { MascotPerimeterPath } from './MascotPerimeterPath';
+import { MascotTargetingAI } from '@/systems/MascotTargetingAI';
+import { RipplePropagationEngine } from '@/systems/RipplePropagationEngine';
+import { CatchParticles } from '@/components/CatchParticles';
 import { gameBalance } from '@/config/gameBalance';
 
 /**
@@ -37,6 +41,14 @@ export class Mascot extends BaseActorSprite {
   private movementCooldown: number = 0; // cooldown before can be activated again
   private autoRotationCooldown: number = 0; // cooldown before switching sections in auto mode
 
+  // T-Shirt Cannon system properties
+  private targetingAI!: MascotTargetingAI;
+  private rippleEngine!: RipplePropagationEngine;
+  private shotsRemaining: number = 0;
+  private shotCooldown: number = 0;
+  private isCharging: boolean = false;
+  private chargingStartTime: number = 0;
+
   constructor(scene: Phaser.Scene, x: number, y: number,
         personality?: MascotPersonality,
     dialogueManager?: DialogueManager
@@ -58,6 +70,10 @@ export class Mascot extends BaseActorSprite {
     if (this.personality) {
       this.applyVisualCustomization();
     }
+
+    // Initialize cannon systems
+    this.targetingAI = new MascotTargetingAI();
+    this.rippleEngine = new RipplePropagationEngine();
 
     // TODO: Add animation setup
   }
@@ -211,13 +227,24 @@ export class Mascot extends BaseActorSprite {
     this.activeDuration = this.maxDuration;
     this.movementSpeed = gameBalance.mascot.movementSpeed;
 
+    // Initialize cannon system
+    this.shotsRemaining = Phaser.Math.Between(
+      gameBalance.mascotCannon.minShotsPerActivation,
+      gameBalance.mascotCannon.maxShotsPerActivation
+    );
+    this.shotCooldown = Phaser.Math.Between(
+      gameBalance.mascotCannon.minShotInterval,
+      gameBalance.mascotCannon.maxShotInterval
+    );
+    this.targetingAI.reset();
+
     // Position at starting point
     const pos = this.perimeterPath.getCurrentPosition();
     this.setPosition(pos.x, pos.y);
     this.setFlipX(pos.facing === 'left');
     this.setVisible(true);
 
-    console.log(`[Mascot ${this.mascotId}] Activated in section ${section.getId()}, duration: ${this.maxDuration}ms, mode: ${mode}`);
+    console.log(`[Mascot ${this.mascotId}] Activated in section ${section.getId()}, duration: ${this.maxDuration}ms, shots: ${this.shotsRemaining}, mode: ${mode}`);
   }
 
   /**
@@ -238,6 +265,11 @@ export class Mascot extends BaseActorSprite {
       this.autoRotationCooldown = gameBalance.mascot.autoRotationSectionCooldown;
     }
 
+    // Reset cannon state
+    this.targetingAI.reset();
+    this.shotsRemaining = 0;
+    this.isCharging = false;
+
     this.setVisible(false);
     console.log(`[Mascot ${this.mascotId}] Deactivated, cooldown: ${this.movementCooldown}ms`);
   }
@@ -248,11 +280,14 @@ export class Mascot extends BaseActorSprite {
   private updateMovement(delta: number): void {
     if (!this.perimeterPath || !this.assignedSection) return;
 
-    // Update position along perimeter
-    this.perimeterPath.advance(delta, this.movementSpeed);
-    const pos = this.perimeterPath.getCurrentPosition();
-    this.setPosition(pos.x, pos.y);
-    this.setFlipX(pos.facing === 'left');
+    // Pause movement if charging cannon
+    if (!this.isCharging) {
+      // Update position along perimeter
+      this.perimeterPath.advance(delta, this.movementSpeed);
+      const pos = this.perimeterPath.getCurrentPosition();
+      this.setPosition(pos.x, pos.y);
+      this.setFlipX(pos.facing === 'left');
+    }
 
     // Update duration timer
     this.activeDuration -= delta;
@@ -333,6 +368,132 @@ export class Mascot extends BaseActorSprite {
     return this.isActive && this.perimeterPath !== null;
   }
 
+  /**
+   * Fire a single t-shirt cannon shot
+   * Pauses mascot movement during charge, selects targets, applies effects
+   */
+  private fireCannonShot(): void {
+    if (!this.assignedSection) {
+      console.warn(`[Mascot ${this.mascotId}] Cannot fire - no assigned section`);
+      return;
+    }
+
+    // Pause movement during charge
+    this.isCharging = true;
+    this.chargingStartTime = this.scene.time.now;
+
+    console.log(`[Mascot ${this.mascotId}] Charging cannon (${this.shotsRemaining} shots remaining)`);
+
+    // Select target fans
+    const catchers = this.targetingAI.selectCatchingFans(
+      this.assignedSection,
+      this
+    );
+
+    if (catchers.length === 0) {
+      // No valid targets - wasted shot
+      console.warn(`[Mascot ${this.mascotId}] No valid targets, shot wasted`);
+      this.isCharging = false;
+      this.emit('cannonMissed', { reason: 'no_targets', timestamp: this.scene.time.now });
+      return;
+    }
+
+    // Show targeting indicator (1 second before fire)
+    const targetingIndicator = (this.scene as any).targetingIndicator;
+    if (targetingIndicator) {
+      targetingIndicator.showTargetArea(
+        catchers,
+        gameBalance.mascotCannon.targetingPreviewDuration
+      );
+    }
+
+    this.emit('cannonCharging', {
+      catchers,
+      chargeStartTime: this.chargingStartTime,
+      mascotId: this.mascotId
+    });
+
+    // Wait for charge duration, then fire
+    this.scene.time.delayedCall(
+      gameBalance.mascotCannon.chargeDuration,
+      () => {
+        this.executeShot(catchers);
+        this.isCharging = false;
+      }
+    );
+  }
+
+  /**
+   * Execute the cannon shot after charge completes
+   * Launches projectile and schedules effect application
+   */
+  private executeShot(catchers: Fan[]): void {
+    console.log(`[Mascot ${this.mascotId}] Firing cannon at ${catchers.length} targets`);
+
+    this.emit('cannonFired', {
+      catchers,
+      timestamp: this.scene.time.now,
+      mascotId: this.mascotId
+    });
+
+    // Wait for projectile flight time, then apply effects
+    this.scene.time.delayedCall(
+      gameBalance.mascotCannon.projectileFlightTime,
+      () => {
+        this.applyCannonEffects(catchers);
+      }
+    );
+  }
+
+  /**
+   * Apply all cannon effects: global boost, ripples, visual feedback
+   * Only called on successful hits (catchers.length > 0)
+   */
+  private applyCannonEffects(catchers: Fan[]): void {
+    if (!this.assignedSection) return;
+
+    // Global boost to ALL fans in section (only on successful hit)
+    const allFans = this.assignedSection.getFans();
+    allFans.forEach(fan => {
+      const stats = fan.getStats();
+      fan.modifyStats({
+        attention: stats.attention + gameBalance.mascotCannon.globalAttentionBoost,
+        happiness: stats.happiness + gameBalance.mascotCannon.globalHappinessBoost
+      });
+    });
+
+    // Calculate ripples from each catcher
+    const ripples = catchers.map(catcher =>
+      this.rippleEngine.calculateRipple(catcher, this.assignedSection!)
+    );
+
+    // Combine overlapping ripples
+    const combinedEffects = this.rippleEngine.combineRipples(ripples);
+
+    // Apply combined ripple effects
+    this.rippleEngine.applyCombinedRipples(combinedEffects);
+
+    // Show catch particles
+    // Re-engagement animations will trigger automatically when stats improve
+    catchers.forEach(catcher => {
+      CatchParticles.create(this.scene, catcher.x, catcher.y);
+    });
+
+    console.log(
+      `[Mascot ${this.mascotId}] Shot complete! ` +
+      `${catchers.length} catchers, ${combinedEffects.size} fans affected by ripple`
+    );
+
+    this.emit('cannonShot', {
+      catchers,
+      ripples,
+      combinedEffects,
+      shotNumber: (gameBalance.mascotCannon.maxShotsPerActivation - this.shotsRemaining),
+      timestamp: this.scene.time.now,
+      mascotId: this.mascotId
+    });
+  }
+
   public activate(): void {
     // Legacy method - trigger special ability
     if (this.cooldown <= 0) {
@@ -369,6 +530,23 @@ export class Mascot extends BaseActorSprite {
     // Update perimeter movement
     if (this.isActive && this.perimeterPath) {
       this.updateMovement(delta);
+
+      // Update cannon shot cooldown
+      if (!this.isCharging) {
+        this.shotCooldown -= delta;
+      }
+
+      // Fire cannon if ready
+      if (this.shotCooldown <= 0 && this.shotsRemaining > 0 && !this.isCharging) {
+        this.fireCannonShot();
+        this.shotsRemaining--;
+
+        // Set next shot cooldown
+        this.shotCooldown = Phaser.Math.Between(
+          gameBalance.mascotCannon.minShotInterval,
+          gameBalance.mascotCannon.maxShotInterval
+        );
+      }
     }
   }
 

@@ -314,6 +314,27 @@ export class StadiumScene extends Phaser.Scene {
       const mascot = new Mascot(this, section.x, section.y);
       mascot.setVisible(false); // Start hidden
       this.mascots.push(mascot);
+
+      // Attach cannon event listeners for debugging
+      mascot.on('cannonCharging', (data: any) => {
+        console.log(`[Cannon] Mascot charging, targets: ${data.catchers.length}`);
+      });
+
+      mascot.on('cannonFired', (data: any) => {
+        console.log(`[Cannon] Mascot fired at ${data.catchers.length} fans`);
+      });
+
+      mascot.on('cannonShot', (data: any) => {
+        console.log(
+          `[Cannon] Shot complete! ${data.catchers.length} catchers, ` +
+          `${data.combinedEffects.size} fans affected by ripple`
+        );
+      });
+
+      mascot.on('cannonMissed', (data: any) => {
+        console.log(`[Cannon] Shot missed - ${data.reason}`);
+      });
+
       console.log(`[Mascot] Created mascot ${index} for section ${section.getId()}`);
     });
 
