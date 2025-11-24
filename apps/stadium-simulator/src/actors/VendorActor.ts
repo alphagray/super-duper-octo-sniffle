@@ -83,19 +83,46 @@ export class VendorActor extends AnimatedActor {
    * @param deltaTime Time elapsed since last update (ms)
    */
   public updateMovement(deltaTime: number): void {
-    // Base implementation - override in subclasses for custom movement
-    // or delegate to behavior layer
     const path = this.currentPath;
     if (!path || path.length === 0) return;
 
     const currentSegment = path[this.currentPathIndex];
-    if (!currentSegment) return;
+    if (!currentSegment) {
+      console.warn('[VendorActor] Current segment is null at index', this.currentPathIndex, 'path length:', path.length);
+      return;
+    }
 
-    // Update vendor sprite position
-    // (actual movement logic delegated to behavior or movement system)
-    this.position.x = currentSegment.x;
-    this.position.y = currentSegment.y;
-    this.vendor.setPosition(currentSegment.x, currentSegment.y);
+    // Move toward current waypoint
+    const targetX = currentSegment.x;
+    const targetY = currentSegment.y;
+    const dx = targetX - this.position.x;
+    const dy = targetY - this.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Movement speed: 2 cells per second = 64 pixels/sec (assuming 32px cells)
+    const speed = 64; // pixels per second
+    const moveDistance = (speed * deltaTime) / 1000;
+
+    if (distance <= moveDistance) {
+      // Reached current waypoint - snap to it and advance
+      this.position.x = targetX;
+      this.position.y = targetY;
+      this.vendor.setPosition(targetX, targetY);
+      
+      const wasLastSegment = this.currentPathIndex >= path.length - 1;
+      const advanced = this.advanceSegment();
+      
+      if (!advanced) {
+        // Reached the final waypoint
+        console.log('[VendorActor] Reached final waypoint at', this.currentPathIndex);
+      }
+    } else {
+      // Move toward waypoint
+      const ratio = moveDistance / distance;
+      this.position.x += dx * ratio;
+      this.position.y += dy * ratio;
+      this.vendor.setPosition(this.position.x, this.position.y);
+    }
   }
 
   /**

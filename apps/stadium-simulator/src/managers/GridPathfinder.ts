@@ -53,23 +53,33 @@ export class GridPathfinder extends BaseManager {
     const endGrid = this.gridManager.worldToGrid(toX, toY);
 
     if (!startGrid || !endGrid) {
-      // console.warn('[GridPathfinder] Invalid start or end position', { 
-      //   from: { x: fromX, y: fromY }, 
-      //   to: { x: toX, y: toY },
-      //   startGrid,
-      //   endGrid
-      // });
+      console.warn('[GridPathfinder] Invalid start or end position', { 
+        from: { x: fromX, y: fromY }, 
+        to: { x: toX, y: toY },
+        startGrid,
+        endGrid
+      });
       return [];
     }
 
-    // console.log(`[GridPathfinder] Path found with ${path.length} grid cells`);
+    console.log(`[GridPathfinder] Starting A* from (${startGrid.row},${startGrid.col}) to (${endGrid.row},${endGrid.col})`);
 
     // Run A* algorithm
     const path = this.astar(startGrid.row, startGrid.col, endGrid.row, endGrid.col);
 
     if (path.length === 0) {
-      // console.warn(`[GridPathfinder] No path found from (${startGrid.row},${startGrid.col}) to (${endGrid.row},${endGrid.col})`);
-      // console.warn(`[GridPathfinder] Start passable: ${this.isPassable(startGrid.row, startGrid.col)}, End passable: ${this.isPassable(endGrid.row, endGrid.col)}`);
+      console.warn(`[GridPathfinder] No path found from (${startGrid.row},${startGrid.col}) to (${endGrid.row},${endGrid.col})`);
+      console.warn(`[GridPathfinder] Start passable: ${this.isPassable(startGrid.row, startGrid.col)}, End passable: ${this.isPassable(endGrid.row, endGrid.col)}`);
+      
+      // Check a few cells along the way
+      console.warn('[GridPathfinder] Sampling cells between start and end:');
+      for (let i = 0; i <= 4; i++) {
+        const t = i / 4;
+        const sampleRow = Math.round(startGrid.row + (endGrid.row - startGrid.row) * t);
+        const sampleCol = Math.round(startGrid.col + (endGrid.col - startGrid.col) * t);
+        const cell = this.gridManager.getCell(sampleRow, sampleCol);
+        console.warn(`  (${sampleRow},${sampleCol}):`, cell?.zoneType, 'passable:', cell?.passable);
+      }
       
       // Emit pathCalculated event with failure
       this.emit('pathCalculated', {
@@ -84,7 +94,7 @@ export class GridPathfinder extends BaseManager {
       return [];
     }
 
-    // console.log(`[GridPathfinder] Path found with ${path.length} grid cells`);
+    console.log(`[GridPathfinder] Path found with ${path.length} grid cells`);
 
     // Convert grid path to GridPathCells with world coordinates
     const cells: GridPathCell[] = path.map((cell, index) => {
@@ -147,6 +157,7 @@ export class GridPathfinder extends BaseManager {
     // Typical path across full grid is ~56 cells, allow 5x that for safety
     const maxIterations = 2500;
     let iterations = 0;
+    let exploredCount = 0;
 
     while (openSet.size > 0 && iterations < maxIterations) {
       iterations++;
@@ -164,11 +175,13 @@ export class GridPathfinder extends BaseManager {
 
       if (current === endKey) {
         // Reconstruct path
+        console.log(`[GridPathfinder] Path found! Explored ${exploredCount} cells in ${iterations} iterations`);
         return this.reconstructPath(cameFrom, current);
       }
 
       openSet.delete(current);
       closedSet.add(current);
+      exploredCount++;
 
       const [currentRow, currentCol] = current.split(',').map(Number);
 
@@ -229,6 +242,9 @@ export class GridPathfinder extends BaseManager {
     // No path found
     if (iterations >= maxIterations) {
       console.warn(`[GridPathfinder] Max iterations reached! Start: (${startRow},${startCol}), End: (${endRow},${endCol})`);
+    } else {
+      console.warn(`[GridPathfinder] OpenSet exhausted after ${iterations} iterations, explored ${exploredCount} cells`);
+      console.warn(`[GridPathfinder] ClosedSet size: ${closedSet.size}, never reached end goal`);
     }
     return [];
   }

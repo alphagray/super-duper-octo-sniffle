@@ -51,7 +51,7 @@
       "colStart": 2,
       "colEnd": 9,
       "zoneType": "seat",
-      "passable": false
+      "passable": true
     },
     {
       "rowStart": 15,
@@ -59,7 +59,7 @@
       "colStart": 12,
       "colEnd": 19,
       "zoneType": "seat",
-      "passable": false
+      "passable": true
     },
     {
       "rowStart": 15,
@@ -67,7 +67,7 @@
       "colStart": 22,
       "colEnd": 29,
       "zoneType": "seat",
-      "passable": false
+      "passable": true
     },
     {
       "rowStart": 15,
@@ -75,7 +75,19 @@
       "colStart": 10,
       "colEnd": 11,
       "zoneType": "stair",
-      "passable": true
+      "passable": true,
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      }
     },
     {
       "rowStart": 15,
@@ -83,7 +95,19 @@
       "colStart": 20,
       "colEnd": 21,
       "zoneType": "stair",
-      "passable": true
+      "passable": true,
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      }
     },
     {
       "rowStart": 19,

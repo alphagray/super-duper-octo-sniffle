@@ -61,6 +61,8 @@ export class DrinkVendorBehavior implements AIActorBehavior {
       ...gameBalance.vendorTypes.drink,
       ...configOverrides,
     };
+    
+    console.log('[DrinkVendorBehavior] Created with pathfindingService:', !!this.pathfindingService);
   }
 
   /**
@@ -205,6 +207,8 @@ export class DrinkVendorBehavior implements AIActorBehavior {
    * Handle arrival at destination
    */
   public onArrival(): void {
+    console.log('[DrinkVendorBehavior] onArrival called, current state:', this.state);
+    
     if (this.state === 'recalling') {
       // Transition to patrol
       this.state = 'patrolling' as AIActorState;
@@ -259,10 +263,57 @@ export class DrinkVendorBehavior implements AIActorBehavior {
     this.scanTimer -= deltaTime;
     
     if (this.scanTimer <= 0) {
-      // Scan for thirsty fans
-      const target = this.selectTarget();
+      console.log('[DrinkVendorBehavior] === SCANNING FOR TARGETS ===');
+      console.log('[DrinkVendorBehavior] PathfindingService available:', !!this.pathfindingService);
+      console.log('[DrinkVendorBehavior] Current vendor position:', this.vendorActor.getPosition());
+      
+      // TEMPORARY: Hardcode test target - first fan in Section B, row 0, col 0
+      // This should be grid position (15, 12) based on stadium config
+      const TEST_MODE = true;
+      let target = null;
+      
+      if (TEST_MODE) {
+        console.log('[DrinkVendorBehavior] TEST MODE: Forcing target to Section B, row 1, col 2');
+        const sectionActors = this.aiManager.getSectionActors();
+        if (sectionActors.length > 1) {
+          const sectionB = sectionActors[1]; // Section B is index 1
+          const testFan = sectionB.getFanActorAt(1, 2); // Row 1, Col 2 in Section B
+          if (testFan) {
+            const gridPos = testFan.getGridPosition();
+            const worldPos = this.gridManager.gridToWorld(gridPos.row, gridPos.col);
+            target = {
+              fanActor: testFan,
+              fan: testFan.getFan(),
+              sectionIdx: 1,
+              rowIdx: gridPos.row,
+              colIdx: gridPos.col,
+              x: worldPos.x,
+              y: worldPos.y
+            };
+            console.log('[DrinkVendorBehavior] Test target created:', {
+              gridPos,
+              worldPos,
+              thirst: testFan.getThirst()
+            });
+          } else {
+            console.error('[DrinkVendorBehavior] Test fan not found at Section B (1,2)');
+          }
+        }
+      } else {
+        // Normal mode - scan for thirsty fans
+        target = this.selectTarget();
+        console.log('[DrinkVendorBehavior] selectTarget() returned:', target ? 'valid target' : 'null');
+      }
       
       if (target) {
+        console.log('[DrinkVendorBehavior] Target acquired:', {
+          section: target.sectionIdx,
+          gridRow: target.rowIdx,
+          gridCol: target.colIdx,
+          worldX: target.x.toFixed(1),
+          worldY: target.y.toFixed(1)
+        });
+        
         // Found a target - store direct reference to FanActor
         this.targetFanActor = target.fanActor;
         this.targetPosition = {
@@ -274,6 +325,11 @@ export class DrinkVendorBehavior implements AIActorBehavior {
         // Request pathfinding to target position
         if (this.pathfindingService) {
           const vendorPos = this.vendorActor.getPosition();
+          console.log('[DrinkVendorBehavior] Requesting path from', 
+            `(${vendorPos.x.toFixed(1)}, ${vendorPos.y.toFixed(1)})`,
+            'to',
+            `(${target.x.toFixed(1)}, ${target.y.toFixed(1)})`);
+          
           const path = this.pathfindingService.requestPath(
             vendorPos.x,
             vendorPos.y,
@@ -281,20 +337,39 @@ export class DrinkVendorBehavior implements AIActorBehavior {
             target.y
           );
           
+          console.log('[DrinkVendorBehavior] Path result:', path ? `${path.length} cells` : 'null/empty');
+          
           if (path && path.length > 0) {
+            console.log('[DrinkVendorBehavior] Path preview (first 5 cells):', 
+              path.slice(0, 5).map(c => `(${c.row},${c.col})`).join(' -> '));
+            
             this.vendorActor.setPath(path);
+            const vendorHasPath = this.vendorActor.hasPath();
+            console.log('[DrinkVendorBehavior] Vendor hasPath() after setPath:', vendorHasPath);
+            
             this.state = 'moving' as AIActorState;
-            console.log(`[DrinkVendorBehavior] Path found with ${path.length} cells to target at section ${target.sectionIdx}, row ${target.rowIdx}, col ${target.colIdx}`);
+            console.log(`[DrinkVendorBehavior] STATE TRANSITION: idle -> moving`);
           } else {
-            console.warn(`[DrinkVendorBehavior] No path found to target at (${target.rowIdx}, ${target.colIdx})`);
+            console.warn(`[DrinkVendorBehavior] ❌ No path found to target at grid (${target.rowIdx}, ${target.colIdx})`);
+            console.warn('[DrinkVendorBehavior] Checking grid passability:');
+            const vendorGrid = this.gridManager.worldToGrid(vendorPos.x, vendorPos.y);
+            const targetGrid = this.gridManager.worldToGrid(target.x, target.y);
+            if (vendorGrid) {
+              const vendorCell = this.gridManager.getCell(vendorGrid.row, vendorGrid.col);
+              console.warn('  Vendor cell:', vendorCell);
+            }
+            if (targetGrid) {
+              const targetCell = this.gridManager.getCell(targetGrid.row, targetGrid.col);
+              console.warn('  Target cell:', targetCell);
+            }
             this.scanTimer = 2000; // Retry in 2 seconds
           }
         } else {
-          console.warn('[DrinkVendorBehavior] No pathfinding service available');
+          console.error('[DrinkVendorBehavior] ❌ No pathfinding service available');
           this.state = 'moving' as AIActorState; // Fallback to moving state anyway
         }
       } else {
-        // No targets found - wait before next scan
+        console.log('[DrinkVendorBehavior] No targets found - waiting 2s before next scan');
         this.scanTimer = 2000; // 2 seconds
       }
     }

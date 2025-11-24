@@ -26,18 +26,30 @@ export class DrinkVendorActor extends VendorActor {
    * Update vendor actor - delegates to behavior
    */
   public update(delta: number): void {
+    const behaviorState = this.behavior.getState();
+    const hasPath = this.hasPath();
+    const pathLength = hasPath ? this.getPath().length : 0;
+    const pathIndex = hasPath ? this.getCurrentSegmentIndex() : -1;
+    
+    // Log state occasionally (every 60 frames ~= 1 second)
+    if (Math.random() < 0.017) {
+      console.log('[DrinkVendorActor] State:', behaviorState, '| hasPath:', hasPath, '| path:', pathLength, 'cells | index:', pathIndex);
+    }
+    
+    // Update behavior state machine first
+    this.behavior.tick(delta);
+    
     // Update movement (if path active)
     if (this.hasPath() && !this.isAtPathEnd()) {
       this.updateMovement(delta);
       
-      // Check if arrived at destination
+      // Check if we just reached the end after movement
       if (this.isAtPathEnd()) {
+        console.log('[DrinkVendorActor] ✓ Reached end of path, calling onArrival()');
         this.behavior.onArrival();
+        this.clearPath(); // Clear the completed path
       }
     }
-    
-    // Update behavior state machine
-    this.behavior.tick(delta);
   }
 
   /**

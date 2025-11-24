@@ -155,6 +155,8 @@ export class SectionActor extends SceneryActor {
             'fan',
             false
           );
+          // Set the FanActor's grid position to absolute grid coordinates
+          fanActor.setGridPosition(fd.gridRow, fd.gridCol, this.gridManager);
           seat.setFan(fan);
           this.fans.set(`${fd.row}-${fd.col}`, fan);
           this.fanActors.set(`${fd.row}-${fd.col}`, fanActor);
