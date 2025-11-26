@@ -179,6 +179,14 @@ export class MascotActor extends AnimatedActor {
     if (this.active && Date.now() >= this.activationEndAt) {
       this.deactivate();
     }
+
+    // Update depth continuously based on current world position if available
+    if (this.gridManager) {
+      const depth = this.gridManager.getDepthForWorld(this.sprite.x, this.sprite.y);
+      if (typeof depth === 'number') {
+        this.sprite.setDepth(depth);
+      }
+    }
   }
 
   /** Draw/refresh visuals based on behavior state */

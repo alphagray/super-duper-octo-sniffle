@@ -167,6 +167,59 @@ export class GridManager extends BaseManager {
     return this.getCell(coords.row, coords.col);
   }
 
+  /**
+   * Get render depth for an animated actor at a grid position.
+   * Applies per-row penalty above ground and clamps to [animatedActorMin, animatedActorMax].
+   */
+  public getDepthForPosition(row: number, col: number): number {
+    // Determine rows above ground plane using configured ground line
+    const rowsFromBottom = gameBalance.grid.groundLine.rowsFromBottom ?? 0;
+    const groundRow = this.rows - 1 - rowsFromBottom;
+    const rowsAboveGround = Math.max(0, row - groundRow);
+
+    const base = gameBalance.ui.depths.animatedActorBase;
+    const penalty = gameBalance.ui.depths.animatedActorRowPenalty * rowsAboveGround;
+    const min = gameBalance.ui.depths.animatedActorMin;
+    const max = gameBalance.ui.depths.animatedActorMax;
+    const raw = base - penalty;
+    return Math.max(min, Math.min(max, raw));
+  }
+
+  /**
+   * Compute actor render depth using world position with intra-cell interpolation.
+   * Above the cell center (toward sky) is "further back" (lower depth) within the row band.
+   */
+  public getDepthForWorld(x: number, y: number): number {
+    // Determine grid cell and center
+    const coords = this.worldToGrid(x, y);
+    if (!coords) {
+      // Fallback to mid-depth if outside grid
+      return gameBalance.ui.depths.animatedActorBase;
+    }
+    const cellCenter = this.gridToWorld(coords.row, coords.col);
+
+    // Base depth from row band
+    let depth = this.getDepthForPosition(coords.row, coords.col);
+
+    // Intra-cell interpolation within band width
+    const bandWidth = gameBalance.ui.depths.animatedActorRowPenalty; // typically 10
+    const intraRange = Math.max(0, bandWidth - 2); // leave 1-2 units buffer to avoid crossing bands
+    const halfCell = this.cellSize / 2;
+
+    // Positive fraction when above center (y smaller), negative when below center
+    const fraction = (cellCenter.y - y) / halfCell; // range approx [-1, 1]
+    const clampedFraction = Math.max(-1, Math.min(1, fraction));
+
+    // Adjust depth: above center → reduce depth (further back), below center → increase depth (closer)
+    const intraAdjustment = (intraRange / 2) * clampedFraction;
+    depth = depth - intraAdjustment;
+
+    // Final clamp to [min, max]
+    const min = gameBalance.ui.depths.animatedActorMin;
+    const max = gameBalance.ui.depths.animatedActorMax;
+    return Math.max(min, Math.min(max, depth));
+  }
+
   public setCellPassable(row: number, col: number, passable: boolean): void {
     const cell = this.getCell(row, col);
     if (!cell) return;

@@ -13,6 +13,7 @@ import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
 export class VendorActor extends AnimatedActor {
   protected vendor: Vendor;
   protected position: { x: number; y: number };
+  protected gridManager?: GridManager;
 
   constructor(
     id: string,
@@ -33,12 +34,19 @@ export class VendorActor extends AnimatedActor {
     
     this.position = { x, y };
 
+    // Store grid manager reference
+    this.gridManager = gridManager;
     // Derive grid position from current world position for accurate path queries
-    if (gridManager) {
-      const gridPos = gridManager.worldToGrid(x, y);
+    if (this.gridManager) {
+      const gridPos = this.gridManager.worldToGrid(x, y);
       if (gridPos) {
         this.gridRow = gridPos.row;
         this.gridCol = gridPos.col;
+      }
+      // Initialize depth based on world position
+      const depth = this.gridManager.getDepthForWorld(x, y);
+      if (typeof depth === 'number') {
+        this.vendor.setDepth(depth);
       }
     }
     this.logger.debug(`VendorActor created at world (${x}, ${y}) grid (${this.gridRow}, ${this.gridCol})`);
@@ -127,6 +135,7 @@ export class VendorActor extends AnimatedActor {
       this.position.x = targetX;
       this.position.y = targetY;
       this.vendor.setPosition(targetX, targetY);
+      this.updateDepthForPosition(targetX, targetY);
       
       const wasLastSegment = this.currentPathIndex >= path.length - 1;
       const advanced = this.advanceSegment();
@@ -141,6 +150,7 @@ export class VendorActor extends AnimatedActor {
       this.position.x += dx * ratio;
       this.position.y += dy * ratio;
       this.vendor.setPosition(this.position.x, this.position.y);
+      this.updateDepthForPosition(this.position.x, this.position.y);
     }
   }
 
@@ -189,6 +199,17 @@ export class VendorActor extends AnimatedActor {
   public draw(): void {
     // Vendor sprite handles its own rendering
     // Could add visual state updates here if needed
+  }
+
+  /**
+   * Update vendor sprite depth based on current world position using GridManager.
+   */
+  private updateDepthForPosition(x: number, y: number): void {
+    if (!this.gridManager) return;
+    const depth = this.gridManager.getDepthForWorld(x, y);
+    if (typeof depth === 'number') {
+      this.vendor.setDepth(depth);
+    }
   }
 
   /**

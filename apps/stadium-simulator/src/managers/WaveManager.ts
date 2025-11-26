@@ -812,6 +812,8 @@ export class WaveManager {
     this.waveCalculationResults = [];
     this.consecutiveFailedColumns = 0;
     this.waveSputter = { active: false, columnsRemaining: 0 };
+    this.waveResults = []; // Clear results from previous wave
+    this.columnStateRecords = []; // Clear column records from previous wave
     this.emit('waveStart', {});
     this.emit('waveStrengthChanged', { strength: this.currentWaveStrength });
   }
@@ -1006,6 +1008,11 @@ export class WaveManager {
     const avgParticipation = sectionColumns.length > 0 ? totalParticipation / sectionColumns.length : 0;
     console.log(`[WaveManager] Section ${sectionId} complete: ${sectionState} (S:${successCount} SP:${sputterCount} D:${deathCount}, avg ${Math.round(avgParticipation*100)}%)`);
     
+    // Query SectionActor for aggregate stats
+    const sectionActor = this.actorRegistry?.query({ category: 'section' as any })
+      .find((a: any) => a.getSectionId && a.getSectionId() === sectionId) as any;
+    const aggregateStats = sectionActor?.getAggregateStats?.() || { happiness: 50, thirst: 50, attention: 50 };
+    
     // Trigger section visual effects based on result
     this.emit('sectionComplete', {
       sectionId,
@@ -1013,7 +1020,8 @@ export class WaveManager {
       avgParticipation,
       successCount,
       sputterCount,
-      deathCount
+      deathCount,
+      aggregateStats
     });
     
     // Update wave strength based on section result
@@ -1047,6 +1055,23 @@ export class WaveManager {
    */
   private handleWaveComplete(): void {
     console.log('[WaveManager] handleWaveComplete');
+    
+    // Handle final section (sprite never exits the last section, so we need to emit here)
+    // The final section is the last one in gridColumnSequence (accounting for wave direction)
+    if (this.gridColumnSequence.length > 0) {
+      const finalColumn = this.gridColumnSequence[this.gridColumnSequence.length - 1];
+      const finalSectionActor = finalColumn.sectionActor;
+      const finalSectionId = finalSectionActor?.getSectionId();
+      
+      if (finalSectionId) {
+        // Check if we already handled this section via exit event
+        const alreadyHandled = this.waveResults.some(r => r.section === finalSectionId);
+        if (!alreadyHandled) {
+          console.log(`[WaveManager] handleWaveComplete: Processing final section ${finalSectionId}`);
+          this.handleSpriteExitsSection(finalSectionId);
+        }
+      }
+    }
     
     // Determine if wave was successful (no deaths)
     const waveSuccess = !this.waveResults.some(r => !r.success);

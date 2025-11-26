@@ -9,18 +9,19 @@ export const gameBalance = {
    */
   fanStats: {
     // Initial stat ranges
+
     initialHappiness: 70,
     initialThirstMin: 0,
     initialThirstMax: 30,
     initialAttention: 70,
 
     // Thirst two-phase system
-    thirstRollChance: 0.33, // Phase 1: Chance per second to START getting thirsty (0-1)
+    thirstRollChance: 0.01, // Phase 1: Chance per second to START getting thirsty (0-1)
     thirstActivationAmount: 15, // Phase 1: Big jump when roll succeeds (pushes over threshold)
     thirstThreshold: 50, // Threshold for state transition (Phase 1 → Phase 2)
     thirstDecayRate: 2, // Phase 2: Linear pts/sec after threshold
     unhappyHappinessThreshold: 30, // When happiness drops below this, fan becomes unhappy
-    happinessDecayRate: 1.25, // when thirst > 50
+    happinessDecayRate: 1.0, // when thirst > 50
     attentionDecayRate: 1.5,
     attentionMinimum: 30,
 
@@ -160,8 +161,8 @@ export const gameBalance = {
    * Wave timing configuration (all in milliseconds, converted to seconds where needed)
    */
   waveTiming: {
-    triggerCountdown: 10000, // 10 seconds before wave fires
-    baseCooldown: 10000, // 10 seconds between waves
+    triggerCountdown: 5000, // 10 seconds before wave fires
+    baseCooldown: 15000, // 10 seconds between waves
     successRefund: 5000, // refund this much if all sections succeed
     columnDelay: 44, // ms between column animations
     rowDelay: 6, // ms between row animations within column
@@ -242,6 +243,22 @@ export const gameBalance = {
     // Countdown display
     countdownFontSize: 120,
     waveCountdownFontSize: 48,
+    // Depth layering constants
+    depths: {
+      sky: 0,
+      ground: 1,
+      uiOverlayDefault: 75,
+      uiOverlayMin: 50,
+      uiOverlayMax: 99,
+      scenery: 100,
+      animatedActorBase: 150,
+      animatedActorMin: 101,
+      animatedActorMax: 200,
+      animatedActorRowPenalty: 10,
+    },
+    waveCelebration: {
+      yOffset: -67, // vertical offset for overlay above section top
+    },
   },
 
   /**

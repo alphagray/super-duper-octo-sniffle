@@ -26,6 +26,7 @@ import { GridOverlay } from '@/scenes/GridOverlay';
 import { PathfindingService } from '@/services/PathfindingService';
 import { TargetingIndicator } from '@/components/TargetingIndicator';
 import { TargetingReticle } from '@/ui/TargetingReticle';
+import { OverlayManager } from '@/managers/OverlayManager';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -66,6 +67,7 @@ export class StadiumScene extends Phaser.Scene {
   private pathfindingService?: PathfindingService;
   private targetingReticle?: TargetingReticle;
   private vendorTargetingActive: number | null = null; // Vendor ID currently being targeted
+  private overlayManager?: OverlayManager;
 
   constructor() {
     super({ key: 'StadiumScene' });
@@ -251,6 +253,19 @@ export class StadiumScene extends Phaser.Scene {
     this.successStreak = 0;
 
     this.announcer = new AnnouncerService();
+      // Initialize OverlayManager (UI overlays between ground and scenery)
+      this.overlayManager = new OverlayManager(this);
+      // Hook real section world positions (use sprite positions for now)
+      this.overlayManager.setSectionPositionResolver((sectionId: string) => {
+        const idx = this.getSectionIndex(sectionId);
+        const section = this.sections[idx];
+        const cfgHeight = 200; // matches sectionConfig.height
+        const x = section?.x ?? this.cameras.main.centerX;
+        // Use config offset for overlay Y
+        const yOffset = gameBalance.ui.waveCelebration?.yOffset ?? -32;
+        const y = (section?.y ?? this.cameras.main.centerY) - cfgHeight / 2 + yOffset;
+        return { x, y };
+      });
     this.announcer.getCommentary(JSON.stringify({ event: 'waveStart' }))
       .then(result => console.log('[AnnouncerService test] result:', result))
       .catch(err => console.error('[AnnouncerService test] error', err));
@@ -645,7 +660,15 @@ export class StadiumScene extends Phaser.Scene {
     });
 
     // Section completion event - trigger visual effects
-    this.waveManager.on('sectionComplete', (data: { sectionId: string; state: 'success' | 'sputter' | 'death'; avgParticipation: number }) => {
+    this.waveManager.on('sectionComplete', (data: { 
+      sectionId: string; 
+      state: 'success' | 'sputter' | 'death'; 
+      avgParticipation: number; 
+      successCount: number; 
+      sputterCount: number; 
+      deathCount: number;
+      aggregateStats: { happiness: number; thirst: number; attention: number };
+    }) => {
       const sectionIndex = this.getSectionIndex(data.sectionId);
       const section = this.sections[sectionIndex];
       
@@ -665,6 +688,59 @@ export class StadiumScene extends Phaser.Scene {
         section.playAnimation('flash-fail');
       }
       // No animation for sputter - it's just a weak success
+
+      // Create celebration overlay above section using OverlayManager
+      if (this.overlayManager) {
+        // Defensive: ensure participation is a valid number
+        let participation = Number(data.avgParticipation);
+        if (isNaN(participation) || participation == null) participation = 0;
+        participation = Math.round(participation * 100);
+        
+        // Generate stat-based reasons from aggregate fan stats
+        const reasons: string[] = [];
+        const stats = data.aggregateStats;
+        
+        // Success reasons (positive contributors)
+        if (data.state === 'success') {
+          if (stats.happiness > 70) reasons.push('+ high spirits');
+          if (stats.attention > 70) reasons.push('+ focused crowd');
+          if (stats.thirst < 30) reasons.push('+ well hydrated');
+        }
+        
+        // Sputter reasons (mixed performance)
+        if (data.state === 'sputter') {
+          if (stats.attention < 50) reasons.push('- distracted');
+          if (stats.happiness < 50) reasons.push('- lukewarm mood');
+          if (stats.thirst > 60) reasons.push('- getting thirsty');
+        }
+        
+        // Failure reasons (negative contributors)
+        if (data.state === 'death') {
+          if (stats.attention < 40) reasons.push('- lost interest');
+          if (stats.happiness < 40) reasons.push('- unhappy fans');
+          if (stats.thirst > 70) reasons.push('- very thirsty');
+        }
+        
+        // Fallback: if no specific reasons, show column breakdown
+        if (reasons.length === 0) {
+          const totalColumns = data.successCount + data.sputterCount + data.deathCount;
+          if (data.successCount > 0 && totalColumns > 0) {
+            const successPercent = Math.round((data.successCount / totalColumns) * 100);
+            reasons.push(`+ ${successPercent}% strong`);
+          }
+          if (data.sputterCount > 0 && totalColumns > 0) {
+            const sputterPercent = Math.round((data.sputterCount / totalColumns) * 100);
+            reasons.push(`- ${sputterPercent}% weak`);
+          }
+        }
+        
+        this.overlayManager.createWaveCelebration({
+          sectionId: data.sectionId,
+          participation,
+          state: data.state === 'success' ? 'success' : data.state === 'death' ? 'fail' : 'neutral',
+          reasons,
+        });
+      }
     });
 
     this.waveManager.on('waveComplete', (data: { results: any[] }) => {
@@ -783,6 +859,11 @@ export class StadiumScene extends Phaser.Scene {
 
     // Tick wave sprite movement and events (sprite-driven propagation)
     this.waveManager.update(delta);
+
+    // Update overlay manager (clean up finished overlays)
+    if (this.overlayManager) {
+      this.overlayManager.update(delta);
+    }
 
     // Check for autonomous wave triggering (only when session is active)
     if (gameBalance.waveAutonomous.enabled && 

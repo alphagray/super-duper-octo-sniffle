@@ -20,6 +20,7 @@ export type FanState = 'happy' | 'engaged' | 'disengaged' | 'waving' | 'thirsty'
  */
 export class FanActor extends AnimatedActor {
   private fan: Fan;
+  private gridManager?: import('@/managers/GridManager').GridManager;
 
   // Fan-level stats (game logic)
   private happiness: number;
@@ -46,10 +47,12 @@ export class FanActor extends AnimatedActor {
     fan: Fan,
     initialStats?: { happiness: number; thirst: number; attention: number },
     category: ActorCategory = 'fan',
-    enableLogging = false
+    enableLogging = false,
+    gridManager?: import('@/managers/GridManager').GridManager
   ) {
     super(id, 'fan', category, 0, 0, enableLogging);
     this.fan = fan;
+    this.gridManager = gridManager;
 
     // Initialize stats
     if (initialStats) {
@@ -65,6 +68,17 @@ export class FanActor extends AnimatedActor {
     }
 
     this.logger.debug('FanActor created with game state');
+
+    // Initialize depth based on current position if gridManager provided
+    if (this.gridManager) {
+      const depth = this.gridManager.getDepthForWorld(this.fan.x, this.fan.y);
+      if (typeof depth === 'number') {
+        this.fan.setDepth(depth);
+      }
+    }
+    
+    // Initialize visual intensity based on initial thirst
+    this.fan.setIntensity(this.thirst / 100);
   }
 
   // === Stat Accessors ===
@@ -135,7 +149,8 @@ export class FanActor extends AnimatedActor {
    * Update fan stats over time
    */
   public updateStats(deltaTime: number, scene: Phaser.Scene, environmentalModifier: number = 1.0): void {
-    const deltaSeconds = deltaTime / 1000;
+    // Use deltaTime (ms) for decay
+    const frameSeconds = deltaTime / 1000;
 
     // Attention freeze logic
     if (this.attentionFreezeUntil && scene.time.now < this.attentionFreezeUntil) {
@@ -143,7 +158,7 @@ export class FanActor extends AnimatedActor {
     } else {
       this.attention = Math.max(
         gameBalance.fanStats.attentionMinimum,
-        this.attention - deltaSeconds * gameBalance.fanStats.attentionDecayRate
+        this.attention - frameSeconds * gameBalance.fanStats.attentionDecayRate
       );
     }
 
@@ -156,7 +171,7 @@ export class FanActor extends AnimatedActor {
       // Phase 2 (above threshold): Linear decay after getting thirsty
       if (this.thirst < gameBalance.fanStats.thirstThreshold) {
         // Phase 1: Roll to start getting thirsty
-        const rollChance = gameBalance.fanStats.thirstRollChance * environmentalModifier * deltaSeconds;
+        const rollChance = gameBalance.fanStats.thirstRollChance * environmentalModifier * frameSeconds;
         if (Math.random() < rollChance) {
           // Activation amount pushes fan over threshold
           const thirstAmount = gameBalance.fanStats.thirstActivationAmount * environmentalModifier;
@@ -164,24 +179,24 @@ export class FanActor extends AnimatedActor {
         }
       } else {
         // Phase 2: Linear decay after threshold
-        const decayRate = gameBalance.fanStats.thirstDecayRate * environmentalModifier * deltaSeconds;
+        const decayRate = gameBalance.fanStats.thirstDecayRate * environmentalModifier * frameSeconds;
         this.thirst = Math.min(100, this.thirst + decayRate);
       }
     }
 
     // Thirsty fans get less happy
     if (this.thirst > 50) {
-      this.happiness = Math.max(0, this.happiness - deltaSeconds * gameBalance.fanStats.happinessDecayRate);
+      this.happiness = Math.max(0, this.happiness - frameSeconds * gameBalance.fanStats.happinessDecayRate);
     }
 
     // Disappointment accumulation (future grump-only feature)
     if (this.thirst > 50 && this.happiness < gameBalance.grumpConfig.unhappyThreshold) {
       this.disappointment = Math.min(
         100,
-        this.disappointment + deltaSeconds * gameBalance.grumpConfig.disappointmentGrowthRate
+        this.disappointment + frameSeconds * gameBalance.grumpConfig.disappointmentGrowthRate
       );
     } else {
-      this.disappointment = Math.max(0, this.disappointment - deltaSeconds * 0.5);
+      this.disappointment = Math.max(0, this.disappointment - frameSeconds * 0.5);
     }
 
     // Visual updates deferred to update() state machine
@@ -396,6 +411,14 @@ export class FanActor extends AnimatedActor {
     const newState = this.deriveStateFromStats();
     if (newState !== this.state) {
       this.transitionToState(newState);
+    }
+
+    // Continuous depth update based on current world position
+    if (this.gridManager) {
+      const depth = this.gridManager.getDepthForWorld(this.fan.x, this.fan.y);
+      if (typeof depth === 'number') {
+        this.fan.setDepth(depth);
+      }
     }
   }
 
