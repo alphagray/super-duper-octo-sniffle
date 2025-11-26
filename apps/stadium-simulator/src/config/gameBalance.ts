@@ -14,8 +14,12 @@ export const gameBalance = {
     initialThirstMax: 30,
     initialAttention: 70,
 
-    // Decay rates (points per second)
-    thirstGrowthRate: 2,
+    // Thirst two-phase system
+    thirstRollChance: 0.33, // Phase 1: Chance per second to START getting thirsty (0-1)
+    thirstActivationAmount: 15, // Phase 1: Big jump when roll succeeds (pushes over threshold)
+    thirstThreshold: 50, // Threshold for state transition (Phase 1 → Phase 2)
+    thirstDecayRate: 2, // Phase 2: Linear pts/sec after threshold
+    unhappyHappinessThreshold: 30, // When happiness drops below this, fan becomes unhappy
     happinessDecayRate: 1.25, // when thirst > 50
     attentionDecayRate: 1.5,
     attentionMinimum: 30,
@@ -386,6 +390,16 @@ export const gameBalance = {
   },
 
   /**
+   * Vendor assignment (player-driven targeting)
+   */
+  vendorAssignment: {
+    cooldownMs: 5000, // 5s cooldown after assignment
+    idleTimeoutMs: 5000, // 5s without target → patrol mode
+    patrolIntervalMs: 3000, // 3s between patrol waypoint selections
+    patrolRangeColumns: 5, // ±5 columns from current position for patrol
+  },
+
+  /**
    * Grump/difficult terrain configuration
    * Foundation for future grump fan type
    */
@@ -527,6 +541,7 @@ export const gameBalance = {
     maxRadius: 4, // maximum Manhattan distance for ripple spread
     disinterestedBonus: 5, // extra attention boost for disinterested fans
     decayType: 'linear' as const, // decay function: 'linear' | 'exponential'
+    expDecayBase: 0.6, // exponential base per Manhattan ring when decayType = 'exponential'
   },
 
   /**
@@ -605,6 +620,52 @@ export const gameBalance = {
     reEngagementAttentionThreshold: 30, // attention threshold for re-engagement
     reportingEnabled: true, // Toggle console reports
     trackingWindowMs: 30000, // 30 seconds after mascot
+  },
+  /**
+   * Mascot behavior (Actor + Behavior layer) configuration
+   * New system governing targeting cycles, ability effect magnitudes, scan cadence.
+   */
+  mascotBehavior: {
+    targetingCycle: ['section', 'global', 'cluster'] as const, // deterministic rotation order
+    abilityBaseIntervalMs: 8000, // interval between ability activations (8s)
+    // Per-phase base stat boosts (non-ultimate)
+    abilityEffects: {
+      section: { attention: 6, happiness: 3 }, // applied to one section
+      global: { attention: 3, happiness: 1 }, // applied stadium-wide
+      cluster: { attention: 8, happiness: 4 }, // applied only to low-attention cluster
+      ultimateMultiplier: 1.5, // multiply above boosts when firing during ultimate
+    },
+    // Cluster selection parameters
+    cluster: {
+      lowAttentionThreshold: 45, // fans below this considered for cluster targeting
+      scanRadius: 4, // manhattan radius for forming cluster
+      minClusterSize: 5, // minimum fans to qualify cluster
+      scanIntervalMs: 1500, // ms between cluster scans when in cluster phase
+    },
+    // Section targeting strategy
+    sectionSelection: {
+      mode: 'lowestAttention', // choose section with lowest avg attention
+      tieBreak: 'rotate', // rotate on ties for fairness
+    },
+    // Global effect scaling
+    globalScaling: {
+      participationWeight: 0.4, // future use: scale happiness by participation delta
+    },
+    // Behavior internal timing
+    stateTickIntervalMs: 250, // coarse tick interval for non-frame-critical logic
+  },
+  /**
+   * Mascot ultimate cadence & momentum configuration (hybrid scheduling)
+   * NOTE: baseCooldownMs has been halved per user instruction; minFloorMs retained (potential conflict).
+   */
+  mascotUltimate: {
+    baseCooldownMs: 45000, // base starting cooldown (user-adjusted)
+    maxIntervalMs: 60000, // forced trigger if exceeded (user-adjusted)
+    momentumStepPercent: 0.10, // reduction per consecutive wave success
+    momentumMaxPercent: 0.40, // cap on total reduction
+    attentionTriggerThreshold: 45, // fire early if avg attention below this
+    minFloorMs: 30000, // minimum effective cooldown floor (adjusted per Option A)
+    diminishingReturnFactor: 0.25, // reduce future momentum effectiveness by 25% after an ultimate
   },
 };
 

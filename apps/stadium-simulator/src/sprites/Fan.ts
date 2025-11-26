@@ -47,12 +47,6 @@ export class Fan extends BaseActorContainer {
 
     // Choose top color between pale yellow and medium brown
     const topColor = Fan.randomTopColor();
-    this.topOriginalColor = topColor;
-
-    // Pre-calculate disinterested color for performance
-    const tintColor = gameBalance.fanDisengagement.visualTint;
-    const mixRatio = gameBalance.fanDisengagement.tintMixRatio;
-    this.topDisinterestedColor = Fan.mixColors(topColor, tintColor, mixRatio);
 
     // We'll position children so that the local origin (0,0) is at the bottom-most
     // point of the bottom rectangle. This makes container rotation pivot at that point.
@@ -89,9 +83,7 @@ export class Fan extends BaseActorContainer {
 
     // Jiggle when t > 0 (handled by intermittent timers that trigger short tweens)
     // Only update baseIntensity if not currently disinterested (to preserve saved state)
-    if (!this.isDisinterested) {
-      this.baseIntensity = t;
-    }
+    this.baseIntensity = t;
     if (t > 0) {
       this.startJiggleTimer();
     } else {

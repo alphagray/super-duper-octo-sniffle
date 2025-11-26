@@ -75,6 +75,7 @@
       "colStart": 10,
       "colEnd": 11,
       "zoneType": "stair",
+      "transitionType": "rowBoundary",
       "passable": true,
       "allowedIncoming": {
         "top": true,
@@ -95,6 +96,7 @@
       "colStart": 20,
       "colEnd": 21,
       "zoneType": "stair",
+      "transitionType": "rowBoundary",
       "passable": true,
       "allowedIncoming": {
         "top": true,

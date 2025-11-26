@@ -590,10 +590,10 @@ export class GridManager extends BaseManager {
         };
       
       case 'stair':
-        // Stairs allow vertical movement only (north/south)
+        // Stairs allow both vertical and horizontal ties into seats/corridors
         return {
-          incoming: { top: true, right: false, bottom: true, left: false },
-          outgoing: { top: true, right: false, bottom: true, left: false },
+          incoming: { top: true, right: true, bottom: true, left: true },
+          outgoing: { top: true, right: true, bottom: true, left: true },
         };
       
       case 'ground':
@@ -761,6 +761,11 @@ export class GridManager extends BaseManager {
 
     // Sky never accessible
     if (toZone === 'sky') return false;
+
+    // Seat <-> stair always allowed (handles horizontal transitions at landings)
+    if ((fromZone === 'seat' && toZone === 'stair') || (fromZone === 'stair' && toZone === 'seat')) {
+      return true;
+    }
 
     // Seat <-> corridor/ground must go via rowEntry boundary
     if ((fromZone === 'seat' && (toZone === 'corridor' || toZone === 'ground')) ||

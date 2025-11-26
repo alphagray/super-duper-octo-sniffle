@@ -7,8 +7,10 @@
  * AI actor state machine states
  */
 export enum AIActorState {
-  /** Vendor is inactive, waiting for assignment */
+  /** Vendor is inactive, waiting for player assignment */
   Idle = 'idle',
+  /** Vendor is awaiting player targeting (initial state) */
+  AwaitingAssignment = 'awaitingAssignment',
   /** Vendor is selecting a target seat/fan */
   Assigning = 'assigning',
   /** Vendor is moving along a path */

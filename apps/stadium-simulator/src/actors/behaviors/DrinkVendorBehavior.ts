@@ -25,19 +25,21 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   private config: typeof gameBalance.vendorTypes.drink;
   
   // State machine
-  private state: AIActorState = 'idle' as AIActorState;
+  private state: AIActorState = 'awaitingAssignment' as AIActorState;
   
   // Target tracking (direct actor reference)
   private targetFanActor: any | null = null; // FanActor
   private targetPosition: { row: number; col: number; sectionIdx: number } | null = null;
   
-  // Assignment tracking (legacy, for section assignment)
+  // Assignment tracking (player-driven)
   private assignedSectionIdx: number | null = null;
   private retryCount: number = 0;
   
-  // Service timing
+  // Timing
   private serviceTimer: number = 0;
   private scanTimer: number = 0;
+  private idleTimer: number = 0; // Track time without target (triggers patrol)
+  private cooldownTimer: number = 0; // Post-assignment cooldown
   
   // Patrol tracking
   private patrolTimer: number = 0;
@@ -66,14 +68,88 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   }
 
   /**
-   * Request assignment to target cell
+   * Request assignment (legacy interface method, use assignToSection instead)
+   * @deprecated Use assignToSection for player-driven flow
    */
   public requestAssignment(targetCell: { row: number; col: number }): void {
-    this.state = 'assigning' as AIActorState;
-    this.retryCount = 0;
+    console.log(`[DrinkVendorBehavior] requestAssignment called (deprecated), ignoring`);
+  }
+  
+  /**
+   * Assign vendor to specific section (player-driven)
+   * Vendor will scan only this section for targets
+   */
+  public assignToSection(sectionIdx: number): void {
+    this.assignedSectionIdx = sectionIdx;
+    this.state = 'idle' as AIActorState;
+    this.scanTimer = 0; // Scan immediately
+    this.idleTimer = 0; // Reset idle timeout
+    this.cooldownTimer = gameBalance.vendorAssignment.cooldownMs;
     
-    // TODO: Implement seat selection and cluster logic
-    console.log(`[DrinkVendorBehavior] Assignment requested to (${targetCell.row},${targetCell.col})`);
+    console.log(`[DrinkVendorBehavior] Assigned to section ${sectionIdx}`);
+  }
+  
+  /**
+   * Cancel current assignment (return to awaiting)
+   */
+  public cancelAssignment(): void {
+    this.assignedSectionIdx = null;
+    this.targetFanActor = null;
+    this.targetPosition = null;
+    this.state = 'awaitingAssignment' as AIActorState;
+    this.idleTimer = 0;
+    
+    console.log('[DrinkVendorBehavior] Assignment cancelled');
+  }
+  
+  /**
+   * Get assigned section index (null if not assigned)
+   */
+  public getAssignedSection(): number | null {
+    return this.assignedSectionIdx;
+  }
+  
+  /**
+   * Get cooldown timer remaining (milliseconds)
+   */
+  public getCooldownTimer(): number {
+    return this.cooldownTimer;
+  }
+  
+  /**
+   * Start patrol mode (fallback when no targets found)
+   */
+  public startPatrol(): void {
+    const currentPos = this.vendorActor.getGridPosition();
+    const access = this.gridManager.getNearestVerticalAccess(currentPos.row, currentPos.col);
+    
+    if (!access) {
+      console.warn('[DrinkVendorBehavior] No valid access point for patrol, staying at position');
+      this.state = 'awaitingAssignment' as AIActorState;
+      return;
+    }
+    
+    this.state = 'patrolling' as AIActorState;
+    this.patrolTimer = gameBalance.vendorAssignment.patrolIntervalMs;
+    this.assignedSectionIdx = null; // Clear section assignment
+    
+    console.log(`[DrinkVendorBehavior] Starting patrol mode, moving to (${access.row},${access.col})`);
+    
+    // Request path to access point
+    if (this.pathfindingService) {
+      const targetWorld = this.gridManager.gridToWorld(access.row, access.col);
+      const vendorPos = this.vendorActor.getPosition();
+      const path = this.pathfindingService.requestPath(
+        vendorPos.x,
+        vendorPos.y,
+        targetWorld.x,
+        targetWorld.y
+      );
+      
+      if (path && path.length > 0) {
+        this.vendorActor.setPath(path);
+      }
+    }
   }
 
   /**
@@ -176,7 +252,21 @@ export class DrinkVendorBehavior implements AIActorBehavior {
    * Update behavior each frame
    */
   public tick(deltaTime: number): void {
+    // Update cooldown timer
+    if (this.cooldownTimer > 0) {
+      this.cooldownTimer -= deltaTime;
+      if (this.cooldownTimer <= 0) {
+        this.cooldownTimer = 0;
+        // TODO: Emit event via AIManager for UI to re-enable button
+        console.log('[DrinkVendorBehavior] Cooldown complete');
+      }
+    }
+    
     switch (this.state) {
+      case 'awaitingAssignment':
+        // Idle until player assigns to section
+        break;
+        
       case 'idle':
         this.updateIdle(deltaTime);
         break;
@@ -261,49 +351,24 @@ export class DrinkVendorBehavior implements AIActorBehavior {
    */
   private updateIdle(deltaTime: number): void {
     this.scanTimer -= deltaTime;
+    this.idleTimer += deltaTime;
+    
+    // Check idle timeout (no target found for 5s → patrol)
+    if (this.idleTimer >= gameBalance.vendorAssignment.idleTimeoutMs) {
+      console.log('[DrinkVendorBehavior] Idle timeout reached, entering patrol mode');
+      // TODO: Emit event via AIManager for UI update
+      this.startPatrol();
+      return;
+    }
     
     if (this.scanTimer <= 0) {
       console.log('[DrinkVendorBehavior] === SCANNING FOR TARGETS ===');
       console.log('[DrinkVendorBehavior] PathfindingService available:', !!this.pathfindingService);
       console.log('[DrinkVendorBehavior] Current vendor position:', this.vendorActor.getPosition());
       
-      // TEMPORARY: Hardcode test target - first fan in Section B, row 0, col 0
-      // This should be grid position (15, 12) based on stadium config
-      const TEST_MODE = true;
-      let target = null;
-      
-      if (TEST_MODE) {
-        console.log('[DrinkVendorBehavior] TEST MODE: Forcing target to Section B, row 1, col 2');
-        const sectionActors = this.aiManager.getSectionActors();
-        if (sectionActors.length > 1) {
-          const sectionB = sectionActors[1]; // Section B is index 1
-          const testFan = sectionB.getFanActorAt(1, 2); // Row 1, Col 2 in Section B
-          if (testFan) {
-            const gridPos = testFan.getGridPosition();
-            const worldPos = this.gridManager.gridToWorld(gridPos.row, gridPos.col);
-            target = {
-              fanActor: testFan,
-              fan: testFan.getFan(),
-              sectionIdx: 1,
-              rowIdx: gridPos.row,
-              colIdx: gridPos.col,
-              x: worldPos.x,
-              y: worldPos.y
-            };
-            console.log('[DrinkVendorBehavior] Test target created:', {
-              gridPos,
-              worldPos,
-              thirst: testFan.getThirst()
-            });
-          } else {
-            console.error('[DrinkVendorBehavior] Test fan not found at Section B (1,2)');
-          }
-        }
-      } else {
-        // Normal mode - scan for thirsty fans
-        target = this.selectTarget();
-        console.log('[DrinkVendorBehavior] selectTarget() returned:', target ? 'valid target' : 'null');
-      }
+      // Scan for thirsty fans
+      const target = this.selectTarget();
+      console.log('[DrinkVendorBehavior] selectTarget() returned:', target ? 'valid target' : 'null');
       
       if (target) {
         console.log('[DrinkVendorBehavior] Target acquired:', {
@@ -348,6 +413,7 @@ export class DrinkVendorBehavior implements AIActorBehavior {
             console.log('[DrinkVendorBehavior] Vendor hasPath() after setPath:', vendorHasPath);
             
             this.state = 'moving' as AIActorState;
+            this.idleTimer = 0; // Reset idle timer when moving to target
             console.log(`[DrinkVendorBehavior] STATE TRANSITION: idle -> moving`);
           } else {
             console.warn(`[DrinkVendorBehavior] ❌ No path found to target at grid (${target.rowIdx}, ${target.colIdx})`);

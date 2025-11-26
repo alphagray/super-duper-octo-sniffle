@@ -1,5 +1,6 @@
 import { AnimatedActor } from '@/actors/base/Actor';
 import { Vendor } from '@/sprites/Vendor';
+import type { GridManager } from '@/managers/GridManager';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
 
@@ -7,6 +8,7 @@ import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
  * VendorActor: Base adapter wrapping Vendor sprite as an AnimatedActor.
  * Handles position tracking, path following, and movement state.
  * Does NOT contain targeting/assignment logic (that's in behavior layer).
+ * Creates and manages its own Vendor sprite internally.
  */
 export class VendorActor extends AnimatedActor {
   protected vendor: Vendor;
@@ -14,15 +16,32 @@ export class VendorActor extends AnimatedActor {
 
   constructor(
     id: string,
-    vendor: Vendor,
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
     category: ActorCategory = 'vendor',
-    enableLogging = false
+    enableLogging = false,
+    gridManager?: GridManager
   ) {
-    // Initialize with vendor sprite's current position
-    super(id, 'vendor', category, vendor.x, vendor.y, enableLogging);
-    this.vendor = vendor;
-    this.position = { x: vendor.x, y: vendor.y };
-    this.logger.debug(`VendorActor created at (${vendor.x}, ${vendor.y})`);
+    // Initialize base actor with placeholder grid coords (0,0); we'll set real grid below
+    super(id, 'vendor', category, 0, 0, enableLogging);
+    
+    // Create vendor sprite internally
+    this.vendor = new Vendor(scene, x, y);
+    this.vendor.setDepth(1000); // Render above fans
+    scene.add.existing(this.vendor);
+    
+    this.position = { x, y };
+
+    // Derive grid position from current world position for accurate path queries
+    if (gridManager) {
+      const gridPos = gridManager.worldToGrid(x, y);
+      if (gridPos) {
+        this.gridRow = gridPos.row;
+        this.gridCol = gridPos.col;
+      }
+    }
+    this.logger.debug(`VendorActor created at world (${x}, ${y}) grid (${this.gridRow}, ${this.gridCol})`);
   }
 
   /**

@@ -1,5 +1,5 @@
 import { VendorActor } from '@/actors/VendorActor';
-import { Vendor } from '@/sprites/Vendor';
+import type { GridManager } from '@/managers/GridManager';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import type { AIActorBehavior, AIActorState } from '@/actors/interfaces/AIBehavior';
 
@@ -12,12 +12,15 @@ export class DrinkVendorActor extends VendorActor {
 
   constructor(
     id: string,
-    vendor: Vendor,
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
     behavior: AIActorBehavior,
     category: ActorCategory = 'vendor',
-    enableLogging = false
+    enableLogging = false,
+    gridManager?: GridManager
   ) {
-    super(id, vendor, category, enableLogging);
+    super(id, scene, x, y, category, enableLogging, gridManager);
     this.behavior = behavior;
     this.logger.debug('DrinkVendorActor created with behavior');
   }

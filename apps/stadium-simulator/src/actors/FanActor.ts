@@ -4,9 +4,19 @@ import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import { gameBalance } from '@/config/gameBalance';
 
 /**
+ * Fan states (derived from stats, not manually set)
+ */
+export type FanState = 'happy' | 'engaged' | 'disengaged' | 'waving' | 'thirsty' | 'unhappy' | 'drinking';
+
+/**
  * FanActor: Actor managing fan game state and delegating rendering to Fan sprite.
  * Handles all game logic: stats, wave participation, vendor interactions.
  * Fan sprite handles only visual animations and rendering.
+ * 
+ * State Machine Pattern:
+ * - updateStats(delta) modifies raw stats (thirst, happiness, attention)
+ * - update(delta) derives state from current stats and triggers transitions
+ * - State transitions trigger visual updates (not direct stat changes)
  */
 export class FanActor extends AnimatedActor {
   private fan: Fan;
@@ -16,12 +26,13 @@ export class FanActor extends AnimatedActor {
   private thirst: number;
   private attention: number;
 
-  // Randomized thirst growth rate (environmental sensitivity)
-  private thirstMultiplier: number;
-
   // Grump/difficult terrain stats (foundation for future grump type)
   private disgruntlement: number = 0; // only grows for future grump type
   private disappointment: number = 0; // dynamic accumulator for unhappiness condition
+
+  // State machine
+  private state: FanState = 'happy';
+  private previousState: FanState = 'happy';
 
   // Wave participation properties
   private waveStrengthModifier: number = 0;
@@ -53,13 +64,6 @@ export class FanActor extends AnimatedActor {
       this.attention = gameBalance.fanStats.initialAttention;
     }
 
-    // Randomize thirst growth rate: 0.5x to 1.5x (bell curve centered at 1.0)
-    const r1 = Math.random();
-    const r2 = Math.random();
-    const r3 = Math.random();
-    const bellCurve = (r1 + r2 + r3) / 3;
-    this.thirstMultiplier = 0.5 + bellCurve;
-
     this.logger.debug('FanActor created with game state');
   }
 
@@ -85,22 +89,44 @@ export class FanActor extends AnimatedActor {
     return this.attention;
   }
 
-  public getThirstMultiplier(): number {
-    return this.thirstMultiplier;
+  /**
+   * Determine if fan is currently disinterested (low attention + low happiness).
+   * Used by engagement, targeting, ripple stubs, and mascot ability heuristics.
+   */
+  public getIsDisinterested(): boolean {
+    return (
+      this.attention < gameBalance.fanDisengagement.attentionThreshold &&
+      this.happiness < gameBalance.fanDisengagement.happinessThreshold
+    );
   }
 
   public setHappiness(value: number): void {
     this.happiness = Math.max(0, Math.min(100, value));
-    this.updateVisualIntensity();
+    // Visual update deferred to update() state machine
   }
 
   public setThirst(value: number): void {
     this.thirst = Math.max(0, Math.min(100, value));
-    this.updateVisualIntensity();
+    // Visual update deferred to update() state machine
   }
 
   public setAttention(value: number): void {
     this.attention = Math.max(0, Math.min(100, value));
+    // Visual update deferred to update() state machine
+  }
+
+  /** Generic stat modification helper (delta-based) */
+  public modifyStats(delta: { happiness?: number; thirst?: number; attention?: number }): void {
+    if (delta.happiness !== undefined) {
+      this.happiness = Phaser.Math.Clamp(this.happiness + delta.happiness, 0, 100);
+    }
+    if (delta.thirst !== undefined) {
+      this.thirst = Phaser.Math.Clamp(this.thirst + delta.thirst, 0, 100);
+    }
+    if (delta.attention !== undefined) {
+      this.attention = Phaser.Math.Clamp(this.attention + delta.attention, 0, 100);
+    }
+    // Visual update deferred to update() state machine
   }
 
   // === Game Logic Methods ===
@@ -125,11 +151,22 @@ export class FanActor extends AnimatedActor {
     if (this.thirstFreezeUntil && scene.time.now < this.thirstFreezeUntil) {
       // Do not increase thirst while frozen
     } else {
-      const totalMultiplier = this.thirstMultiplier * environmentalModifier;
-      this.thirst = Math.min(
-        100,
-        this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate * totalMultiplier
-      );
+      // Thirst two-phase system:
+      // Phase 1 (below threshold): Roll to START getting thirsty
+      // Phase 2 (above threshold): Linear decay after getting thirsty
+      if (this.thirst < gameBalance.fanStats.thirstThreshold) {
+        // Phase 1: Roll to start getting thirsty
+        const rollChance = gameBalance.fanStats.thirstRollChance * environmentalModifier * deltaSeconds;
+        if (Math.random() < rollChance) {
+          // Activation amount pushes fan over threshold
+          const thirstAmount = gameBalance.fanStats.thirstActivationAmount * environmentalModifier;
+          this.thirst = Math.min(100, this.thirst + thirstAmount);
+        }
+      } else {
+        // Phase 2: Linear decay after threshold
+        const decayRate = gameBalance.fanStats.thirstDecayRate * environmentalModifier * deltaSeconds;
+        this.thirst = Math.min(100, this.thirst + decayRate);
+      }
     }
 
     // Thirsty fans get less happy
@@ -147,8 +184,7 @@ export class FanActor extends AnimatedActor {
       this.disappointment = Math.max(0, this.disappointment - deltaSeconds * 0.5);
     }
 
-    // Update visual representation
-    this.updateVisualIntensity();
+    // Visual updates deferred to update() state machine
   }
 
   /**
@@ -167,7 +203,8 @@ export class FanActor extends AnimatedActor {
       : sceneOrTimestamp.time.now;
     
     this.thirstFreezeUntil = timestamp + gameBalance.fanStats.thirstFreezeDuration;
-    this.updateVisualIntensity();
+    // Explicitly transition to drinking state
+    this.transitionToState('drinking');
   }
 
   /**
@@ -237,14 +274,77 @@ export class FanActor extends AnimatedActor {
     return this.disappointment;
   }
 
-  // === Visual Delegation ===
+  /**
+   * Get current state
+   */
+  public getState(): FanState {
+    return this.state;
+  }
 
   /**
-   * Update visual intensity based on current thirst level
+   * Transition to a new state (triggers visual updates)
    */
-  private updateVisualIntensity(): void {
-    this.fan.setIntensity(this.thirst / 100);
+  private transitionToState(newState: FanState): void {
+    if (this.state === newState) return;
+    
+    this.previousState = this.state;
+    this.state = newState;
+    
+    // Trigger visual updates on state change
+    this.updateVisualsForState(newState);
   }
+
+  // === Visual Updates ===
+
+  /**
+   * Update visuals for the current state (called on state transitions)
+   * Handles state-specific visual properties like alpha, tint, scale
+   */
+  private updateVisualsForState(state: FanState): void {
+    const cfg = gameBalance.fanDisengagement;
+    
+    // Update thirst-based intensity (color + jiggle) - always needs to be updated
+    this.fan.setIntensity(this.thirst / 100);
+    
+    switch (state) {
+      case 'disengaged':
+        this.fan.setAlpha(cfg.visualOpacity);
+        (this.fan as any).setTint?.(cfg.visualTint);
+        break;
+
+      case 'thirsty':
+        // Thirsty: slightly faded, yellowish tint
+        this.fan.setAlpha(0.85);
+        (this.fan as any).setTint?.(0xFFDD88);
+        break;
+
+      case 'unhappy':
+        // Unhappy: very faded, dark tint
+        this.fan.setAlpha(0.6);
+        (this.fan as any).setTint?.(0x666666);
+        break;
+        
+      case 'engaged':
+      case 'happy':
+        this.fan.setAlpha(1);
+        (this.fan as any).clearTint?.();
+        break;
+        
+      case 'waving':
+        // Wave animation handles its own visuals
+        this.fan.setAlpha(1);
+        (this.fan as any).clearTint?.();
+        break;
+        
+      case 'drinking':
+        // Drinking state - full visibility, no tint
+        this.fan.setAlpha(1);
+        (this.fan as any).clearTint?.();
+        break;
+    }
+  }
+
+  // === Visual Delegation ===
 
   /**
    * Play wave animation on sprite
@@ -281,10 +381,58 @@ export class FanActor extends AnimatedActor {
 
   /**
    * Update fan actor (called each frame)
+   * Handles stat decay, derives state from stats, and triggers transitions
+   * @param delta - Time elapsed in milliseconds
+   * @param scene - Phaser scene (for time.now access)
+   * @param environmentalModifier - Environmental thirst multiplier (optional, defaults to 1.0)
    */
-  public update(delta: number): void {
-    // Stats are updated explicitly by SectionActor.updateFanStats()
-    // No per-frame updates needed here currently
+  public update(delta: number, scene?: Phaser.Scene, environmentalModifier: number = 1.0): void {
+    // Update stats (thirst/happiness/attention decay)
+    if (scene) {
+      this.updateStats(delta, scene, environmentalModifier);
+    }
+    
+    // Check for state transitions
+    const newState = this.deriveStateFromStats();
+    if (newState !== this.state) {
+      this.transitionToState(newState);
+    }
+  }
+
+  /**
+   * Derive state from current stats (pure logic, no side effects)
+   */
+  private deriveStateFromStats(): FanState {
+    // Priority order: specific states override general states
+    
+    // 1. Temporary states (highest priority)
+    if (this.thirst < 10 && this.thirstFreezeUntil > 0) {
+      return 'drinking';
+    }
+    
+    // 2. Unhappy state (low happiness from prolonged thirst)
+    if (this.happiness < gameBalance.fanStats.unhappyHappinessThreshold) {
+      return 'unhappy';
+    }
+    
+    // 3. Thirsty state (thirst crossed threshold, but happiness still okay)
+    if (this.thirst > gameBalance.fanStats.thirstThreshold) {
+      return 'thirsty';
+    }
+    
+    // 4. Disengaged state (low attention + low happiness, not thirst-related)
+    const isDisinterested = this.getIsDisinterested();
+    if (isDisinterested) {
+      return 'disengaged';
+    }
+    
+    // 5. Engaged state (high attention or recent wave participation)
+    if (this.attention > 70 || this.lastWaveParticipated) {
+      return 'engaged';
+    }
+    
+    // 6. Happy state (default when nothing is wrong)
+    return 'happy';
   }
 
   /**

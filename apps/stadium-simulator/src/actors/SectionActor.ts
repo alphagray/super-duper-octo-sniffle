@@ -6,6 +6,7 @@ import { Fan } from '@/sprites/Fan';
 import { FanActor } from '@/actors/FanActor';
 import { SeatActor } from '@/sprites/Seat';
 import { SectionRowActor } from './SectionRowActor';
+import { gameBalance } from '@/config/gameBalance';
 
 /**
  * SectionActor: Primary game logic for a stadium section.
@@ -232,6 +233,7 @@ private lastLoggedTargetFan: number = 0;
           
           if (fanActor) {
             const fan = fanActor.getFan();
+            if (!fanPos) continue; // guard against undefined grid lookup
             results.push({
               fanActor,
               fan,
@@ -299,6 +301,29 @@ private lastLoggedTargetFan: number = 0;
       fanCount: this.fans.size
     };
   }
+
+  /**
+   * Per-frame update: drive fan stat decay and aggregate cache.
+   * Environmental modifier passed in from AIManager orchestrator.
+   * @param delta - Time elapsed in milliseconds
+   * @param scene - Phaser scene for FanActor updates
+   * @param environmentalModifier - Environmental thirst multiplier
+   */
+  public update(delta: number, scene?: Phaser.Scene, environmentalModifier: number = 1.0): void {
+    // Update all fan actors (stat decay + state transitions)
+    const allFanActors = this.getFanActors();
+    for (const fanActor of allFanActors) {
+      fanActor.update(delta, scene, environmentalModifier);
+    }
+    
+    // Update cached aggregate values for performance
+    this.updateAggregateCache();
+  }
+
+  /**
+   * Scenery draw: no-op (handled by sprites), kept for Actor contract.
+   */
+  public draw(): void { /* no-op */ }
 
   /**
    * Update all fan stats (thirst, happiness, attention decay).
@@ -411,7 +436,6 @@ private lastLoggedTargetFan: number = 0;
     waveStrength: number
   ): Array<{ fan: any; willParticipate: boolean; intensity: number }> {
     const sectionBonus = this.getSectionWaveBonus();
-    const gameBalance = require('@/config/gameBalance').gameBalance;
     const strengthModifier = (waveStrength - 50) * gameBalance.waveStrength.strengthModifier;
     const result: Array<{ fan: any; willParticipate: boolean; intensity: number }> = [];
 
@@ -482,7 +506,6 @@ private lastLoggedTargetFan: number = 0;
     visualState: 'full' | 'sputter' | 'death' = 'full',
     waveStrength: number = 70
   ): Promise<void> {
-    const gameBalance = require('@/config/gameBalance').gameBalance;
     const baseRowDelay = gameBalance.waveTiming.rowDelay;
     const columnPromises: Promise<void>[] = [];
 

@@ -1,277 +1,78 @@
-import type { Fan } from '@/sprites/Fan';
-import type { StadiumSection } from '@/sprites/StadiumSection';
+// Simplified ACTOR-BASED stub for RipplePropagationEngine.
+// Legacy grid traversal & Manhattan distance logic removed.
+// Will be reimplemented using SectionActor seat graph + FanActor stats.
+import type { SectionActor } from '@/actors/SectionActor';
+import type { FanActor } from '@/actors/FanActor';
 import { gameBalance } from '@/config/gameBalance';
 
-/**
- * Configuration for ripple propagation behavior
- */
-export interface RippleConfig {
-  baseEffect: number; // Attention boost at epicenter (default: 40)
-  maxRadius: number; // Maximum Manhattan distance (default: 4)
-  disinterestedBonus: number; // Extra boost for disinterested fans (default: 5)
-  decayType: 'linear' | 'exponential'; // Decay function type
-}
+export interface RippleConfig { baseEffect: number; disinterestedBonus: number; }
+export interface RippleEffect { epicenterFanId: string; affected: Map<string, number>; }
 
-/**
- * Result of a single ripple calculation
- */
-export interface RippleEffect {
-  epicenterFan: Fan;
-  epicenterRow: number;
-  epicenterSeat: number;
-  affectedFans: Map<Fan, number>; // fan -> attention boost amount
-}
-
-/**
- * Engine for calculating cascading fan engagement effects
- * Uses grid-based Manhattan distance with configurable decay
- *
- * @example
- * const engine = new RipplePropagationEngine();
- * const ripple = engine.calculateRipple(catcherFan, section);
- * engine.applyRipple(ripple);
- */
 export class RipplePropagationEngine {
   private config: RippleConfig;
-
   constructor(config?: Partial<RippleConfig>) {
     this.config = {
       baseEffect: config?.baseEffect ?? gameBalance.ripplePropagation.baseEffect,
-      maxRadius: config?.maxRadius ?? gameBalance.ripplePropagation.maxRadius,
-      disinterestedBonus: config?.disinterestedBonus ?? gameBalance.ripplePropagation.disinterestedBonus,
-      decayType: config?.decayType ?? gameBalance.ripplePropagation.decayType,
+      disinterestedBonus: config?.disinterestedBonus ?? gameBalance.ripplePropagation.disinterestedBonus
     };
   }
 
   /**
-   * Calculate ripple effects from an epicenter fan
-   *
-   * @param epicenter - Fan who caught the t-shirt (ripple origin)
-   * @param section - Section containing the fan
-   * @returns RippleEffect with all affected fans and their boosts
-   *
-   * @example
-   * const ripple = engine.calculateRipple(catcherFan, section);
-   * ripple.affectedFans.forEach((boost, fan) => {
-   *   fan.modifyStats({ attention: fan.getAttention() + boost });
-   * });
+   * Calculate ripple using Manhattan distance with configurable decay.
+   * - Includes disinterested bonus per target
+   * - Respects maxRadius from game balance
    */
-  public calculateRipple(
-    epicenter: Fan,
-    section: StadiumSection
-  ): RippleEffect {
-    const epicenterPos = this.findFanPosition(epicenter, section);
+  public calculateRipple(epicenter: FanActor, section: SectionActor): RippleEffect {
+    const affected = new Map<string, number>();
+    const epiPos = epicenter.getGridPosition();
+    const maxR = gameBalance.ripplePropagation.maxRadius;
+    const decayType = gameBalance.ripplePropagation.decayType;
+    const expBase = gameBalance.ripplePropagation.expDecayBase ?? 0.6;
 
-    if (!epicenterPos) {
-      console.warn('[RippleEngine] Epicenter fan not found in section');
-      return {
-        epicenterFan: epicenter,
-        epicenterRow: -1,
-        epicenterSeat: -1,
-        affectedFans: new Map(),
-      };
-    }
+    for (const fan of section.getFanActors()) {
+      if (fan.id === epicenter.id) continue;
+      const pos = fan.getGridPosition();
+      const d = Math.abs(pos.row - epiPos.row) + Math.abs(pos.col - epiPos.col);
+      if (d <= 0 || d > maxR) continue;
 
-    const affectedFans = new Map<Fan, number>();
-    const rows = section.getRows();
-
-    // Iterate through all fans in section grid
-    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-      const row = rows[rowIdx];
-      const seats = row.getSeats();
-
-      for (let seatIdx = 0; seatIdx < seats.length; seatIdx++) {
-        const seat = seats[seatIdx];
-        const fan = seat.getFan();
-        if (!fan) continue;
-
-        // Calculate Manhattan distance from epicenter
-        const distance = this.calculateManhattanDistance(
-          epicenterPos.row,
-          epicenterPos.seat,
-          rowIdx,
-          seatIdx
-        );
-
-        // Apply decay function to get effect strength
-        const effect = this.calculateEffect(distance, fan);
-
-        if (effect > 0) {
-          affectedFans.set(fan, effect);
-        }
+      let effect = 0;
+      if (decayType === 'linear') {
+        effect = this.config.baseEffect * (1 - d / maxR);
+      } else {
+        // exponential
+        effect = this.config.baseEffect * Math.pow(expBase, d);
       }
+      if (fan.getIsDisinterested()) effect += this.config.disinterestedBonus;
+      if (effect > 0.01) affected.set(fan.id, effect);
     }
-
-    return {
-      epicenterFan: epicenter,
-      epicenterRow: epicenterPos.row,
-      epicenterSeat: epicenterPos.seat,
-      affectedFans,
-    };
+    return { epicenterFanId: epicenter.id, affected };
   }
 
-  /**
-   * Calculate Manhattan distance between two grid positions
-   * Manhattan distance = |row1 - row2| + |seat1 - seat2|
-   *
-   * @example
-   * // Adjacent horizontally: distance = 1
-   * calculateManhattanDistance(2, 3, 2, 4) // => 1
-   *
-   * // Adjacent vertically: distance = 1
-   * calculateManhattanDistance(2, 3, 3, 3) // => 1
-   *
-   * // Diagonal: distance = 2
-   * calculateManhattanDistance(2, 3, 3, 4) // => 2
-   */
-  private calculateManhattanDistance(
-    row1: number,
-    seat1: number,
-    row2: number,
-    seat2: number
-  ): number {
-    return Math.abs(row1 - row2) + Math.abs(seat1 - seat2);
+  public applyRipple(ripple: RippleEffect, section: SectionActor): void {
+    for (const fan of section.getFanActors()) {
+      const boost = ripple.affected.get(fan.id);
+      if (!boost) continue;
+      const current = fan.getAttention();
+      fan.modifyStats({ attention: Math.min(100, current + boost) });
+    }
   }
 
-  /**
-   * Calculate effect strength for a fan at given distance
-   * Applies decay formula and bonuses
-   *
-   * @param distance - Manhattan distance from epicenter
-   * @param fan - Target fan (for checking disinterested status)
-   * @returns Attention boost amount (0 if outside radius)
-   */
-  private calculateEffect(distance: number, fan: Fan): number {
-    // Outside max radius = no effect
-    if (distance >= this.config.maxRadius) {
-      return 0;
+  public combineRipples(ripples: RippleEffect[]): Map<string, number> {
+    const combined = new Map<string, number>();
+    for (const r of ripples) {
+      r.affected.forEach((v, id) => combined.set(id, (combined.get(id) || 0) + v));
     }
-
-    // Calculate base effect with decay
-    let effect = this.config.baseEffect;
-
-    if (this.config.decayType === 'linear') {
-      // Linear decay: effect = baseEffect * (1 - distance/maxRadius)
-      // Distance 0: 100% effect
-      // Distance maxRadius: 0% effect
-      if (this.config.maxRadius === 0) {
-        return 0;
-      }
-      const decayFactor = Math.max(0, 1 - (distance / this.config.maxRadius));
-      effect *= decayFactor;
-    } else if (this.config.decayType === 'exponential') {
-      // Exponential decay not yet implemented
-      throw new Error('Exponential decay type is not yet implemented. Use "linear" instead.');
-    }
-
-    // Add bonus for disinterested fans (re-engagement incentive)
-    if (fan.getIsDisinterested()) {
-      effect += this.config.disinterestedBonus;
-    }
-
-    return Math.round(effect);
-  }
-
-  /**
-   * Find a fan's grid position within a section
-   *
-   * @param fan - Fan to locate
-   * @param section - Section to search
-   * @returns Grid position {row, seat} or null if not found
-   */
-  private findFanPosition(
-    fan: Fan,
-    section: StadiumSection
-  ): { row: number; seat: number } | null {
-    const rows = section.getRows();
-
-    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-      const row = rows[rowIdx];
-      const seats = row.getSeats();
-
-      for (let seatIdx = 0; seatIdx < seats.length; seatIdx++) {
-        const seat = seats[seatIdx];
-        if (seat.getFan() === fan) {
-          return { row: rowIdx, seat: seatIdx };
-        }
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Apply ripple effects to all affected fans
-   * Respects 100 attention cap
-   *
-   * @param ripple - Calculated ripple effect
-   */
-  public applyRipple(ripple: RippleEffect): void {
-    ripple.affectedFans.forEach((boost, fan) => {
-      const currentAttention = fan.getAttention();
-      const newAttention = Math.min(100, currentAttention + boost);
-
-      fan.modifyStats({
-        attention: newAttention
-      });
-    });
-  }
-
-  /**
-   * Combine multiple ripples from same event
-   * Effects are additive but capped at 100 when applied
-   *
-   * @param ripples - Array of ripple effects to combine
-   * @returns Map of fans to total combined boost
-   *
-   * @example
-   * // Two fans catch t-shirts near each other
-   * const ripple1 = engine.calculateRipple(catcher1, section);
-   * const ripple2 = engine.calculateRipple(catcher2, section);
-   * const combined = engine.combineRipples([ripple1, ripple2]);
-   * engine.applyCombinedRipples(combined);
-   * // Fans in overlap area get both boosts added together
-   */
-  public combineRipples(ripples: RippleEffect[]): Map<Fan, number> {
-    const combined = new Map<Fan, number>();
-
-    for (const ripple of ripples) {
-      ripple.affectedFans.forEach((boost, fan) => {
-        const currentBoost = combined.get(fan) || 0;
-        combined.set(fan, currentBoost + boost);
-      });
-    }
-
     return combined;
   }
 
-  /**
-   * Apply combined ripples to fans with attention cap
-   *
-   * @param combinedEffects - Result from combineRipples()
-   */
-  public applyCombinedRipples(combinedEffects: Map<Fan, number>): void {
-    combinedEffects.forEach((boost, fan) => {
-      const currentAttention = fan.getAttention();
-      const newAttention = Math.min(100, currentAttention + boost);
-
-      fan.modifyStats({
-        attention: newAttention
-      });
-    });
-  }
-
-  /**
-   * Get current configuration
-   */
-  public getConfig(): RippleConfig {
-    return { ...this.config };
-  }
-
-  /**
-   * Update configuration (useful for testing different parameters)
-   */
-  public updateConfig(config: Partial<RippleConfig>): void {
-    this.config = { ...this.config, ...config };
+  public applyCombinedRipples(combined: Map<string, number>, section: SectionActor): void {
+    for (const fan of section.getFanActors()) {
+      const boost = combined.get(fan.id);
+      if (!boost) continue;
+      const current = fan.getAttention();
+      fan.modifyStats({ attention: Math.min(100, current + boost) });
+    }
   }
 }
+
+export default RipplePropagationEngine;

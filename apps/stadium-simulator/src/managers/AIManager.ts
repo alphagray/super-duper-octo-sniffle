@@ -4,15 +4,20 @@ import type { Fan } from '@/sprites/Fan'; // Visual only; stat access removed
 import type { StadiumSection } from '@/sprites/StadiumSection';
 import type { GridManager } from './GridManager';
 import { gameBalance } from '@/config/gameBalance';
+import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
+import type { Actor } from '@/actors/base/Actor';
+import { FanActor } from '@/actors/FanActor';
+import { VendorActor } from '@/actors/VendorActor';
 import { PathfindingService } from '@/services/PathfindingService';
 import type { ActorRegistry } from '@/actors/base/ActorRegistry';
 import { DrinkVendorActor } from '@/actors/DrinkVendorActor';
+import { MascotActor } from '@/actors/MascotActor';
 import { DrinkVendorBehavior } from '@/actors/behaviors/DrinkVendorBehavior';
 import { Vendor } from '@/sprites/Vendor';
 
 /**
  * Represents a legacy vendor in the stadium (deprecated)
- * @deprecated Use VendorProfile and VendorInstance instead
+ * @deprecated Use DrinkVendorActor with DrinkVendorBehavior instead
  */
 export interface LegacyVendor {
   /** Unique identifier for the vendor */
@@ -28,32 +33,13 @@ export interface LegacyVendor {
 }
 
 /**
- * Runtime vendor instance with profile and state
- * @deprecated Use DrinkVendorActor with DrinkVendorBehavior instead
- */
-export interface VendorInstance {
-  profile: VendorProfile;
-  state: VendorState;
-  position: { x: number; y: number };
-  // Note: currentPath is now stored on VendorActor itself, not here
-  targetFan?: Fan;
-  targetPosition?: { sectionIdx: number; rowIdx: number; colIdx: number };
-  assignedSectionIdx?: number; // Restrict targeting to a specific section when set
-  scanTimer: number; // ms until next scan attempt
-  stateTimer: number; // generic timer for state-specific durations
-  distractionCheckTimer: number;
-  attentionAuraActive: boolean;
-  lastServiceTime: number;
-}
-
-/**
  * AIManager: Manages all AI-driven actors in the stadium
  * Handles vendors, mascots, and future AI entities
  * Coordinates with GridManager for pathfinding and spatial queries
  */
 export class AIManager {
-  private vendors: Map<number, VendorInstance>; // @deprecated Legacy instances
-  private vendorActors: Map<number, DrinkVendorActor> = new Map(); // New actor-based vendors
+  private vendorActors: Map<number, DrinkVendorActor> = new Map(); // Actor-based vendors
+  private mascotActors: MascotActor[] = []; // Supports one or many mascots
   private legacyVendors: LegacyVendor[]; // backward compatibility
   private gameState: GameStateManager;
   private eventListeners: Map<string, Array<Function>>;
@@ -76,7 +62,6 @@ export class AIManager {
     this.gridManager = gridManager;
     this.actorRegistry = actorRegistry;
     this.eventListeners = new Map();
-    this.vendors = new Map();
     this.legacyVendors = [];
     this.sections = [];
 
@@ -121,9 +106,26 @@ export class AIManager {
 
   /**
    * Get all vendor actors
+   * @returns Map of vendor ID to VendorActor
    */
   public getVendorActors(): Map<number, DrinkVendorActor> {
     return this.vendorActors;
+  }
+
+  /**
+   * Get vendor actor by ID
+   * @param id Vendor ID
+   * @returns VendorActor or undefined
+   */
+  public getVendorActor(id: number): DrinkVendorActor | undefined {
+    return this.vendorActors.get(id);
+  }
+
+  /**
+   * Get all mascot actors (may be 0..N, currently typically 1)
+   */
+  public getMascotActors(): MascotActor[] {
+    return this.mascotActors;
   }
 
   /**
@@ -139,6 +141,14 @@ export class AIManager {
   public attachPathfindingService(service: PathfindingService): void {
     this.pathfindingService = service;
     console.log('[AIManager] PathfindingService attached');
+  }
+
+  /**
+   * Register a mascot actor with the AIManager.
+   * Event-lite: no emitted event, just stored for update integration.
+   */
+  public registerMascot(actor: MascotActor): void {
+    this.mascotActors.push(actor);
   }
 
   /**
@@ -185,13 +195,17 @@ export class AIManager {
 
   /**
    * Spawn a vendor actor with behavior
-   * @param vendorSprite The Phaser vendor sprite to wrap
+   * @param scene The Phaser scene to create the vendor sprite in
+   * @param x X position for the vendor
+   * @param y Y position for the vendor
    * @param type Vendor type ('drink' or 'rangedAoE')
    * @param quality Quality tier
    * @returns Object containing the vendor actor and profile ID
    */
   public spawnVendor(
-    vendorSprite: Vendor,
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
     type: VendorType = 'drink',
     quality: VendorQualityTier = 'good'
   ): { actor: DrinkVendorActor; id: number } {
@@ -207,13 +221,16 @@ export class AIManager {
       this.pathfindingService
     );
     
-    // Create vendor actor
+    // Create vendor actor (now creates its own sprite)
     const vendorActor = new DrinkVendorActor(
       actorId,
-      vendorSprite,
+      scene,
+      x,
+      y,
       behavior,
       'vendor',
-      false // Disable logging for now
+      false, // Disable logging for now
+      this.gridManager
     );
     
     // Set circular reference in behavior
@@ -244,112 +261,81 @@ export class AIManager {
     const vendorQuality = quality ?? gameBalance.sessionDefaults.initialVendorQuality;
 
     // Note: Logging controlled by scene's logVendorEvents flag via events
+    // Vendor profiles created, actors instantiated when sprites spawned via spawnVendor()
 
     for (let i = 0; i < vendorCount; i++) {
       const profile = this.createVendor(vendorType, vendorQuality);
-      
-      // Create vendor instance
-      const instance: VendorInstance = {
-        profile,
-        state: 'idle',
-        position: { x: 0, y: 0 }, // will be set when placed
-        scanTimer: 0,
-        stateTimer: 0,
-        distractionCheckTimer: 0,
-        attentionAuraActive: false,
-        lastServiceTime: 0,
-      };
-
-      this.vendors.set(profile.id, instance);
-      
-      // Emit vendor spawned event
+      // Emit vendor spawned event for scene to create sprite + actor
       this.emit('vendorSpawned', { vendorId: profile.id, profile });
     }
   }
 
   /**
-   * Get all vendor instances
-   * @returns Map of vendor instances by ID
+   * Assign vendor to a specific section (player-driven)
+   * Delegates to vendor behavior for autonomous execution
+   * @param vendorId Vendor ID
+   * @param sectionIdx Section index (0-based)
+   * @param seatRow Optional target seat row (for initial pathfinding)
+   * @param seatCol Optional target seat col (for initial pathfinding)
    */
-  public getVendorInstances(): Map<number, VendorInstance> {
-    return this.vendors;
-  }
-
-  /**
-   * Get specific vendor instance
-   * @param id Vendor ID
-   * @returns Vendor instance or undefined
-   */
-  public getVendorInstance(id: number): VendorInstance | undefined {
-    return this.vendors.get(id);
-  }
-
-  /**
-   * Assign vendor to a specific section (index in sections array)
-   * Clears current target and forces reselection next update
-   */
-  public assignVendorToSection(vendorId: number, sectionIdx: number): void {
-    const instance = this.vendors.get(vendorId);
-    if (!instance) {
+  public assignVendorToSection(vendorId: number, sectionIdx: number, seatRow?: number, seatCol?: number): void {
+    // Check if vendor actor exists in new system
+    const vendorActor = this.vendorActors.get(vendorId);
+    if (!vendorActor) {
       console.warn(`[AIManager] Cannot assign unknown vendor ${vendorId}`);
       return;
     }
     
-    if (sectionIdx < 0 || sectionIdx >= this.sections.length) {
+    if (sectionIdx < 0 || sectionIdx >= this.sectionActors.length) {
       console.warn(`[AIManager] Invalid section index ${sectionIdx}`);
       return;
     }
     
-    instance.assignedSectionIdx = sectionIdx;
-    instance.targetFan = undefined;
-    instance.targetPosition = undefined;
-    // TODO: Path management now handled by VendorActor, not VendorInstance
-    instance.state = 'idle'; // ensure target selection occurs
-    instance.scanTimer = 0; // force immediate scan
-    console.log(`[AIManager] Vendor ${vendorId} assigned to section ${sectionIdx}`);
-    this.emit('vendorSectionAssigned', { vendorId, sectionIdx });
-  }
-
-  /**
-   * Select next drink target for a vendor
-   * @deprecated Use DrinkVendorBehavior.selectTarget() directly
-   * @param vendorId Vendor ID
-   * @returns Target fan or null if none found
-   */
-  public selectNextDrinkTarget(vendorId: number): { fan: Fan; sectionIdx: number; rowIdx: number; colIdx: number } | null {
-    // Delegate to wrapper which uses behavior system
-    return this.selectNextDrinkTargetWrapper(vendorId);
-  }
-
-  /**
-   * Select next drink target for a vendor (wrapper)
-   * @deprecated Use DrinkVendorBehavior.selectTarget() directly
-   * @param vendorId Vendor ID
-   * @returns Target fan or null if none found
-   */
-  public selectNextDrinkTargetWrapper(vendorId: number): { fan: Fan; sectionIdx: number; rowIdx: number; colIdx: number } | null {
-    const instance = this.vendors.get(vendorId);
-    if (!instance) return null;
-
-    // Get vendor actor and delegate to behavior if available
-    const vendorActor = this.actorRegistry?.get(`actor:vendor-${vendorId}`) as any; // VendorActor
-    if (vendorActor && vendorActor.getBehavior && vendorActor.getBehavior()) {
-      const behavior = vendorActor.getBehavior();
-      if ('selectTarget' in behavior) {
-        const target = behavior.selectTarget();
-        if (target) {
-          return {
-            fan: target.fan,
-            sectionIdx: target.sectionIdx,
-            rowIdx: target.rowIdx,
-            colIdx: target.colIdx
-          };
-        }
-      }
+    // Delegate to behavior
+    const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
+    if (!behavior || !('assignToSection' in behavior)) {
+      console.warn(`[AIManager] Vendor ${vendorId} behavior missing assignToSection method`);
+      return;
     }
-
-    return null;
+    
+    // Delegate assignment to behavior (handles state transition, cooldown, pathfinding)
+    behavior.assignToSection(sectionIdx);
+    
+    console.log(`[AIManager] Vendor ${vendorId} assigned to section ${sectionIdx}`);
+    this.emit('vendorAssigned', { vendorId, sectionIdx });
   }
+  
+  /**
+   * Check if vendor is on cooldown (cannot be reassigned)
+   * @param vendorId Vendor ID
+   * @returns true if on cooldown
+   */
+  public isVendorOnCooldown(vendorId: number): boolean {
+    const vendorActor = this.vendorActors.get(vendorId);
+    if (!vendorActor) return false;
+    
+    const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
+    if (!behavior || !('getCooldownTimer' in behavior)) return false;
+    
+    return behavior.getCooldownTimer() > 0;
+  }
+  
+  /**
+   * Get remaining cooldown time for vendor
+   * @param vendorId Vendor ID
+   * @returns Remaining cooldown in milliseconds
+   */
+  public getVendorCooldownRemaining(vendorId: number): number {
+    const vendorActor = this.vendorActors.get(vendorId);
+    if (!vendorActor) return 0;
+    
+    const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
+    if (!behavior || !('getCooldownTimer' in behavior)) return 0;
+    
+    return Math.max(0, behavior.getCooldownTimer());
+  }
+
+
 
   /**
    * Advance vendor movement along current path
@@ -424,31 +410,135 @@ export class AIManager {
   }
 
   /**
-   * Update method (deprecated - actors update themselves via ActorRegistry)
-   * @deprecated Vendors now update autonomously via DrinkVendorActor.update()
-   * @param deltaTime Time elapsed in milliseconds
+   * Universal actor update orchestrator (category-ordered).
+   * Scenery → Utility → Fans → Vendors → Mascots, then orchestration.
    */
-  public update(deltaTime: number): void {
-    // Note: New vendor actors update themselves via ActorRegistry.update()
-    // No manager orchestration needed - actors are fully autonomous
-    
-    // Update legacy vendors for backward compatibility only
+  /**
+   * Universal actor update orchestrator
+   * Handles category-ordered updates: scenery → utility → fans → vendors → mascots
+   * Then performs cross-actor orchestration logic
+   * @param deltaTime - Time elapsed in milliseconds
+   * @param scene - Phaser scene (passed to actors for time.now access)
+   */
+  public update(deltaTime: number, scene?: Phaser.Scene): void {
+    // 1. Scenery (SectionActor updates all fans + aggregates)
+    this.updateSceneryActors(deltaTime, scene);
+
+    // 2. Utility actors (e.g., zones, waypoints)
+    this.updateUtilityActors(deltaTime);
+
+    // 3. Fans (no direct updates - handled by sections in step 1)
+    // Skip updateFanActors since sections handle them
+
+    // 4. Vendors (behavior tick + movement handled by VendorActor)
+    this.updateVendorActors(deltaTime);
+
+    // 5. Mascots (behavior tick)
+    this.updateMascotActors(deltaTime);
+
+    // 6. Orchestration logic across actors
+    this.handleVendorCollisions();
+    this.balanceVendorDistribution();
+    this.checkMascotVendorInterference();
+
+    // Backward compatibility: update legacy vendors if any remain
     for (const vendor of this.legacyVendors) {
       if (vendor.isServing) {
         vendor.serviceTimer -= deltaTime;
-
         if (vendor.serviceTimer <= 0) {
           this.gameState.vendorServe(vendor.currentSection!);
           const completedSection = vendor.currentSection;
           vendor.isServing = false;
           vendor.currentSection = null;
-          this.emit('serviceComplete', {
-            vendorId: vendor.id,
-            section: completedSection,
-          });
+          this.emit('serviceComplete', { vendorId: vendor.id, section: completedSection });
         }
       }
     }
+  }
+
+  /** Update scenery actors (sections drive fan updates/aggregates) */
+  private updateSceneryActors(deltaTime: number, scene?: Phaser.Scene): void {
+    if (!this.actorRegistry) return;
+    const sections = this.actorRegistry.getByCategory('section' as ActorCategory);
+    for (const actor of sections) {
+      // Get environmental modifier for this section
+      const sectionId = (actor as any).data?.get('sectionId') || 'A';
+      const envModifier = this.gameState.getEnvironmentalModifier(sectionId);
+      (actor as any).update(deltaTime, scene, envModifier);
+    }
+  }
+
+  /** Update utility actors */
+  private updateUtilityActors(deltaTime: number): void {
+    if (!this.actorRegistry) return;
+    const utilities = this.actorRegistry.getByCategory('utility' as ActorCategory);
+    for (const actor of utilities) {
+      actor.update(deltaTime);
+    }
+  }
+
+  /** Update fan actors (skip - handled by sections) */
+  private updateFanActors(deltaTime: number): void {
+    // Fans are updated by their parent SectionActors
+    // This method kept for future direct fan updates if needed
+  }
+
+  /** Update vendor actors */
+  private updateVendorActors(deltaTime: number): void {
+    if (!this.actorRegistry) return;
+    const vendors = this.actorRegistry.getByCategory('vendor' as ActorCategory) as VendorActor[];
+    for (const vendor of vendors) {
+      vendor.update(deltaTime);
+    }
+  }
+
+  /** Update mascot actors */
+  private updateMascotActors(deltaTime: number): void {
+    // Use registered mascotActors list directly (avoids unsafe casts)
+    for (const mascot of this.mascotActors) {
+      mascot.update(deltaTime);
+      mascot.draw();
+    }
+  }
+
+  /** Cross-actor: simple collision avoidance between vendors (stub) */
+  private handleVendorCollisions(): void {
+    // TODO: Implement proximity checks and path re-routing
+  }
+
+  /** Cross-actor: balance vendor distribution across sections (stub) */
+  private balanceVendorDistribution(): void {
+    // TODO: Implement section counts and reassign if imbalanced
+  }
+
+  /** Cross-actor: mascot interference with nearby vendors (stub) */
+  private checkMascotVendorInterference(): void {
+    // TODO: Implement distraction effects based on proximity
+  }
+
+  /** Handle wave success (migrate from Scene) */
+  public handleWaveSuccess(data: any): void {
+    // Update momentum for vendor/mascot behaviors
+    for (const [, vendorActor] of this.vendorActors) {
+      const behavior = (vendorActor as any).getBehavior?.();
+      behavior?.onWaveSuccess?.();
+    }
+    for (const mascot of this.mascotActors) {
+      (mascot as any).getBehavior?.().onWaveSuccess?.();
+    }
+    this.emit('waveSuccessProcessed', data);
+  }
+
+  /** Handle wave failure (migrate from Scene) */
+  public handleWaveFail(data: any): void {
+    for (const [, vendorActor] of this.vendorActors) {
+      const behavior = (vendorActor as any).getBehavior?.();
+      behavior?.onWaveFailure?.();
+    }
+    for (const mascot of this.mascotActors) {
+      (mascot as any).getBehavior?.().onWaveFailure?.();
+    }
+    this.emit('waveFailProcessed', data);
   }
 
   public on(event: string, callback: Function): void {

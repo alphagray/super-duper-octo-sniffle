@@ -742,10 +742,22 @@ export class Fan extends BaseActorContainer {
     if (this.thirstFreezeUntil && this.scene.time.now < this.thirstFreezeUntil) {
       // Do not increase thirst while frozen
     } else {
-      // Fans get thirstier over time (configurable, with per-fan multiplier and environmental modifier)
-      // environmentalModifier: < 1.0 = shade/cool, 1.0 = normal, > 1.0 = hot/sunny
-      const totalMultiplier = this.thirstMultiplier * environmentalModifier;
-      this.thirst = Math.min(100, this.thirst + deltaSeconds * gameBalance.fanStats.thirstGrowthRate * totalMultiplier);
+      // Thirst two-phase system:
+      // Phase 1 (below threshold): Roll to START getting thirsty
+      // Phase 2 (above threshold): Linear decay after getting thirsty
+      if (this.thirst < gameBalance.fanStats.thirstThreshold) {
+        // Phase 1: Roll to start getting thirsty
+        const rollChance = gameBalance.fanStats.thirstRollChance * environmentalModifier * deltaSeconds;
+        if (Math.random() < rollChance) {
+          // Activation amount pushes fan over threshold
+          const thirstAmount = gameBalance.fanStats.thirstActivationAmount * environmentalModifier;
+          this.thirst = Math.min(100, this.thirst + thirstAmount);
+        }
+      } else {
+        // Phase 2: Linear decay after threshold
+        const decayRate = gameBalance.fanStats.thirstDecayRate * environmentalModifier * deltaSeconds;
+        this.thirst = Math.min(100, this.thirst + decayRate);
+      }
     }
 
     // Thirsty fans get less happy (configurable rate)
