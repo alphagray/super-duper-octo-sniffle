@@ -1,9 +1,12 @@
-import { SceneryActor } from '@/actors/Actor';
+import { SceneryActor } from '@/actors/base/Actor';
 import { StadiumSection } from '@/sprites/StadiumSection';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import type { FanData } from '@/services/LevelService';
 import { Fan } from '@/sprites/Fan';
+import { FanActor } from '@/actors/FanActor';
+import { SeatActor } from '@/sprites/Seat';
 import { SectionRowActor } from './SectionRowActor';
+import { gameBalance } from '@/config/gameBalance';
 
 /**
  * SectionActor: Primary game logic for a stadium section.
@@ -14,7 +17,10 @@ export class SectionActor extends SceneryActor {
   private section: StadiumSection;
   private sectionId: string;
   private rowActors: SectionRowActor[] = [];
+  // Sprite instances (visual only)
   private fans: Map<string, Fan> = new Map();
+  // Actor instances (game logic)
+  private fanActors: Map<string, FanActor> = new Map();
   private gridManager?: any;
   private sectionData: any;
   private labelText?: Phaser.GameObjects.Text;
@@ -124,7 +130,7 @@ export class SectionActor extends SceneryActor {
       }
     }
 
-    // Create fans from data
+    // Create fan sprites + actors from data
     fanData.forEach(fd => {
       const rowActor = this.rowActors[fd.row];
       if (rowActor) {
@@ -133,13 +139,28 @@ export class SectionActor extends SceneryActor {
           // Create fan sprite at seat position
           // gridToWorld already returns center of cell
           const worldPos = this.gridManager
-            ? this.gridManager.gridToWorld(this.sectionData.gridTop + fd.row, this.sectionData.gridLeft + fd.col)
+            ? this.gridManager.gridToWorld(fd.gridRow, fd.gridCol)
             : { x: 0, y: 0 };
           const seatOffsetY = 5; // Offset to align with top of row floor divider (matches SectionRow seat positioning)
           const fanY = worldPos.y - seatOffsetY; // Adjust from cell center by seat offset
           const fan = new Fan(this.section.scene, worldPos.x, fanY);
+          // Create FanActor for game logic
+          const fanActor = new FanActor(
+            `fan-${this.sectionId}-${fd.row}-${fd.col}`,
+            fan,
+            fd.initialStats ? {
+              happiness: fd.initialStats.happiness,
+              thirst: fd.initialStats.thirst,
+              attention: fd.initialStats.attention
+            } : undefined,
+            'fan',
+            false
+          );
+          // Set the FanActor's grid position to absolute grid coordinates
+          fanActor.setGridPosition(fd.gridRow, fd.gridCol, this.gridManager);
           seat.setFan(fan);
           this.fans.set(`${fd.row}-${fd.col}`, fan);
+          this.fanActors.set(`${fd.row}-${fd.col}`, fanActor);
         }
       }
     });
@@ -150,15 +171,85 @@ export class SectionActor extends SceneryActor {
   /**
    * Get all fans in this section
    */
-  public getFans(): Fan[] {
-    return Array.from(this.fans.values());
+  public getFans(): Fan[] { return Array.from(this.fans.values()); }
+
+  /**
+   * Get all FanActor logic instances in this section
+   */
+  public getFanActors(): FanActor[] { return Array.from(this.fanActors.values()); }
+
+  /**
+   * Get FanActor at a seat position
+   */
+  public getFanActorAt(row: number, col: number): FanActor | undefined {
+    return this.fanActors.get(`${row}-${col}`);
   }
 
   /**
    * Query fans by criteria (e.g., thirstiest for AI targeting)
+   * @deprecated Use queryFanActors for game logic
    */
   public queryFans(filter: (fan: Fan) => boolean): Fan[] {
     return this.getFans().filter(filter);
+  }
+
+private lastLoggedTargetFan: number = 0; 
+
+  /**
+   * Query thirstiest FanActors for vendor targeting
+   * @param count Maximum number of fans to return
+   * @returns Array of fan actors with grid positions, sorted by thirst descending
+   */
+  public queryThirstiestFans(count: number = 10): Array<{
+    fanActor: FanActor;
+    fan: Fan;
+    row: number;
+    col: number;
+    thirst: number;
+  }> {
+    const results: Array<{
+      fanActor: FanActor;
+      fan: Fan;
+      row: number;
+      col: number;
+      thirst: number;
+    }> = [];
+
+    // Scan all rows/columns to find fans
+    for (let rowIdx = 0; rowIdx < this.rowActors.length; rowIdx++) {
+      const rowActor = this.rowActors[rowIdx];
+      const seats = rowActor.getSeats();
+      
+      for (let colIdx = 0; colIdx < seats.length; colIdx++) {
+        const seat = seats[colIdx];
+        if (!seat.isEmpty()) {
+          const fanActor = this.getFanActorAt(rowIdx, colIdx);
+          let fanPos = fanActor?.getGridPosition();
+          let time = this.section.scene.game.getTime();
+          if(time - this.lastLoggedTargetFan > 5000){
+            this.lastLoggedTargetFan = time;
+            this.logger.debug(`Checking fan at row ${fanPos?.row}, col ${fanPos?.col}`);
+          }
+          
+          if (fanActor) {
+            const fan = fanActor.getFan();
+            if (!fanPos) continue; // guard against undefined grid lookup
+            results.push({
+              fanActor,
+              fan,
+              row: fanPos.row,
+              col: fanPos.col,
+              thirst: fanActor.getThirst()
+            });
+          }
+        }
+      }
+    }
+
+    // Sort by thirst descending and take top N
+    return results
+      .sort((a, b) => b.thirst - a.thirst)
+      .slice(0, count);
   }
 
   /**
@@ -212,15 +303,38 @@ export class SectionActor extends SceneryActor {
   }
 
   /**
+   * Per-frame update: drive fan stat decay and aggregate cache.
+   * Environmental modifier passed in from AIManager orchestrator.
+   * @param delta - Time elapsed in milliseconds
+   * @param scene - Phaser scene for FanActor updates
+   * @param environmentalModifier - Environmental thirst multiplier
+   */
+  public update(delta: number, scene?: Phaser.Scene, environmentalModifier: number = 1.0): void {
+    // Update all fan actors (stat decay + state transitions)
+    const allFanActors = this.getFanActors();
+    for (const fanActor of allFanActors) {
+      fanActor.update(delta, scene, environmentalModifier);
+    }
+    
+    // Update cached aggregate values for performance
+    this.updateAggregateCache();
+  }
+
+  /**
+   * Scenery draw: no-op (handled by sprites), kept for Actor contract.
+   */
+  public draw(): void { /* no-op */ }
+
+  /**
    * Update all fan stats (thirst, happiness, attention decay).
    * Called explicitly by StadiumScene during active session.
    * @param deltaTime - Time elapsed in milliseconds
    * @param environmentalModifier - Environmental thirst multiplier (< 1.0 = shade, 1.0 = normal, > 1.0 = hot/sunny)
    */
   public updateFanStats(deltaTime: number, environmentalModifier: number = 1.0): void {
-    const allFans = this.getFans();
-    for (const fan of allFans) {
-      fan.updateStats(deltaTime, environmentalModifier);
+    const allFanActors = this.getFanActors();
+    for (const fanActor of allFanActors) {
+      fanActor.updateStats(deltaTime, this.section.scene, environmentalModifier);
     }
     // Update cached aggregate values for performance
     this.updateAggregateCache();
@@ -231,8 +345,8 @@ export class SectionActor extends SceneryActor {
    * Returns cached values updated by updateFanStats().
    */
   public getAggregateStats(): { happiness: number; thirst: number; attention: number } {
-    const allFans = this.getFans();
-    if (allFans.length === 0) {
+    const allFanActors = this.getFanActors();
+    if (allFanActors.length === 0) {
       return { happiness: 50, thirst: 50, attention: 50 };
     }
     return {
@@ -256,8 +370,8 @@ export class SectionActor extends SceneryActor {
    * Called internally after fan stats update.
    */
   private updateAggregateCache(): void {
-    const allFans = this.getFans();
-    if (allFans.length === 0) {
+    const allFanActors = this.getFanActors();
+    if (allFanActors.length === 0) {
       this.happinessAgg = 50;
       this.thirstAgg = 50;
       this.attentionAgg = 50;
@@ -268,16 +382,16 @@ export class SectionActor extends SceneryActor {
     let totalThirst = 0;
     let totalAttention = 0;
 
-    for (const fan of allFans) {
-      const stats = fan.getStats();
+    for (const fanActor of allFanActors) {
+      const stats = fanActor.getStats();
       totalHappiness += stats.happiness;
       totalThirst += stats.thirst;
       totalAttention += stats.attention;
     }
 
-    this.happinessAgg = totalHappiness / allFans.length;
-    this.thirstAgg = totalThirst / allFans.length;
-    this.attentionAgg = totalAttention / allFans.length;
+    this.happinessAgg = totalHappiness / allFanActors.length;
+    this.thirstAgg = totalThirst / allFanActors.length;
+    this.attentionAgg = totalAttention / allFanActors.length;
   }
 
   /**
@@ -285,16 +399,17 @@ export class SectionActor extends SceneryActor {
    * Called each frame to update fan colors.
    */
   public updateFanIntensity(intensity?: number): void {
-    const allFans = this.getFans();
+    const allFanActors = this.getFanActors();
     if (intensity !== undefined) {
       // Set all fans to same intensity
-      for (const fan of allFans) {
-        fan.setIntensity(intensity);
+      for (const fanActor of allFanActors) {
+        fanActor.getFan().setIntensity(intensity);
       }
     } else {
       // Use each fan's personal thirst as intensity
-      for (const fan of allFans) {
-        fan.setIntensity();
+      for (const fanActor of allFanActors) {
+        const thirst = fanActor.getThirst();
+        fanActor.getFan().setIntensity(thirst / 100);
       }
     }
   }
@@ -304,10 +419,9 @@ export class SectionActor extends SceneryActor {
    * Clears reducedEffort flag and wave strength modifier for clean state.
    */
   public resetFanWaveState(): void {
-    const allFans = this.getFans();
-    for (const fan of allFans) {
-      fan.reducedEffort = false;
-      fan.setWaveStrengthModifier(0);
+    for (const fanActor of this.getFanActors()) {
+      fanActor.reducedEffort = false;
+      fanActor.setWaveStrengthModifier(0);
     }
   }
 
@@ -322,7 +436,6 @@ export class SectionActor extends SceneryActor {
     waveStrength: number
   ): Array<{ fan: any; willParticipate: boolean; intensity: number }> {
     const sectionBonus = this.getSectionWaveBonus();
-    const gameBalance = require('@/config/gameBalance').gameBalance;
     const strengthModifier = (waveStrength - 50) * gameBalance.waveStrength.strengthModifier;
     const result: Array<{ fan: any; willParticipate: boolean; intensity: number }> = [];
 
@@ -338,13 +451,14 @@ export class SectionActor extends SceneryActor {
         if (!seat.isEmpty()) {
           const fan = seat.getFan();
           if (fan) {
-            // Apply wave strength modifier
-            fan.setWaveStrengthModifier(strengthModifier);
-            // Roll for participation
-            const willParticipate = fan.rollForWaveParticipation(sectionBonus);
-            fanStates.push({ fan, willParticipate });
-            if (willParticipate) {
-              participatingCount++;
+            const fanActor = this.getFanActorAt(rowIdx, columnIndex);
+            if (fanActor) {
+              fanActor.setWaveStrengthModifier(strengthModifier);
+              const willParticipate = fanActor.rollForWaveParticipation(sectionBonus);
+              fanStates.push({ fan: fanActor, willParticipate });
+              if (willParticipate) {
+                participatingCount++;
+              }
             }
           }
         }
@@ -361,17 +475,18 @@ export class SectionActor extends SceneryActor {
       for (const state of fanStates) {
         if (!state.willParticipate) {
           state.willParticipate = true;
-          state.fan.reducedEffort = true;
+          (state.fan as FanActor).reducedEffort = true;
         }
       }
     }
 
     // Build result with intensity
     for (const state of fanStates) {
+      const actor = state.fan as FanActor;
       result.push({
-        fan: state.fan,
+        fan: actor,
         willParticipate: state.willParticipate,
-        intensity: state.fan.reducedEffort ? 0.5 : 1.0,
+        intensity: actor.reducedEffort ? 0.5 : 1.0,
       });
     }
 
@@ -391,7 +506,6 @@ export class SectionActor extends SceneryActor {
     visualState: 'full' | 'sputter' | 'death' = 'full',
     waveStrength: number = 70
   ): Promise<void> {
-    const gameBalance = require('@/config/gameBalance').gameBalance;
     const baseRowDelay = gameBalance.waveTiming.rowDelay;
     const columnPromises: Promise<void>[] = [];
 
@@ -415,13 +529,14 @@ export class SectionActor extends SceneryActor {
       const state = fanStates[rowIdx];
       if (state && state.willParticipate && state.fan) {
         const delayMs = rowIdx * baseRowDelay;
-        columnPromises.push(state.fan.playWave(delayMs, state.intensity, visualState, waveStrength));
+        const actor = state.fan as FanActor;
+        columnPromises.push(actor.playWave(delayMs, state.intensity, visualState, waveStrength));
         animCount++;
         // Call onWaveParticipation after animation completes
         const scene = (this.section as any).scene;
         if (scene) {
           scene.time.delayedCall(delayMs + animationDuration, () => {
-            state.fan.onWaveParticipation(state.willParticipate);
+            (state.fan as FanActor).onWaveParticipation(scene, state.willParticipate);
           });
         }
       }

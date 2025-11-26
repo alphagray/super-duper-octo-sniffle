@@ -126,6 +126,10 @@ export class StadiumSection extends Phaser.GameObjects.Container {
     return this.rows;
   }
 
+  public getColumnCount() :number {
+    return this.getRows().reduce((max, row) => Math.max(max, row.seats.length), 0);
+  }
+
   /**
    * Gets all fans in this section
    */
@@ -175,15 +179,9 @@ export class StadiumSection extends Phaser.GameObjects.Container {
    * Temporary delegation for backwards compatibility.
    */
   public updateFanIntensity(intensity?: number): void {
-    // This is kept temporarily for any direct sprite calls
-    // StadiumScene should call SectionActor.updateFanIntensity() instead
+    // Deprecated: visual intensity now handled by SectionActor
     if (intensity !== undefined) {
       this.rows.forEach(row => row.updateFanIntensity(intensity));
-    } else {
-      const allFans = this.getFans();
-      for (const fan of allFans) {
-        fan.setIntensity();
-      }
     }
   }
 
@@ -217,11 +215,7 @@ export class StadiumSection extends Phaser.GameObjects.Container {
    * Temporary delegation for backwards compatibility.
    */
   public resetFanWaveState(): void {
-    const allFans = this.getFans();
-    for (const fan of allFans) {
-      fan.reducedEffort = false;
-      fan.setWaveStrengthModifier(0);
-    }
+    // Deprecated: handled by SectionActor.resetFanWaveState()
   }
 
   /**
@@ -232,56 +226,8 @@ export class StadiumSection extends Phaser.GameObjects.Container {
     columnIndex: number,
     waveStrength: number
   ): Array<{ fan: Fan; willParticipate: boolean; intensity: number }> {
-    // Temporary fallback - StadiumScene should call SectionActor method instead
-    const sectionBonus = this.getSectionWaveBonus();
-    const strengthModifier = (waveStrength - 50) * gameBalance.waveStrength.strengthModifier;
-    const rows = this.getRows();
-    const result: Array<{ fan: Fan; willParticipate: boolean; intensity: number }> = [];
-
-    let participatingCount = 0;
-    const fanStates: Array<{ fan: Fan; willParticipate: boolean }> = [];
-
-    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-      const row = rows[rowIdx];
-      const seats = row.getSeats();
-      if (columnIndex < seats.length) {
-        const seat = seats[columnIndex];
-        if (!seat.isEmpty()) {
-          const fan = seat.getFan();
-          if (fan) {
-            fan.setWaveStrengthModifier(strengthModifier);
-            const willParticipate = fan.rollForWaveParticipation(sectionBonus);
-            fanStates.push({ fan, willParticipate });
-            if (willParticipate) {
-              participatingCount++;
-            }
-          }
-        }
-      }
-    }
-
-    const columnSize = fanStates.length;
-    const peerPressureThreshold = gameBalance.waveStrength.peerPressureThreshold;
-    const participationRate = columnSize > 0 ? participatingCount / columnSize : 0;
-
-    if (participationRate >= peerPressureThreshold) {
-      for (const state of fanStates) {
-        if (!state.willParticipate) {
-          state.willParticipate = true;
-          state.fan.reducedEffort = true;
-        }
-      }
-    }
-
-    for (const state of fanStates) {
-      result.push({
-        fan: state.fan,
-        willParticipate: state.willParticipate,
-        intensity: state.fan.reducedEffort ? 0.5 : 1.0,
-      });
-    }
-
-    return result;
+    // Deprecated: use SectionActor.calculateColumnParticipation()
+    return [];
   }
 
   /**
@@ -294,38 +240,7 @@ export class StadiumSection extends Phaser.GameObjects.Container {
     visualState: 'full' | 'sputter' | 'death' = 'full',
     waveStrength: number = 70
   ): Promise<void> {
-    const baseRowDelay = gameBalance.waveTiming.rowDelay;
-    const columnPromises: Promise<void>[] = [];
-
-    let animationDuration: number;
-    switch (visualState) {
-      case 'sputter':
-        animationDuration = 378;
-        break;
-      case 'death':
-        animationDuration = 252;
-        break;
-      case 'full':
-      default:
-        animationDuration = 420;
-        break;
-    }
-
-    const rows = this.getRows();
-    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-      const state = fanStates[rowIdx];
-      if (state && state.willParticipate && state.fan) {
-        const delayMs = rowIdx * baseRowDelay;
-        columnPromises.push(state.fan.playWave(delayMs, state.intensity, visualState, waveStrength));
-        this.scene.time.delayedCall(delayMs + animationDuration, () => {
-          state.fan.onWaveParticipation(state.willParticipate);
-        });
-      }
-    }
-
-    Promise.all(columnPromises).catch(err => {
-      console.error('Error during column animation:', err);
-    });
+    // Deprecated: use SectionActor.playColumnAnimation()
   }
 
   /**
@@ -333,80 +248,8 @@ export class StadiumSection extends Phaser.GameObjects.Container {
    * Now tracks individual fan participation (kept for backwards compatibility)
    */
   public async playWave(): Promise<{ participatingFans: number; totalFans: number; participationRate: number }> {
-    // Reset fan wave state for clean participation calculations
-    this.resetFanWaveState();
-
-    const baseColumnDelay = gameBalance.waveTiming.columnDelay;
-    const baseRowDelay = gameBalance.waveTiming.rowDelay;
-    const columnDelay = baseColumnDelay;
-    const rowDelay = baseRowDelay;
-
-    const sectionBonus = this.getSectionWaveBonus();
-    let participatingFans = 0;
-    let totalFans = 0;
-
-    // PRE-CALCULATE participation for all fans before any animation
-    const rows = this.getRows();
-    const maxSeats = rows[0]?.getSeats().length ?? 0;
-    
-    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-      const row = rows[rowIdx];
-      const seats = row.getSeats();
-      for (let col = 0; col < seats.length; col++) {
-        const seat = seats[col];
-        if (!seat.isEmpty()) {
-          const fan = seat.getFan();
-          if (fan) {
-            totalFans++;
-            // Pre-roll participation
-            if (fan.rollForWaveParticipation(sectionBonus)) {
-              participatingFans++;
-            }
-          }
-        }
-      }
-    }
-
-    // Now animate the wave smoothly, column by column
-    for (let col = 0; col < maxSeats; col++) {
-      const columnPromises: Promise<void>[] = [];
-
-      // For each row, animate the seat at this column if they're participating
-      for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-        const row = rows[rowIdx];
-        const seats = row.getSeats();
-        if (col < seats.length) {
-          const seat = seats[col];
-          if (!seat.isEmpty()) {
-            const fan = seat.getFan();
-            if (fan && fan._lastWaveParticipated) {
-              const delayMs = rowIdx * rowDelay;
-              columnPromises.push(fan.playWave(delayMs));
-            }
-          }
-        }
-      }
-
-      // Start all fans in this column (don't await - allows smooth overlapping animations)
-      Promise.all(columnPromises).catch(err => {
-        console.error('Error during wave animation:', err);
-      });
-      
-      // Delay before next column
-      if (col < maxSeats - 1) {
-        await new Promise(resolve => {
-          this.scene.time.delayedCall(columnDelay, resolve);
-        });
-      }
-    }
-
-    // Wait a short buffer for the final column to start before reporting completion
-    await new Promise(resolve => {
-      this.scene.time.delayedCall(40, resolve);
-    });
-
-    const participationRate = totalFans > 0 ? participatingFans / totalFans : 0;
-    return { participatingFans, totalFans, participationRate };
+    // Deprecated: SectionActor orchestrates waves now
+    return { participatingFans: 0, totalFans: 0, participationRate: 0 };
   }
 
   /**

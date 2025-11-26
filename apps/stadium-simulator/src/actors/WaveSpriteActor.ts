@@ -1,4 +1,4 @@
-import { UtilityActor } from '@/actors/Actor';
+import { UtilityActor } from '@/actors/base/Actor';
 import type { WaveSprite } from '@/sprites/WaveSprite';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 

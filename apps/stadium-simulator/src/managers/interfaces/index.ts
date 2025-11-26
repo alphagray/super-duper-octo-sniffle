@@ -6,3 +6,4 @@ export * from './Section';
 export * from './WaveState';
 export * from './GameState';
 export * from './VendorTypes';
+export * from './ZoneConfig';

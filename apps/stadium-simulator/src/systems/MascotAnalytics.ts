@@ -1,6 +1,5 @@
-import type { Fan } from '@/sprites/Fan';
+// TODO: Rebuild analytics using Actor-level data (MascotActor, FanActor, SectionActor).
 import type { StadiumSection } from '@/sprites/StadiumSection';
-import type { RippleEffect } from '@/systems/RipplePropagationEngine';
 import { gameBalance } from '@/config/gameBalance';
 
 /**
@@ -94,77 +93,17 @@ export class MascotAnalytics {
   /**
    * Record individual cannon shot impact
    */
-  public recordCannonShot(shotNumber: number, ripples: RippleEffect[]): void {
+  public recordCannonShot(_shotNumber: number, _rippleIds: string[]): void {
+    // Deprecated until actor-based ripple restored; stub increments only
     this.metrics.totalShotsFired++;
-
-    // Aggregate shot statistics
-    const uniqueFans = new Set<Fan>();
-    let totalBoost = 0;
-    let disinterestedHit = 0;
-
-    ripples.forEach((ripple) => {
-      ripple.affectedFans.forEach((boost, fan) => {
-        uniqueFans.add(fan);
-        totalBoost += boost;
-
-        // Check if was disinterested and got re-engaged
-        if (fan.getIsDisinterested()) {
-          disinterestedHit++;
-
-          // Project if this will re-engage them
-          const currentAttention = fan.getAttention();
-          const threshold = gameBalance.mascotAnalytics?.reEngagementAttentionThreshold ?? 30;
-          if (currentAttention + boost >= threshold) {
-            // Will exceed threshold
-            this.metrics.disinterestedReEngaged++;
-          }
-        }
-      });
-    });
-
-    const fansAffected = uniqueFans.size;
-    const averageBoost = fansAffected > 0 ? totalBoost / fansAffected : 0;
-
-    // Update cumulative metrics
-    this.metrics.totalFansAffected += fansAffected;
-    this.metrics.totalAttentionBoost += totalBoost;
-
-    // Record shot details
-    const record: ShotImpactRecord = {
-      shotNumber,
-      timestamp: Date.now(),
-      catcherCount: ripples.length,
-      fansAffected,
-      totalBoost,
-      disinterestedHit,
-      averageBoost,
-    };
-
-    this.shotRecords.push(record);
-
-    if (this.shouldReport()) {
-      console.log(
-        `[MascotAnalytics] Shot ${shotNumber}: ${fansAffected} fans affected, ` +
-          `avg boost: ${averageBoost.toFixed(1)}, disinterested hit: ${disinterestedHit}`
-      );
-    }
   }
 
   /**
    * Calculate current wave participation rate for section
    */
   private calculateParticipationRate(section: StadiumSection): number {
-    const fans = section.getFans();
-    if (fans.length === 0) return 0;
-
-    // Calculate how many fans would participate in a wave right now
-    const threshold = gameBalance.mascotAnalytics?.participationThreshold ?? 50;
-    const wouldParticipate = fans.filter((fan) => {
-      const chance = fan.calculateWaveChance(0);
-      return chance > threshold; // Threshold for "likely to participate"
-    }).length;
-
-    return (wouldParticipate / fans.length) * 100;
+    // Placeholder until SectionActor participation snapshot API implemented
+    return 0;
   }
 
   /**

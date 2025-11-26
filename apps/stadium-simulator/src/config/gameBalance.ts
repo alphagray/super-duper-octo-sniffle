@@ -9,14 +9,19 @@ export const gameBalance = {
    */
   fanStats: {
     // Initial stat ranges
+
     initialHappiness: 70,
     initialThirstMin: 0,
     initialThirstMax: 30,
     initialAttention: 70,
 
-    // Decay rates (points per second)
-    thirstGrowthRate: 2,
-    happinessDecayRate: 1.25, // when thirst > 50
+    // Thirst two-phase system
+    thirstRollChance: 0.01, // Phase 1: Chance per second to START getting thirsty (0-1)
+    thirstActivationAmount: 15, // Phase 1: Big jump when roll succeeds (pushes over threshold)
+    thirstThreshold: 50, // Threshold for state transition (Phase 1 → Phase 2)
+    thirstDecayRate: 2, // Phase 2: Linear pts/sec after threshold
+    unhappyHappinessThreshold: 30, // When happiness drops below this, fan becomes unhappy
+    happinessDecayRate: 1.0, // when thirst > 50
     attentionDecayRate: 1.5,
     attentionMinimum: 30,
 
@@ -156,8 +161,8 @@ export const gameBalance = {
    * Wave timing configuration (all in milliseconds, converted to seconds where needed)
    */
   waveTiming: {
-    triggerCountdown: 10000, // 10 seconds before wave fires
-    baseCooldown: 10000, // 10 seconds between waves
+    triggerCountdown: 5000, // 10 seconds before wave fires
+    baseCooldown: 15000, // 10 seconds between waves
     successRefund: 5000, // refund this much if all sections succeed
     columnDelay: 44, // ms between column animations
     rowDelay: 6, // ms between row animations within column
@@ -238,6 +243,22 @@ export const gameBalance = {
     // Countdown display
     countdownFontSize: 120,
     waveCountdownFontSize: 48,
+    // Depth layering constants
+    depths: {
+      sky: 0,
+      ground: 1,
+      uiOverlayDefault: 75,
+      uiOverlayMin: 50,
+      uiOverlayMax: 99,
+      scenery: 100,
+      animatedActorBase: 150,
+      animatedActorMin: 101,
+      animatedActorMax: 200,
+      animatedActorRowPenalty: 10,
+    },
+    waveCelebration: {
+      yOffset: -67, // vertical offset for overlay above section top
+    },
   },
 
   /**
@@ -364,6 +385,38 @@ export const gameBalance = {
   },
 
   /**
+   * Grid pathfinding zone-based costs
+   * Used by GridPathfinder for A* movement cost calculation
+   */
+  pathfinding: {
+    // Zone type cost multipliers (applied to base cell size)
+    zoneCosts: {
+      ground: 0.7, // Ground is fastest
+      corridor: 0.8, // Corridors are fast
+      rowEntry: 1.2, // Entering rows is slower
+      seat: 2.0, // Moving through seats is very slow
+      stair: 1.5, // Stairs are moderately slow
+      sky: 999, // Sky is impassable (failsafe)
+    } as Record<'ground' | 'corridor' | 'rowEntry' | 'seat' | 'stair' | 'sky', number>,
+    
+    // Transition crossing penalty (added when crossing zone boundaries)
+    transitionCrossPenalty: 10,
+    
+    // Ground diagonal penalty (for future diagonal support in ground zones)
+    groundDiagonalPenalty: 5,
+  },
+
+  /**
+   * Vendor assignment (player-driven targeting)
+   */
+  vendorAssignment: {
+    cooldownMs: 5000, // 5s cooldown after assignment
+    idleTimeoutMs: 5000, // 5s without target → patrol mode
+    patrolIntervalMs: 3000, // 3s between patrol waypoint selections
+    patrolRangeColumns: 5, // ±5 columns from current position for patrol
+  },
+
+  /**
    * Grump/difficult terrain configuration
    * Foundation for future grump fan type
    */
@@ -422,6 +475,28 @@ export const gameBalance = {
       happinessBoost: 15, // points added to happiness
       canEnterRows: true, // allowed to navigate section rows
       rangedOnly: false, // must approach fans directly
+      
+      // Targeting configuration
+      targeting: {
+        thirstWeight: 1.0, // weight for average thirst in cluster scoring
+        clusterSizeWeight: 0.5, // weight for cluster size
+        distanceWeight: 0.3, // penalty weight for distance to cluster
+        clusterRadius: 3, // Manhattan radius for fan grouping
+        minimumServeThirst: 25, // minimum fan thirst to warrant service
+      },
+      
+      // Seat assignment retry configuration
+      retry: {
+        maxAttempts: 3, // max seat assignment attempts before recall
+        logOnlyFinalFailure: true, // only log warning on 3rd failure
+      },
+      
+      // Patrol behavior configuration
+      patrol: {
+        enabled: true, // enable patrol when unassigned
+        intervalMs: 4000, // time between random waypoint selections
+        zones: ['corridor', 'ground'] as const, // allowed patrol zones
+      },
     },
     
     // Ranged AoE vendor (t-shirt cannon, front-only service)
@@ -468,6 +543,7 @@ export const gameBalance = {
     logPathPlanning: true, // log path calculation details
     logTargetSelection: true, // log target scoring
     logMovement: false, // log movement updates (verbose)
+    logAccessSelection: true, // log vertical access helper selections
     renderPaths: true, // draw debug lines for paths
     renderAoE: true, // draw AoE radius circles
   },
@@ -482,6 +558,7 @@ export const gameBalance = {
     maxRadius: 4, // maximum Manhattan distance for ripple spread
     disinterestedBonus: 5, // extra attention boost for disinterested fans
     decayType: 'linear' as const, // decay function: 'linear' | 'exponential'
+    expDecayBase: 0.6, // exponential base per Manhattan ring when decayType = 'exponential'
   },
 
   /**
@@ -560,6 +637,52 @@ export const gameBalance = {
     reEngagementAttentionThreshold: 30, // attention threshold for re-engagement
     reportingEnabled: true, // Toggle console reports
     trackingWindowMs: 30000, // 30 seconds after mascot
+  },
+  /**
+   * Mascot behavior (Actor + Behavior layer) configuration
+   * New system governing targeting cycles, ability effect magnitudes, scan cadence.
+   */
+  mascotBehavior: {
+    targetingCycle: ['section', 'global', 'cluster'] as const, // deterministic rotation order
+    abilityBaseIntervalMs: 8000, // interval between ability activations (8s)
+    // Per-phase base stat boosts (non-ultimate)
+    abilityEffects: {
+      section: { attention: 6, happiness: 3 }, // applied to one section
+      global: { attention: 3, happiness: 1 }, // applied stadium-wide
+      cluster: { attention: 8, happiness: 4 }, // applied only to low-attention cluster
+      ultimateMultiplier: 1.5, // multiply above boosts when firing during ultimate
+    },
+    // Cluster selection parameters
+    cluster: {
+      lowAttentionThreshold: 45, // fans below this considered for cluster targeting
+      scanRadius: 4, // manhattan radius for forming cluster
+      minClusterSize: 5, // minimum fans to qualify cluster
+      scanIntervalMs: 1500, // ms between cluster scans when in cluster phase
+    },
+    // Section targeting strategy
+    sectionSelection: {
+      mode: 'lowestAttention', // choose section with lowest avg attention
+      tieBreak: 'rotate', // rotate on ties for fairness
+    },
+    // Global effect scaling
+    globalScaling: {
+      participationWeight: 0.4, // future use: scale happiness by participation delta
+    },
+    // Behavior internal timing
+    stateTickIntervalMs: 250, // coarse tick interval for non-frame-critical logic
+  },
+  /**
+   * Mascot ultimate cadence & momentum configuration (hybrid scheduling)
+   * NOTE: baseCooldownMs has been halved per user instruction; minFloorMs retained (potential conflict).
+   */
+  mascotUltimate: {
+    baseCooldownMs: 45000, // base starting cooldown (user-adjusted)
+    maxIntervalMs: 60000, // forced trigger if exceeded (user-adjusted)
+    momentumStepPercent: 0.10, // reduction per consecutive wave success
+    momentumMaxPercent: 0.40, // cap on total reduction
+    attentionTriggerThreshold: 45, // fire early if avg attention below this
+    minFloorMs: 30000, // minimum effective cooldown floor (adjusted per Option A)
+    diminishingReturnFactor: 0.25, // reduce future momentum effectiveness by 25% after an ultimate
   },
 };
 

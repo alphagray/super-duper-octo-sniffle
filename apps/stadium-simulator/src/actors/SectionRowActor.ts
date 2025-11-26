@@ -1,4 +1,4 @@
-import { SceneryActor } from '@/actors/Actor';
+import { SceneryActor } from '@/actors/base/Actor';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import type { VendorAbilities } from '@/managers/interfaces/VendorTypes';
 import { gameBalance } from '@/config/gameBalance';
@@ -119,6 +119,7 @@ export class SectionRowActor extends SceneryActor {
    * @param seatCount Number of seats in this row
    */
   public buildSeats(seatCount: number): void {
+    const cellWidth = this.rowWidthPx / seatCount;
     for (let col = 0; col < seatCount; col++) {
       const gridCol = this.gridLeft + col;
       const seatId = `${this.sectionId}-${this.rowIndex}-${col}`;

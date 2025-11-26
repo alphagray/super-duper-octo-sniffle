@@ -1,4 +1,4 @@
-import { SceneryActor } from '@/actors/Actor';
+import { SceneryActor } from '@/actors/base/Actor';
 
 /**
  * StairsActor: Represents a stairway connecting two stadium sections.

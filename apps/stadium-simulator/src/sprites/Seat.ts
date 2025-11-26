@@ -1,7 +1,7 @@
 import { Fan } from './Fan';
 import type { VendorAbilities } from '@/managers/interfaces/VendorTypes';
 import { gameBalance } from '@/config/gameBalance';
-import { Actor } from '@/actors/Actor';
+import { Actor } from '@/actors/base/Actor';
 
 /**
  * SeatActor: Represents a seat in a stadium section row as an Actor.
@@ -87,15 +87,8 @@ export class SeatActor extends Actor {
     if (this.isEmpty()) {
       return gameBalance.vendorMovement.emptySeatPenalty;
     }
-    let penalty = gameBalance.vendorMovement.occupiedSeatPenalty;
-    if (this.fan && this.fan.isDifficultTerrain()) {
-      if (!vendorAbilities.ignoreGrumpPenalty) {
-        const grumpPenalty = gameBalance.vendorMovement.rowBasePenalty 
-          * this.fan.getTerrainPenaltyMultiplier();
-        penalty = Math.min(grumpPenalty, gameBalance.vendorMovement.maxTerrainPenalty);
-      }
-    }
-    return penalty;
+    // Difficult terrain logic moved to FanActor; sprite no longer exposes it.
+    return gameBalance.vendorMovement.occupiedSeatPenalty;
   }
 
   update(delta: number): void {

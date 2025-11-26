@@ -5,22 +5,28 @@ import { AIManager } from '@/managers/AIManager';
 import { StadiumSection } from '@/sprites/StadiumSection';
 import { Vendor } from '@/sprites/Vendor';
 import { Mascot } from '@/sprites/Mascot';
+import { MascotActor } from '@/actors/MascotActor';
 import { VendorState } from '@/managers/interfaces';
 import { AnnouncerService } from '@/managers/AnnouncerService';
 import { DevPanel } from '@/ui/DevPanel';
 
 import { gameBalance } from '@/config/gameBalance';
-import { ActorRegistry } from '@/actors/ActorRegistry';
-import { ActorFactory } from '@/actors/ActorFactory';
-import { SectionActor } from '@/actors/adapters/SectionActor';
-import { StairsActor } from '@/actors/adapters/StairsActor';
-import { GroundActor } from '@/actors/adapters/GroundActor';
-import { SkyboxActor } from '@/actors/adapters/SkyboxActor';
-import { FanActor } from '@/actors/adapters/FanActor';
+import { ActorRegistry } from '@/actors/base/ActorRegistry';
+import { ActorFactory } from '@/actors/base/ActorFactory';
+import { SectionActor } from '@/actors/SectionActor';
+import { StairsActor } from '@/actors/StairsActor';
+import { GroundActor } from '@/actors/GroundActor';
+import { SkyboxActor } from '@/actors/SkyboxActor';
+import { FanActor } from '@/actors/FanActor';
+import { VendorActor } from '@/actors/VendorActor';
+import { DrinkVendorBehavior } from '@/actors/behaviors/DrinkVendorBehavior';
 import { GridManager } from '@/managers/GridManager';
 import { LevelService } from '@/services/LevelService';
 import { GridOverlay } from '@/scenes/GridOverlay';
+import { PathfindingService } from '@/services/PathfindingService';
 import { TargetingIndicator } from '@/components/TargetingIndicator';
+import { TargetingReticle } from '@/ui/TargetingReticle';
+import { OverlayManager } from '@/managers/OverlayManager';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -41,8 +47,8 @@ export class StadiumScene extends Phaser.Scene {
   private sessionTimerText?: Phaser.GameObjects.Text;
   private sections: StadiumSection[] = [];
   private vendorSprites: Map<number, Vendor> = new Map(); // Track vendor visual sprites
-  private mascots: Mascot[] = []; // Track mascot sprites
-  private mascotSectionMap: Map<string, Mascot> = new Map(); // Track which mascot is in which section
+  private mascotActors: MascotActor[] = []; // Track mascot actors (logic + sprite)
+  private mascotSectionMap: Map<string, MascotActor> = new Map(); // Map sectionId -> mascot actor
   private autoRotationMode: boolean = false; // Auto-rotation mode for mascots
   private mascotKeys: Phaser.Input.Keyboard.Key[] = []; // Track keyboard keys for cleanup
   private demoMode: boolean = false;
@@ -58,6 +64,10 @@ export class StadiumScene extends Phaser.Scene {
   private groundActor?: any;
   private gridOverlay?: GridOverlay;
   public targetingIndicator!: TargetingIndicator;
+  private pathfindingService?: PathfindingService;
+  private targetingReticle?: TargetingReticle;
+  private vendorTargetingActive: number | null = null; // Vendor ID currently being targeted
+  private overlayManager?: OverlayManager;
 
   constructor() {
     super({ key: 'StadiumScene' });
@@ -82,6 +92,22 @@ export class StadiumScene extends Phaser.Scene {
     const levelData = await LevelService.loadLevel();
     this.levelData = levelData; // Cache for later use
     console.log('[StadiumScene] Level data loaded:', levelData);
+
+    // Load zone configuration into GridManager
+    if (this.gridManager && levelData.gridConfig) {
+      console.log('[StadiumScene] Loading zone config into GridManager');
+      console.log('[StadiumScene] gridConfig structure:', {
+        hasCellRanges: !!levelData.gridConfig.cellRanges,
+        cellRangesCount: levelData.gridConfig.cellRanges?.length,
+        hasCells: !!levelData.gridConfig.cells,
+        cellsCount: levelData.gridConfig.cells?.length,
+        hasGridConfig: !!levelData.gridConfig.gridConfig,
+      });
+      this.gridManager.loadZoneConfig(levelData.gridConfig);
+      console.log('[StadiumScene] Zone config loaded successfully');
+    } else {
+      console.warn('[StadiumScene] GridManager or gridConfig not available');
+    }
 
     // Attach actorRegistry to the scene instance for WaveManager access
     (this as any).actorRegistry = this.actorRegistry;
@@ -128,6 +154,14 @@ export class StadiumScene extends Phaser.Scene {
 
     // Initialize AIManager
     this.aiManager = new AIManager(this.gameState, 2, this.gridManager, this.actorRegistry);
+
+    // Initialize shared PathfindingService once and attach it everywhere
+    if (this.gridManager) {
+      this.pathfindingService = new PathfindingService(this.gridManager);
+      this.aiManager.attachPathfindingService(this.pathfindingService);
+    } else {
+      console.warn('[StadiumScene] Cannot initialize PathfindingService without GridManager');
+    }
 
     // Create SectionActors from level data (Actor-first, data-driven!)
     const sectionActors: SectionActor[] = [];
@@ -188,6 +222,7 @@ export class StadiumScene extends Phaser.Scene {
 
     // Initialize AIManager with sections for pathfinding
     this.aiManager.initializeSections(this.sections);
+    this.aiManager.setSectionActors(sectionActors);
 
     // Listen to vendor events BEFORE spawning (important!)
     this.setupVendorEventListeners();
@@ -195,29 +230,16 @@ export class StadiumScene extends Phaser.Scene {
     // Spawn vendors at positions from level data
     if (levelData.vendors && this.gridManager) {
       levelData.vendors.forEach((vendorData, idx) => {
-        const profile = this.aiManager.createVendor(vendorData.type as any, 'good');
         const worldPos = this.gridManager!.gridToWorld(vendorData.gridRow, vendorData.gridCol);
-        console.log(`[Vendor Init] Vendor ${profile.id} at grid (${vendorData.gridRow}, ${vendorData.gridCol}) -> world (${worldPos.x}, ${worldPos.y})`);
-        
-        const instance = {
-          profile,
-          state: 'idle' as VendorState,
-          position: { x: worldPos.x, y: worldPos.y },
-          currentSegmentIndex: 0,
-          scanTimer: 0,
-          stateTimer: 0,
-          distractionCheckTimer: 0,
-          attentionAuraActive: false,
-          lastServiceTime: 0,
-        };
-        this.aiManager.getVendorInstances().set(profile.id, instance);
-        
-        // Directly create vendor sprite for initialization (no need for event)
-        const vendorSprite = new Vendor(this, worldPos.x, worldPos.y);
-        vendorSprite.setDepth(1000); // Render above fans
-        this.add.existing(vendorSprite);
-        this.vendorSprites.set(profile.id, vendorSprite);
-        console.log(`[Vendor Init] Created sprite for vendor ${profile.id}, total sprites: ${this.vendorSprites.size}`);
+        console.log(`[Vendor Init] Spawning vendor at grid (${vendorData.gridRow}, ${vendorData.gridCol}) -> world (${worldPos.x}, ${worldPos.y})`);
+
+        // Spawn vendor actor (actor creates its own sprite)
+        const { actor: vendorActor, id: vendorId } = this.aiManager.spawnVendor(this, worldPos.x, worldPos.y, vendorData.type as any, 'good');
+
+        // Store sprite for UI controls
+        const vendorSprite = vendorActor.getVendor();
+        this.vendorSprites.set(vendorId, vendorSprite);
+        console.log(`[Vendor Init] Created vendor actor ${vendorId}, total sprites: ${this.vendorSprites.size}`);
       });
       
       // Rebuild vendor controls to show buttons immediately
@@ -231,6 +253,19 @@ export class StadiumScene extends Phaser.Scene {
     this.successStreak = 0;
 
     this.announcer = new AnnouncerService();
+      // Initialize OverlayManager (UI overlays between ground and scenery)
+      this.overlayManager = new OverlayManager(this);
+      // Hook real section world positions (use sprite positions for now)
+      this.overlayManager.setSectionPositionResolver((sectionId: string) => {
+        const idx = this.getSectionIndex(sectionId);
+        const section = this.sections[idx];
+        const cfgHeight = 200; // matches sectionConfig.height
+        const x = section?.x ?? this.cameras.main.centerX;
+        // Use config offset for overlay Y
+        const yOffset = gameBalance.ui.waveCelebration?.yOffset ?? -32;
+        const y = (section?.y ?? this.cameras.main.centerY) - cfgHeight / 2 + yOffset;
+        return { x, y };
+      });
     this.announcer.getCommentary(JSON.stringify({ event: 'waveStart' }))
       .then(result => console.log('[AnnouncerService test] result:', result))
       .catch(err => console.error('[AnnouncerService test] error', err));
@@ -281,6 +316,13 @@ export class StadiumScene extends Phaser.Scene {
       this.gridOverlay = new GridOverlay(this, this.gridManager);
       this.gridOverlay.setStadiumScene(this);
       this.gridOverlay.setAIManager(this.aiManager);
+      if (this.pathfindingService) {
+        this.gridOverlay.setPathfindingService(this.pathfindingService);
+      }
+      
+      // Create targeting reticle (hidden initially)
+      this.targetingReticle = new TargetingReticle(this);
+      this.targetingReticle.on('cancelled', this.exitVendorTargetingMode, this);
       
       // Setup keyboard toggles for grid overlay
       const keyboard = this.input.keyboard;
@@ -307,44 +349,45 @@ export class StadiumScene extends Phaser.Scene {
             this.gridOverlay.toggleVendorPaths();
           }
         });
+        // Z key: Toggle zone visualization (only if grid visible)
+        keyboard.addKey('Z').on('down', () => {
+          if (this.gridOverlay) {
+            this.gridOverlay.toggleZones();
+          }
+        });
+
+        // T key: Toggle transition markers (only if grid visible)
+        keyboard.addKey('T').on('down', () => {
+          if (this.gridOverlay) {
+            this.gridOverlay.toggleTransitions();
+          }
+        });
+
+        // E key: Toggle directional edges (only if grid visible)
+        keyboard.addKey('E').on('down', () => {
+          if (this.gridOverlay) {
+            this.gridOverlay.toggleDirectionalEdges();
+          }
+        });
       }
     }
 
-    // Spawn mascots (one per section initially, inactive)
+    // Spawn mascot actors (one per section initially, inactive)
     this.sections.forEach((section, index) => {
-      const mascot = new Mascot(this, section.x, section.y);
-      mascot.setVisible(false); // Start hidden
-      this.mascots.push(mascot);
-
-      // Attach cannon event listeners for debugging
-      mascot.on('cannonCharging', (data: any) => {
-        console.log(`[Cannon] Mascot charging, targets: ${data.catchers.length}`);
-      });
-
-      mascot.on('cannonFired', (data: any) => {
-        console.log(`[Cannon] Mascot fired at ${data.catchers.length} fans`);
-      });
-
-      mascot.on('cannonShot', (data: any) => {
-        console.log(
-          `[Cannon] Shot complete! ${data.catchers.length} catchers, ` +
-          `${data.combinedEffects.size} fans affected by ripple`
-        );
-      });
-
-      mascot.on('cannonMissed', (data: any) => {
-        console.log(`[Cannon] Shot missed - ${data.reason}`);
-      });
-
-      // Forward mascot analytics to DevPanel
-      mascot.on('mascotAnalytics', (data: { metrics: any, shotRecords: any }) => {
-        if (!import.meta.env.PROD) {
-          const devPanel = DevPanel.getInstance();
-          devPanel.updateMascotAnalytics(data.metrics, data.shotRecords);
-        }
-      });
-
-      console.log(`[Mascot] Created mascot ${index} for section ${section.getId()}`);
+      const sprite = new Mascot(this, section.x, section.y);
+      // Show faint placeholder in debug mode so user knows spawn points
+      if (this.debugMode) {
+        sprite.setVisible(true);
+        sprite.setAlpha(0.35);
+      } else {
+        sprite.setVisible(false);
+      }
+      const actorId = `actor:mascot-${index}`;
+      const mascotActor = new MascotActor(actorId, sprite, null, this.gridManager, false);
+      this.actorRegistry.register(mascotActor);
+      this.aiManager.registerMascot(mascotActor);
+      this.mascotActors.push(mascotActor);
+      console.log(`[MascotActor] Registered mascot actor ${actorId} for section ${section.getId()}`);
     });
 
     // Setup mascot keyboard controls
@@ -352,6 +395,9 @@ export class StadiumScene extends Phaser.Scene {
 
     // Setup cleanup on scene shutdown
     this.events.once('shutdown', this.cleanupMascotControls, this);
+    
+    // Setup canvas click handler for vendor targeting
+    this.input.on('pointerdown', this.handleCanvasClick, this);
 
     // Notify WorldScene that initialization is complete
     this.events.emit('stadiumReady', { aiManager: this.aiManager });
@@ -493,6 +539,28 @@ export class StadiumScene extends Phaser.Scene {
       }
     });
 
+    // Wire wave events through AIManager (Phase 4: Wave Event Migration)
+    // AIManager handles actor momentum updates, then re-emits for Scene UI
+    this.waveManager.on('waveFullSuccess', () => {
+      this.aiManager.handleWaveSuccess({ type: 'full' });
+    });
+
+    this.waveManager.on('sectionComplete', (data: { sectionId: string; state: 'success' | 'sputter' | 'death'; avgParticipation: number }) => {
+      if (data.state === 'success') {
+        this.aiManager.handleWaveSuccess({ type: 'section', ...data });
+      } else {
+        this.aiManager.handleWaveFail({ type: 'section', ...data });
+      }
+    });
+
+    // Listen to AIManager's processed wave events for UI updates
+    this.aiManager.on('waveSuccessProcessed', (data: any) => {
+      if (data.type === 'full') {
+        console.log('[StadiumScene] waveFullSuccess - triggering camera shake');
+        this.cameras.main.shake(200, 0.005);
+      }
+    });
+
     // Listen to WaveManager events for visual feedback
     this.waveManager.on('waveStart', () => {
       this.successStreak = 0;
@@ -514,6 +582,16 @@ export class StadiumScene extends Phaser.Scene {
       
       const sectionIndex = this.getSectionIndex(data.sectionId);
       const section = this.sections[sectionIndex];
+      
+      // Get SectionActor for calculating participation (not the sprite)
+      const sectionActors = this.actorRegistry.getByCategory('section');
+      const sectionActor = sectionActors[sectionIndex] as SectionActor;
+      
+      if (!sectionActor) {
+        console.warn(`[StadiumScene.columnWaveReached] No SectionActor for section ${data.sectionId} index ${sectionIndex}`);
+        return;
+      }
+      
       if (data.seatIds.length === 0) {
         console.warn(`[StadiumScene.columnWaveReached] No seats for section ${data.sectionId} col ${data.gridCol}`);
         return;
@@ -541,12 +619,12 @@ export class StadiumScene extends Phaser.Scene {
       const waveStrength = data.waveStrength ?? this.waveManager.getCurrentWaveStrength();
       const visualState = (data.visualState as 'full' | 'sputter' | 'death' | undefined) ?? 'full';
       const participationMultiplier = 1; // TODO: Apply boosters if needed
-      // Calculate participation for this specific column
-      const fanStates = section.calculateColumnParticipation(columnIndex, waveStrength * participationMultiplier);
-      console.log(`[StadiumScene.columnWaveReached] fanStates.length: ${fanStates.length}`);
+      
+      // Calculate participation using SectionActor (not deprecated sprite method)
+      const fanStates = sectionActor.calculateColumnParticipation(columnIndex, waveStrength * participationMultiplier);
       
       if (fanStates.length === 0) {
-        console.warn(`[StadiumScene.columnWaveReached] No fanStates for section ${data.sectionId} col ${columnIndex}`);
+        // This can happen if the column is outside the section's range - just skip silently
         return;
       }
       
@@ -561,9 +639,10 @@ export class StadiumScene extends Phaser.Scene {
       // Record column state for analytics
       this.waveManager.recordColumnState(data.sectionId, columnIndex, columnRate, columnState);
       this.waveManager.pushColumnParticipation(columnRate);
-      // Trigger animation for this column immediately (no await - fire and forget)
-      console.log(`[StadiumScene.columnWaveReached] Calling playColumnAnimation for ${fanStates.length} fans`);
-      section.playColumnAnimation(columnIndex, fanStates, visualState, waveStrength);
+      
+      // Trigger animation using SectionActor (not deprecated sprite method)
+      sectionActor.playColumnAnimation(columnIndex, fanStates, visualState, waveStrength);
+      
       // Log every few columns to reduce spam
       if (this.waveManager['currentGridColumnIndex'] % 5 === 0) {
         console.log(`[Column Wave] Section ${data.sectionId} col ${columnIndex}: ${columnState} (${Math.round(columnRate*100)}%)`);
@@ -581,7 +660,15 @@ export class StadiumScene extends Phaser.Scene {
     });
 
     // Section completion event - trigger visual effects
-    this.waveManager.on('sectionComplete', (data: { sectionId: string; state: 'success' | 'sputter' | 'death'; avgParticipation: number }) => {
+    this.waveManager.on('sectionComplete', (data: { 
+      sectionId: string; 
+      state: 'success' | 'sputter' | 'death'; 
+      avgParticipation: number; 
+      successCount: number; 
+      sputterCount: number; 
+      deathCount: number;
+      aggregateStats: { happiness: number; thirst: number; attention: number };
+    }) => {
       const sectionIndex = this.getSectionIndex(data.sectionId);
       const section = this.sections[sectionIndex];
       
@@ -601,6 +688,59 @@ export class StadiumScene extends Phaser.Scene {
         section.playAnimation('flash-fail');
       }
       // No animation for sputter - it's just a weak success
+
+      // Create celebration overlay above section using OverlayManager
+      if (this.overlayManager) {
+        // Defensive: ensure participation is a valid number
+        let participation = Number(data.avgParticipation);
+        if (isNaN(participation) || participation == null) participation = 0;
+        participation = Math.round(participation * 100);
+        
+        // Generate stat-based reasons from aggregate fan stats
+        const reasons: string[] = [];
+        const stats = data.aggregateStats;
+        
+        // Success reasons (positive contributors)
+        if (data.state === 'success') {
+          if (stats.happiness > 70) reasons.push('+ high spirits');
+          if (stats.attention > 70) reasons.push('+ focused crowd');
+          if (stats.thirst < 30) reasons.push('+ well hydrated');
+        }
+        
+        // Sputter reasons (mixed performance)
+        if (data.state === 'sputter') {
+          if (stats.attention < 50) reasons.push('- distracted');
+          if (stats.happiness < 50) reasons.push('- lukewarm mood');
+          if (stats.thirst > 60) reasons.push('- getting thirsty');
+        }
+        
+        // Failure reasons (negative contributors)
+        if (data.state === 'death') {
+          if (stats.attention < 40) reasons.push('- lost interest');
+          if (stats.happiness < 40) reasons.push('- unhappy fans');
+          if (stats.thirst > 70) reasons.push('- very thirsty');
+        }
+        
+        // Fallback: if no specific reasons, show column breakdown
+        if (reasons.length === 0) {
+          const totalColumns = data.successCount + data.sputterCount + data.deathCount;
+          if (data.successCount > 0 && totalColumns > 0) {
+            const successPercent = Math.round((data.successCount / totalColumns) * 100);
+            reasons.push(`+ ${successPercent}% strong`);
+          }
+          if (data.sputterCount > 0 && totalColumns > 0) {
+            const sputterPercent = Math.round((data.sputterCount / totalColumns) * 100);
+            reasons.push(`- ${sputterPercent}% weak`);
+          }
+        }
+        
+        this.overlayManager.createWaveCelebration({
+          sectionId: data.sectionId,
+          participation,
+          state: data.state === 'success' ? 'success' : data.state === 'death' ? 'fail' : 'neutral',
+          reasons,
+        });
+      }
     });
 
     this.waveManager.on('waveComplete', (data: { results: any[] }) => {
@@ -655,10 +795,6 @@ export class StadiumScene extends Phaser.Scene {
           }
         });
       });
-    });    // Full wave success celebration (camera shake) - scene-level effect
-    this.waveManager.on('waveFullSuccess', () => {
-      console.log('[StadiumScene] waveFullSuccess - triggering camera shake');
-      this.cameras.main.shake(200, 0.005);
     });
 
     // Create debug panel
@@ -692,53 +828,42 @@ export class StadiumScene extends Phaser.Scene {
       }
     }
 
-    // Update fan stats (thirst decay, happiness, attention)
-    // Only update stats when session is actually active (not during countdown)
-    if (!this.demoMode && this.gameState.getSessionState() === 'active') {
-      // Get section actors from registry and update their fan stats
+    // Universal actor orchestration through AIManager (Phase 3 complete)
+    // AIManager handles: scenery → utility → fans → vendors → mascots
+    // Stat decay now happens per-fan via FanActor.update()
+    this.aiManager.update(delta, this);
+
+    // Sync section-level stats from fan aggregates for UI display
+    // (Aggregates are now updated by SectionActor.update() in AIManager)
+    if (this.levelData && this.gameState.getSessionState() === 'active') {
       const sectionActors = this.actorRegistry.getByCategory('section');
-      sectionActors.forEach(actor => {
-        // Get environmental modifier for this section
-        const sectionId = (actor as any).data?.get('sectionId') || 'A';
-        const envModifier = this.gameState.getEnvironmentalModifier(sectionId);
-        (actor as any).updateFanStats(delta, envModifier);
-      });
-
-      // Sync section-level stats from fan aggregates for UI display
-      if (this.levelData) {
-        this.levelData.sections.forEach((sectionData: any, idx: number) => {
-          const sectionActor = sectionActors[idx];
-          if (!sectionActor) return;
-          const aggregate = (sectionActor as any).getAggregateStats();
-          
-          // Update GameStateManager with aggregate values for UI display
-          this.gameState.updateSectionStat(sectionData.id, 'happiness', aggregate.happiness);
-          this.gameState.updateSectionStat(sectionData.id, 'thirst', aggregate.thirst);
-          this.gameState.updateSectionStat(sectionData.id, 'attention', aggregate.attention);
-        });
-      }
-
-      // Check disinterested state for all fans (~500ms intervals)
-      // This uses time-based throttling to avoid checking every frame
-      this.sections.forEach(section => {
-        section.getFans().forEach(fan => fan.checkDisinterestedState());
+      this.levelData.sections.forEach((sectionData: any, idx: number) => {
+        const sectionActor = sectionActors[idx];
+        if (!sectionActor) return;
+        const aggregate = (sectionActor as any).getAggregateStats();
+        
+        // Update GameStateManager with aggregate values for UI display
+        this.gameState.updateSectionStat(sectionData.id, 'happiness', aggregate.happiness);
+        this.gameState.updateSectionStat(sectionData.id, 'thirst', aggregate.thirst);
+        this.gameState.updateSectionStat(sectionData.id, 'attention', aggregate.attention);
       });
     }
 
-    // Update actor registry (for autonomous actor behaviors)
-    this.actorRegistry.update(delta);
-
-    // Update vendor manager
-    this.aiManager.update(delta);
-
     // Update vendor visual positions
     this.updateVendorPositions();
+    // Render vendor grid labels when path debug is active
+    this.renderVendorGridLabels();
 
     // Update mascot positions and states
     this.updateMascots(delta);
 
     // Tick wave sprite movement and events (sprite-driven propagation)
     this.waveManager.update(delta);
+
+    // Update overlay manager (clean up finished overlays)
+    if (this.overlayManager) {
+      this.overlayManager.update(delta);
+    }
 
     // Check for autonomous wave triggering (only when session is active)
     if (gameBalance.waveAutonomous.enabled && 
@@ -802,6 +927,14 @@ export class StadiumScene extends Phaser.Scene {
 
     // Update debug panel stats
     this.updateDebugStats();
+
+    // Update vendor button cooldowns (real-time countdown)
+    this.updateVendorCooldowns();
+
+    // Update targeting reticle cursor validation (real-time)
+    if (this.vendorTargetingActive && this.targetingReticle) {
+      this.updateTargetingReticle();
+    }
   }
 
   /**
@@ -1333,16 +1466,14 @@ export class StadiumScene extends Phaser.Scene {
       console.log(`[Vendor] Spawned vendor ${data.vendorId}`);
       const { vendorId, profile } = data;
       
-      // Use vendor instance position (set from gridManager.gridToWorld)
-      const instance = this.aiManager.getVendorInstance(vendorId);
-      const startX = instance?.position.x ?? this.cameras.main.centerX;
-      const startY = instance?.position.y ?? 550;
-      const vendorSprite = new Vendor(this, startX, startY);
-      vendorSprite.setDepth(1000); // Render above fans
-      console.log(`[Vendor] Sprite created at (${startX}, ${startY})`);
-      this.vendorSprites.set(vendorId, vendorSprite);
-      console.log(`[Vendor] Total sprites: ${this.vendorSprites.size}`);
-      this.add.existing(vendorSprite);
+      // Get vendor actor and its sprite
+      const vendorActor = this.aiManager.getVendorActor(vendorId);
+      const vendorSprite = vendorActor?.getVendor();
+      if (vendorSprite) {
+        this.vendorSprites.set(vendorId, vendorSprite);
+        console.log(`[Vendor] Sprite created at (${vendorSprite.x}, ${vendorSprite.y})`);
+        console.log(`[Vendor] Total sprites: ${this.vendorSprites.size}`);
+      }
       console.log(`[Vendor] Profile type=${profile.type} quality=${profile.qualityTier}`);
       this.rebuildVendorControls();
     });
@@ -1388,15 +1519,15 @@ export class StadiumScene extends Phaser.Scene {
     const mKey = keyboard.addKey('M');
     this.mascotKeys.push(mKey);
     mKey.on('down', () => {
-      const availableMascot = this.mascots.find(m => m.canActivate());
+      const availableMascot = this.mascotActors.find(m => m.canActivate());
       const availableSection = this.sections.find(s => !this.mascotSectionMap.has(s.getId()));
-
       if (availableMascot && availableSection) {
         availableMascot.activateInSection(availableSection, 'manual');
         this.mascotSectionMap.set(availableSection.getId(), availableMascot);
-        console.log(`[Mascot] Activated mascot in section ${availableSection.getId()}`);
+        console.log(`[MascotActor] Activated mascot in section ${availableSection.getId()}`);
+        availableMascot.getSprite().setVisible(true);
       } else {
-        console.log('[Mascot] No available mascot or section');
+        console.log('[MascotActor] No available mascot or section');
       }
     });
 
@@ -1409,7 +1540,7 @@ export class StadiumScene extends Phaser.Scene {
         if (sectionIndex >= this.sections.length) return;
 
         const section = this.sections[sectionIndex];
-        const availableMascot = this.mascots.find(m => m.canActivate());
+        const availableMascot = this.mascotActors.find(m => m.canActivate());
 
         // Check if section already has a mascot
         if (this.mascotSectionMap.has(section.getId())) {
@@ -1420,9 +1551,10 @@ export class StadiumScene extends Phaser.Scene {
         if (availableMascot) {
           availableMascot.activateInSection(section, 'manual');
           this.mascotSectionMap.set(section.getId(), availableMascot);
-          console.log(`[Mascot] Activated mascot in section ${section.getId()} (index ${sectionIndex})`);
+          availableMascot.getSprite().setVisible(true);
+          console.log(`[MascotActor] Activated mascot in section ${section.getId()} (index ${sectionIndex})`);
         } else {
-          console.log('[Mascot] No available mascot (all in cooldown or active)');
+          console.log('[MascotActor] No available mascot (all in cooldown or active)');
         }
       });
     }
@@ -1432,10 +1564,8 @@ export class StadiumScene extends Phaser.Scene {
     this.mascotKeys.push(aKey);
     aKey.on('down', () => {
       this.autoRotationMode = !this.autoRotationMode;
-      this.mascots.forEach(m => {
-        m.setMovementMode(this.autoRotationMode ? 'auto' : 'manual');
-      });
-      console.log(`[Mascot] Auto-rotation mode: ${this.autoRotationMode ? 'ON' : 'OFF'}`);
+      this.mascotActors.forEach(m => m.setMovementMode(this.autoRotationMode ? 'auto' : 'manual'));
+      console.log(`[MascotActor] Auto-rotation mode: ${this.autoRotationMode ? 'ON' : 'OFF'}`);
     });
   }
 
@@ -1453,14 +1583,39 @@ export class StadiumScene extends Phaser.Scene {
    */
   private updateVendorPositions(): void {
     for (const [vendorId, sprite] of this.vendorSprites) {
-      const instance = this.aiManager.getVendorInstance(vendorId);
-      if (!instance) continue;
+      const vendorActor = this.aiManager.getVendorActor(vendorId);
+      if (!vendorActor) continue;
 
-      // Update sprite position to match instance position
-      sprite.setPosition(instance.position.x, instance.position.y);
+      // Update sprite position to match actor position
+      const position = vendorActor.getPosition();
+      sprite.setPosition(position.x, position.y);
 
-      // Update sprite state to match vendor state
-      sprite.setMovementState(instance.state);
+      // Update sprite state to match vendor behavior state
+      const behavior = vendorActor.getBehavior();
+      if (behavior && 'getState' in behavior) {
+        sprite.setMovementState((behavior as any).getState());
+      }
+    }
+  }
+
+  /** Render grid coordinate labels below vendor sprites when vendor path debug (V) is active */
+  private renderVendorGridLabels(): void {
+    if (!this.gridOverlay) return;
+    const active = this.gridOverlay.showVendorPaths;
+    // Remove existing labels
+    this.children.list.filter(c => c.name && c.name.startsWith('vendor-grid-label-')).forEach(c => c.destroy());
+    if (!active) return;
+    for (const [vendorId, sprite] of this.vendorSprites) {
+      const actor = this.actorRegistry.get(`actor:vendor-${vendorId}`) as any;
+      if (!actor || !this.gridManager) continue;
+      const gp = actor.getGridPosition();
+      const label = this.add.text(sprite.x, sprite.y + 18, `(${gp.col},${gp.row})`, {
+        fontSize: '11px',
+        fontFamily: 'Courier New',
+        color: '#ffec99'
+      }).setOrigin(0.5, 0);
+      label.setDepth(sprite.depth + 1);
+      label.name = `vendor-grid-label-${vendorId}`;
     }
   }
 
@@ -1468,24 +1623,21 @@ export class StadiumScene extends Phaser.Scene {
    * Update mascot positions and handle deactivation cleanup
    */
   private updateMascots(delta: number): void {
-    this.mascots.forEach(mascot => {
-      mascot.update(delta);
-
-      // Clean up section map when mascot deactivates
-      if (!mascot.isPatrolling() && mascot.getAssignedSection()) {
-        const sectionId = mascot.getAssignedSection()?.getId();
-        if (sectionId && this.mascotSectionMap.get(sectionId) === mascot) {
+    this.mascotActors.forEach(actor => {
+      actor.update(delta);
+      // Section cleanup when actor deactivates
+      if (!actor.isPatrolling() && actor.getAssignedSection()) {
+        const sectionId = actor.getAssignedSection()?.getId();
+        if (sectionId && this.mascotSectionMap.get(sectionId) === actor) {
           this.mascotSectionMap.delete(sectionId);
-          mascot.clearSection();
         }
       }
-
-      // Auto-rotation: automatically move mascot to next section
+      // Auto-rotation
       if (gameBalance.mascot.autoRotationEnabled &&
-          mascot.getMovementMode() === 'auto' &&
-          mascot.canActivate() &&
-          mascot.getAutoRotationCooldown() <= 0) {
-        this.autoRotateMascot(mascot);
+          actor.getMovementMode() === 'auto' &&
+          actor.canActivate() &&
+          actor.getAutoRotationCooldown() <= 0) {
+        this.autoRotateMascot(actor);
       }
     });
   }
@@ -1493,64 +1645,271 @@ export class StadiumScene extends Phaser.Scene {
   /**
    * Auto-rotate a mascot to the next available section
    */
-  private autoRotateMascot(mascot: Mascot): void {
-    // Find next available section (sequential rotation)
+  private autoRotateMascot(actor: MascotActor): void {
     const availableSection = this.sections.find(s => !this.mascotSectionMap.has(s.getId()));
-
     if (availableSection) {
-      mascot.activateInSection(availableSection, 'auto');
-      this.mascotSectionMap.set(availableSection.getId(), mascot);
-      console.log(`[Mascot Auto-Rotation] Activated mascot in section ${availableSection.getId()}`);
+      actor.activateInSection(availableSection, 'auto');
+      this.mascotSectionMap.set(availableSection.getId(), actor);
+      actor.getSprite().setVisible(true);
+      console.log(`[MascotActor Auto-Rotation] Activated mascot in section ${availableSection.getId()}`);
     }
   }
 
   /**
-   * Dynamically rebuild vendor assignment controls based on active vendors
+   * Dynamically rebuild vendor assignment controls (player-driven targeting)
    */
   private rebuildVendorControls(): void {
     const controlsRoot = document.getElementById('controls');
     if (!controlsRoot) return;
-    // Clear previous dynamic vendor controls (keep wave button if present)
-    // Remove all children then recreate
+    
+    // Clear previous controls
     controlsRoot.innerHTML = '';
-    // Optionally re-add wave button if it existed
+    
+    // Re-add wave button
     const waveBtn = document.createElement('button');
     waveBtn.id = 'wave-btn';
     waveBtn.textContent = 'START WAVE';
     waveBtn.style.display = 'none';
     controlsRoot.appendChild(waveBtn);
 
-    const vendorInstances = Array.from(this.aiManager.getVendorInstances().entries());
-    vendorInstances.forEach(([vendorId, instance], idx) => {
+    // Use vendorActors map (new actor-based system)
+    const vendorActors = Array.from(this.aiManager.getVendorActors().entries());
+    console.log(`[rebuildVendorControls] Building controls for ${vendorActors.length} vendors`);
+    
+    vendorActors.forEach(([vendorId, vendorActor]) => {
       const row = document.createElement('div');
       row.className = 'vendor-controls';
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px;';
-      const label = document.createElement('span');
-      label.className = 'vendor-label';
-      label.textContent = `Vendor ${vendorId}:`;
-      label.style.cssText = 'font-size:12px;color:#ccc;';
-      row.appendChild(label);
-
-      // Determine serviceable sections (drink => all sections; later types may differ)
-      const serviceableSectionIndices: number[] = [0,1,2];
-      serviceableSectionIndices.forEach(sIdx => {
-        const sectionId = this.levelData?.sections[sIdx]?.id || sIdx.toString();
-        const btn = document.createElement('button');
-        btn.className = 'vendor-btn';
-        btn.textContent = `Section ${sectionId}`;
-        btn.style.cssText = 'background:#111;border:1px solid #555;color:#eee;font-size:11px;padding:2px 6px;cursor:pointer;';
-        if (instance.assignedSectionIdx === sIdx) {
-          btn.style.border = '1px solid #0ff';
-          btn.style.background = '#033';
+      row.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:8px;';
+      
+      // Main vendor button
+      const btn = document.createElement('button');
+      btn.className = 'vendor-btn';
+      btn.id = `vendor-btn-${vendorId}`;
+      btn.textContent = `Vendor ${vendorId}`;
+      btn.style.cssText = 'background:#111;border:1px solid #555;color:#eee;font-size:11px;padding:4px 8px;cursor:pointer;';
+      
+      // Check cooldown status
+      const onCooldown = this.aiManager.isVendorOnCooldown(vendorId);
+      if (onCooldown) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+      }
+      
+      btn.onclick = () => {
+        if (!onCooldown) {
+          this.enterVendorTargetingMode(vendorId);
         }
-        btn.onclick = () => {
-          this.aiManager.assignVendorToSection(vendorId, sIdx);
-        };
-        row.appendChild(btn);
-      });
-
+      };
+      row.appendChild(btn);
+      
+      // Status label
+      const statusLabel = document.createElement('span');
+      statusLabel.id = `vendor-status-${vendorId}`;
+      statusLabel.style.cssText = 'font-size:10px;color:#999;text-align:center;';
+      
+      if (onCooldown) {
+        const remaining = this.aiManager.getVendorCooldownRemaining(vendorId);
+        statusLabel.textContent = `Cooldown: ${Math.ceil(remaining / 1000)}s`;
+      } else {
+        // Check if vendor is assigned to a section via behavior
+        const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
+        const assignedSection = behavior.getAssignedSection();
+        
+        if (assignedSection !== null && assignedSection >= 0 && assignedSection <= 2) {
+          const sectionNames = ['Section A', 'Section B', 'Section C'];
+          statusLabel.textContent = sectionNames[assignedSection];
+        } else {
+          statusLabel.textContent = 'Available';
+        }
+      }
+      
+      row.appendChild(statusLabel);
       controlsRoot.appendChild(row);
     });
+  }
+
+  /**
+   * Enter vendor targeting mode
+   */
+  private enterVendorTargetingMode(vendorId: number): void {
+    if (this.vendorTargetingActive !== null) {
+      console.warn('[StadiumScene] Already in targeting mode');
+      return;
+    }
+    
+    this.vendorTargetingActive = vendorId;
+    console.log(`[StadiumScene] Entered targeting mode for vendor ${vendorId}`);
+    
+    // Show reticle
+    if (this.targetingReticle) {
+      this.targetingReticle.show();
+    }
+    
+    // Update button state
+    const btn = document.getElementById(`vendor-btn-${vendorId}`);
+    if (btn) {
+      btn.style.border = '2px solid #0f0';
+      btn.style.background = '#030';
+      btn.textContent = `▶ Vendor ${vendorId} ◀`;
+    }
+  }
+
+  /**
+   * Exit vendor targeting mode
+   */
+  private exitVendorTargetingMode(): void {
+    if (this.vendorTargetingActive === null) return;
+    
+    const vendorId = this.vendorTargetingActive;
+    console.log(`[StadiumScene] Exited targeting mode for vendor ${vendorId}`);
+    
+    // Hide reticle
+    if (this.targetingReticle) {
+      this.targetingReticle.hide();
+    }
+    
+    // Restore button state
+    const btn = document.getElementById(`vendor-btn-${vendorId}`);
+    if (btn) {
+      btn.style.border = '1px solid #555';
+      btn.style.background = '#111';
+      btn.textContent = `Vendor ${vendorId}`;
+    }
+    
+    this.vendorTargetingActive = null;
+  }
+
+  /**
+   * Handle canvas click during vendor targeting
+   */
+  private handleCanvasClick(pointer: Phaser.Input.Pointer): void {
+    if (this.vendorTargetingActive === null || !this.gridManager) return;
+    
+    // Convert world coordinates to grid
+    const gridPos = this.gridManager.worldToGrid(pointer.worldX, pointer.worldY);
+    if (!gridPos) {
+      console.log('[StadiumScene] Click outside grid bounds, cancelling targeting');
+      this.exitVendorTargetingMode();
+      return;
+    }
+    
+    // Validate click is in seat zone
+    const cell = this.gridManager.getCell(gridPos.row, gridPos.col);
+    if (!cell || cell.zoneType !== 'seat') {
+      console.log('[StadiumScene] Click on non-seat tile, cancelling targeting');
+      this.exitVendorTargetingMode();
+      return;
+    }
+    
+    // Determine which section this seat belongs to
+    const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
+    if (sectionIdx === null) {
+      console.log('[StadiumScene] Could not determine section for clicked seat');
+      this.exitVendorTargetingMode();
+      return;
+    }
+    
+    // Assign vendor to section
+    console.log(`[StadiumScene] Assigning vendor ${this.vendorTargetingActive} to section ${sectionIdx} via click at grid (${gridPos.row},${gridPos.col})`);
+    this.aiManager.assignVendorToSection(this.vendorTargetingActive, sectionIdx, gridPos.row, gridPos.col);
+    
+    // Exit targeting mode
+    this.exitVendorTargetingMode();
+    
+    // Rebuild controls to show assignment
+    this.rebuildVendorControls();
+  }
+
+  /**
+   * Get section index at grid position
+   * @param row Grid row
+   * @param col Grid column
+   * @returns Section index (0-2) or null if not in any section
+   */
+  private getSectionAtGridPosition(row: number, col: number): number | null {
+    // Section seat ranges from level data
+    // Section A: cols 2-9, rows 15-18
+    // Section B: cols 12-19, rows 15-18
+    // Section C: cols 22-29, rows 15-18
+    
+    if (row < 15 || row > 18) return null;
+    
+    if (col >= 2 && col <= 9) return 0; // Section A
+    if (col >= 12 && col <= 19) return 1; // Section B
+    if (col >= 22 && col <= 29) return 2; // Section C
+    
+    return null;
+  }
+
+  /**
+   * Update vendor button cooldown displays (called every frame)
+   * Shows real-time countdown on cooldown buttons
+   */
+  private updateVendorCooldowns(): void {
+    // Iterate all vendor actors and update their DOM status labels
+    const vendorActors = this.aiManager.getVendorActors();
+    
+    vendorActors.forEach((vendorActor, vendorId) => {
+      const statusLabel = document.getElementById(`vendor-status-${vendorId}`);
+      if (!statusLabel) return;
+
+      // Check if vendor is on cooldown
+      if (this.aiManager.isVendorOnCooldown(vendorId)) {
+        const cooldownMs = this.aiManager.getVendorCooldownRemaining(vendorId);
+        const cooldownSec = Math.ceil(cooldownMs / 1000);
+        statusLabel.textContent = `Cooldown: ${cooldownSec}s`;
+      } else {
+        // Check if vendor is assigned to a section
+        const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
+        const assignedSection = behavior.getAssignedSection();
+
+        if (assignedSection !== null && assignedSection >= 0 && assignedSection <= 2) {
+          const sectionNames = ['Section A', 'Section B', 'Section C'];
+          statusLabel.textContent = sectionNames[assignedSection];
+        } else {
+          // Check if vendor is patrolling
+          const state = behavior.getState();
+          if (state === 'patrolling') {
+            statusLabel.textContent = 'Patrolling';
+          } else {
+            statusLabel.textContent = 'Available';
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * Update targeting reticle cursor validation (called every frame when targeting active)
+   * Changes reticle color based on whether cursor is over valid section seat
+   */
+  private updateTargetingReticle(): void {
+    if (!this.targetingReticle || !this.gridManager) return;
+
+    // Get cursor world position
+    const pointer = this.input.activePointer;
+    const worldX = pointer.worldX;
+    const worldY = pointer.worldY;
+
+    // Convert to grid position
+    const gridPos = this.gridManager.worldToGrid(worldX, worldY);
+    if (!gridPos) {
+      this.targetingReticle.setTargetable(false, null);
+      return;
+    }
+
+    // Check if cursor is over a seat zone
+    const zone = this.gridManager.getZoneType(gridPos.row, gridPos.col);
+    const isValidTarget = zone === 'seat';
+
+    if (isValidTarget) {
+      // Check which section this seat belongs to
+      const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
+      this.targetingReticle.setTargetable(true, sectionIdx);
+    } else {
+      this.targetingReticle.setTargetable(false, null);
+    }
   }
 
   /**

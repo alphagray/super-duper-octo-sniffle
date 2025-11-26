@@ -1,0 +1,989 @@
+{
+  "gridConfig": {
+    "rows": 24,
+    "cols": 32,
+    "cellSize": 32
+  },
+  "cellRanges": [
+    {
+      "rowStart": 0,
+      "rowEnd": 13,
+      "colStart": 0,
+      "colEnd": 31,
+      "zoneType": "sky",
+      "passable": false,
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      }
+    },
+    {
+      "rowStart": 14,
+      "rowEnd": 14,
+      "colStart": 0,
+      "colEnd": 31,
+      "zoneType": "corridor",
+      "passable": true,
+      "allowedIncoming": {
+        "top": false,
+        "right": true,
+        "bottom": false,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": true,
+        "bottom": false,
+        "left": true
+      }
+    },
+    {
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 2,
+      "colEnd": 9,
+      "zoneType": "seat",
+      "passable": false
+    },
+    {
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 12,
+      "colEnd": 19,
+      "zoneType": "seat",
+      "passable": false
+    },
+    {
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 22,
+      "colEnd": 29,
+      "zoneType": "seat",
+      "passable": false
+    },
+    {
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 10,
+      "colEnd": 11,
+      "zoneType": "stair",
+      "passable": true
+    },
+    {
+      "rowStart": 15,
+      "rowEnd": 18,
+      "colStart": 20,
+      "colEnd": 21,
+      "zoneType": "stair",
+      "passable": true
+    },
+    {
+      "rowStart": 19,
+      "rowEnd": 23,
+      "colStart": 0,
+      "colEnd": 31,
+      "zoneType": "ground",
+      "passable": true
+    }
+  ],
+  "cells": [
+    {
+      "row": 14,
+      "col": 2,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 3,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 4,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 5,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 6,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 7,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 8,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 9,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 12,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 13,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 14,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 15,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 16,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 17,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 18,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 19,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 22,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 23,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 24,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 25,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 26,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 27,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 28,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 29,
+      "zoneType": "rowEntry",
+      "transitionType": "rowBoundary",
+      "allowedIncoming": {
+        "top": true,
+        "right": null,
+        "bottom": null,
+        "left": null
+      },
+      "allowedOutgoing": {
+        "top": null,
+        "right": null,
+        "bottom": true,
+        "left": null
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 10,
+      "zoneType": "corridor",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 11,
+      "zoneType": "corridor",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 20,
+      "zoneType": "corridor",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 21,
+      "zoneType": "corridor",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 19,
+      "col": 10,
+      "zoneType": "ground",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 19,
+      "col": 11,
+      "zoneType": "ground",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 19,
+      "col": 20,
+      "zoneType": "ground",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 19,
+      "col": 21,
+      "zoneType": "ground",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 0,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 14,
+      "col": 1,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 15,
+      "col": 0,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 15,
+      "col": 1,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 16,
+      "col": 0,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 16,
+      "col": 1,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 14,
+      "col": 30,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 14,
+      "col": 31,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 15,
+      "col": 30,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 15,
+      "col": 31,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 16,
+      "col": 30,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    },
+    {
+      "row": 16,
+      "col": 31,
+      "zoneType": "sky",
+      "allowedIncoming": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": false,
+        "bottom": false,
+        "left": false
+      },
+      "passable": false
+    }
+  ],
+  "sections": [
+    {
+      "id": "A",
+      "label": "Section A",
+      "gridBounds": {
+        "top": 15,
+        "left": 2,
+        "width": 8,
+        "height": 4
+      },
+      "rows": 4,
+      "seatsPerRow": 8
+    },
+    {
+      "id": "B",
+      "label": "Section B",
+      "gridBounds": {
+        "top": 15,
+        "left": 12,
+        "width": 8,
+        "height": 4
+      },
+      "rows": 4,
+      "seatsPerRow": 8
+    },
+    {
+      "id": "C",
+      "label": "Section C",
+      "gridBounds": {
+        "top": 15,
+        "left": 22,
+        "width": 8,
+        "height": 4
+      },
+      "rows": 4,
+      "seatsPerRow": 8
+    }
+  ],
+  "stairs": [
+    {
+      "id": "stairs-A-B",
+      "gridBounds": {
+        "top": 15,
+        "left": 10,
+        "width": 2,
+        "height": 4
+      },
+      "connectsSections": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "stairs-B-C",
+      "gridBounds": {
+        "top": 15,
+        "left": 20,
+        "width": 2,
+        "height": 4
+      },
+      "connectsSections": [
+        "B",
+        "C"
+      ]
+    }
+  ]
+}

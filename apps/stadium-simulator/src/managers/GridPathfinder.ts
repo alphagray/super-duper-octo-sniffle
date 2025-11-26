@@ -1,59 +1,103 @@
 import type { GridManager } from '@/managers/GridManager';
-import type { PathSegment, VendorProfile } from '@/managers/interfaces/VendorTypes';
+import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
 import { gameBalance } from '@/config/gameBalance';
+import { BaseManager } from '@/managers/helpers/BaseManager';
 
 /**
- * Grid-based A* pathfinding for vendors
- * Ensures vendors move cell-by-cell and respect stadium architecture
+ * Event payload emitted when a path is calculated
  */
-export class GridPathfinder {
+export interface PathCalculatedEvent {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  path: GridPathCell[];
+  success: boolean;
+}
+
+/**
+ * Grid-based A* pathfinding for any actor
+ * Ensures actors move cell-by-cell and respect stadium architecture with directional constraints
+ */
+export class GridPathfinder extends BaseManager {
   private gridManager: GridManager;
   private passableCache: Map<string, boolean> = new Map();
+  private directionalCache: Map<string, boolean> = new Map();
 
   constructor(gridManager: GridManager) {
+    super({
+      name: 'GridPathfinder',
+      category: 'pathfinding',
+      logLevel: 'info',
+      enabled: true,
+    });
     this.gridManager = gridManager;
+    
+    // Subscribe to grid events for cache invalidation
+    this.gridManager.on('gridChanged', () => this.clearCache());
+    this.gridManager.on('zonesLoaded', () => this.clearCache());
   }
 
   /**
    * Find a path from start world position to end world position
-   * Returns array of PathSegments representing grid cells to traverse
+   * Returns array of GridPathCells representing grid cells to traverse
    */
   public findPath(
-    vendor: VendorProfile,
     fromX: number,
     fromY: number,
     toX: number,
     toY: number
-  ): PathSegment[] {
+  ): GridPathCell[] {
     // Convert world coordinates to grid
     const startGrid = this.gridManager.worldToGrid(fromX, fromY);
     const endGrid = this.gridManager.worldToGrid(toX, toY);
 
     if (!startGrid || !endGrid) {
-      // console.warn('[GridPathfinder] Invalid start or end position', { 
-      //   from: { x: fromX, y: fromY }, 
-      //   to: { x: toX, y: toY },
-      //   startGrid,
-      //   endGrid
-      // });
+      console.warn('[GridPathfinder] Invalid start or end position', { 
+        from: { x: fromX, y: fromY }, 
+        to: { x: toX, y: toY },
+        startGrid,
+        endGrid
+      });
       return [];
     }
 
-    // console.log(`[GridPathfinder] Finding path from (${startGrid.row},${startGrid.col}) to (${endGrid.row},${endGrid.col})`);
+    console.log(`[GridPathfinder] Starting A* from (${startGrid.row},${startGrid.col}) to (${endGrid.row},${endGrid.col})`);
 
     // Run A* algorithm
     const path = this.astar(startGrid.row, startGrid.col, endGrid.row, endGrid.col);
 
     if (path.length === 0) {
-      // console.warn(`[GridPathfinder] No path found from (${startGrid.row},${startGrid.col}) to (${endGrid.row},${endGrid.col})`);
-      // console.warn(`[GridPathfinder] Start passable: ${this.isPassable(startGrid.row, startGrid.col)}, End passable: ${this.isPassable(endGrid.row, endGrid.col)}`);
+      console.warn(`[GridPathfinder] No path found from (${startGrid.row},${startGrid.col}) to (${endGrid.row},${endGrid.col})`);
+      console.warn(`[GridPathfinder] Start passable: ${this.isPassable(startGrid.row, startGrid.col)}, End passable: ${this.isPassable(endGrid.row, endGrid.col)}`);
+      
+      // Check a few cells along the way
+      console.warn('[GridPathfinder] Sampling cells between start and end:');
+      for (let i = 0; i <= 4; i++) {
+        const t = i / 4;
+        const sampleRow = Math.round(startGrid.row + (endGrid.row - startGrid.row) * t);
+        const sampleCol = Math.round(startGrid.col + (endGrid.col - startGrid.col) * t);
+        const cell = this.gridManager.getCell(sampleRow, sampleCol);
+        console.warn(`  (${sampleRow},${sampleCol}):`, cell?.zoneType, 'passable:', cell?.passable);
+      }
+      
+      // Emit pathCalculated event with failure
+      this.emit('pathCalculated', {
+        fromX,
+        fromY,
+        toX,
+        toY,
+        path: [],
+        success: false,
+      } as PathCalculatedEvent);
+      
       return [];
     }
 
-    // console.log(`[GridPathfinder] Path found with ${path.length} grid cells`);
+    console.log(`[GridPathfinder] Path found with ${path.length} grid cells`);
 
-    // Convert grid path to PathSegments with world coordinates
-    const segments: PathSegment[] = path.map((cell, index) => {
+    // Convert grid path to GridPathCells with world coordinates
+    const cells: GridPathCell[] = path.map((cell, index) => {
       const worldPos = this.gridManager.gridToWorld(cell.row, cell.col);
       const prevCell = index > 0 ? path[index - 1] : cell;
       const prevWorld = this.gridManager.gridToWorld(prevCell.row, prevCell.col);
@@ -63,20 +107,27 @@ export class GridPathfinder {
       );
 
       return {
-        nodeType: this.getCellType(cell.row, cell.col),
-        sectionIdx: 0, // TODO: determine from cell position
-        rowIdx: cell.row,
-        colIdx: cell.col,
-        gridRow: cell.row,
-        gridCol: cell.col,
+        row: cell.row,
+        col: cell.col,
         x: worldPos.x,
         y: worldPos.y,
         cost,
       };
     });
 
-    // console.log(`[GridPathfinder] Found path with ${segments.length} cells`);
-    return segments;
+    // console.log(`[GridPathfinder] Found path with ${cells.length} cells`);
+    
+    // Emit pathCalculated event with success
+    this.emit('pathCalculated', {
+      fromX,
+      fromY,
+      toX,
+      toY,
+      path: cells,
+      success: true,
+    } as PathCalculatedEvent);
+    
+    return cells;
   }
 
   /**
@@ -106,6 +157,7 @@ export class GridPathfinder {
     // Typical path across full grid is ~56 cells, allow 5x that for safety
     const maxIterations = 2500;
     let iterations = 0;
+    let exploredCount = 0;
 
     while (openSet.size > 0 && iterations < maxIterations) {
       iterations++;
@@ -123,11 +175,13 @@ export class GridPathfinder {
 
       if (current === endKey) {
         // Reconstruct path
+        console.log(`[GridPathfinder] Path found! Explored ${exploredCount} cells in ${iterations} iterations`);
         return this.reconstructPath(cameFrom, current);
       }
 
       openSet.delete(current);
       closedSet.add(current);
+      exploredCount++;
 
       const [currentRow, currentCol] = current.split(',').map(Number);
 
@@ -168,7 +222,7 @@ export class GridPathfinder {
         const neighborKey = `${neighbor.row},${neighbor.col}`;
 
         if (closedSet.has(neighborKey)) continue;
-        if (!this.isPassable(neighbor.row, neighbor.col)) continue;
+        if (!this.isPassableInDirection(currentRow, currentCol, neighbor.row, neighbor.col)) continue;
 
         const tentativeGScore = (gScore.get(current) || 0) + 
           this.getMovementCost(currentRow, currentCol, neighbor.row, neighbor.col);
@@ -188,12 +242,16 @@ export class GridPathfinder {
     // No path found
     if (iterations >= maxIterations) {
       console.warn(`[GridPathfinder] Max iterations reached! Start: (${startRow},${startCol}), End: (${endRow},${endCol})`);
+    } else {
+      console.warn(`[GridPathfinder] OpenSet exhausted after ${iterations} iterations, explored ${exploredCount} cells`);
+      console.warn(`[GridPathfinder] ClosedSet size: ${closedSet.size}, never reached end goal`);
     }
     return [];
   }
 
   /**
    * Reconstruct path from A* cameFrom map
+   * In dev mode, validates that all steps are axis-aligned and directionally legal
    */
   private reconstructPath(
     cameFrom: Map<string, string>,
@@ -205,6 +263,29 @@ export class GridPathfinder {
       const [row, col] = current.split(',').map(Number);
       path.unshift({ row, col });
       current = cameFrom.get(current) || '';
+    }
+
+    // Dev-mode path validation
+    if (import.meta.env.DEV) {
+      for (let i = 1; i < path.length; i++) {
+        const from = path[i - 1];
+        const to = path[i];
+        
+        // Assert axis-aligned movement (no diagonals)
+        const rowDiff = Math.abs(to.row - from.row);
+        const colDiff = Math.abs(to.col - from.col);
+        const isAxisAligned = (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
+        
+        if (!isAxisAligned) {
+          console.error(`[GridPathfinder] Non-axis-aligned step detected: (${from.row},${from.col}) -> (${to.row},${to.col})`);
+        }
+        
+        // Assert directional passability
+        const isDirectionallyLegal = this.gridManager.isPassableDirection(from.row, from.col, to.row, to.col);
+        if (!isDirectionallyLegal) {
+          console.error(`[GridPathfinder] Illegal directional step: (${from.row},${from.col}) -> (${to.row},${to.col})`);
+        }
+      }
     }
 
     return path;
@@ -239,38 +320,52 @@ export class GridPathfinder {
 
   /**
    * Get movement cost between two adjacent cells
+   * Uses zone types and transition penalties from gameBalance
    */
   private getMovementCost(fromRow: number, fromCol: number, toRow: number, toCol: number): number {
     const cellSize = this.gridManager.getWorldSize().cellSize;
-    const toType = this.getCellType(toRow, toCol);
+    const toCell = this.gridManager.getCell(toRow, toCol);
+    
+    if (!toCell) return cellSize;
 
     // Base cost is cell size
     let cost = cellSize;
 
-    // Apply multipliers based on terrain type
-    switch (toType) {
-      case 'stair':
-        cost *= gameBalance.vendorMovement.stairTransitionCost;
-        break;
-      case 'corridor':
-        cost *= 0.8; // Corridors are fast
-        break;
-      case 'ground':
-        cost *= 0.7; // Ground is fastest
-        break;
-      case 'rowEntry':
-        cost *= 1.2; // Entering rows is slower
-        break;
-      case 'seat':
-        cost *= 2.0; // Moving through seats is very slow
-        break;
+    // Apply zone-specific cost multipliers
+    const zoneCosts = gameBalance.pathfinding.zoneCosts;
+    const zoneType = toCell.zoneType || 'corridor';
+    const multiplier = zoneCosts[zoneType] || 1.0;
+    cost *= multiplier;
+
+    // Apply transition crossing penalty if moving between different zones
+    const fromCell = this.gridManager.getCell(fromRow, fromCol);
+    if (fromCell && fromCell.zoneType !== toCell.zoneType) {
+      cost += gameBalance.pathfinding.transitionCrossPenalty;
     }
 
     return cost;
   }
 
   /**
-   * Check if a grid cell is passable for vendors
+   * Check if movement is allowed from one cell to another (directional)
+   * Uses GridManager's zone-aware directional passability checks
+   */
+  private isPassableInDirection(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
+    const key = `${fromRow},${fromCol}->${toRow},${toCol}`;
+    
+    // Check directional cache
+    if (this.directionalCache.has(key)) {
+      return this.directionalCache.get(key)!;
+    }
+
+    // Delegate to GridManager's zone-aware directional check
+    const passable = this.gridManager.isPassableDirection(fromRow, fromCol, toRow, toCol);
+    this.directionalCache.set(key, passable);
+    return passable;
+  }
+
+  /**
+   * Check if a grid cell is passable for actors
    */
   private isPassable(row: number, col: number): boolean {
     const key = `${row},${col}`;
@@ -303,29 +398,11 @@ export class GridPathfinder {
   }
 
   /**
-   * Get the type of cell for cost calculation
-   */
-  private getCellType(row: number, col: number): 'corridor' | 'stair' | 'ground' | 'rowEntry' | 'seat' {
-    const cell = this.gridManager.getCell(row, col);
-    if (!cell) return 'corridor';
-
-    // Check occupants for type hints
-    for (const occupant of cell.occupants.values()) {
-      if (occupant.type === 'stairs') return 'stair';
-      if (occupant.type === 'section') return 'seat';
-    }
-
-    // Determine by height level or position
-    if (cell.heightLevel < 0) return 'ground';
-    if (cell.heightLevel === 0) return 'corridor';
-    
-    return 'seat';
-  }
-
-  /**
-   * Clear passability cache (call when grid changes)
+   * Clear passability and directional caches (call when grid changes)
    */
   public clearCache(): void {
     this.passableCache.clear();
+    this.directionalCache.clear();
+    this.emit('cacheCleared', { timestamp: Date.now() });
   }
 }

@@ -1,5 +1,12 @@
 import { BaseManager } from '@/managers/helpers/BaseManager';
 import { gameBalance } from '@/config/gameBalance';
+import type { 
+  ZoneType, 
+  TransitionType, 
+  DirectionalFlags, 
+  StadiumSceneConfig,
+  BoundaryCell 
+} from '@/managers/interfaces/ZoneConfig';
 
 export type CardinalDirection = 'top' | 'right' | 'bottom' | 'left';
 
@@ -24,7 +31,7 @@ export interface GridNeighbor {
   cost: number;
 }
 
-interface GridCell {
+interface GridCellData {
   row: number;
   col: number;
   passable: boolean;
@@ -33,6 +40,10 @@ interface GridCell {
   occupants: Map<string, GridOccupant>;
   walls: Record<CardinalDirection, boolean>;
   defaultWalls: Record<CardinalDirection, boolean>;
+  zoneType: ZoneType;
+  transitionType: TransitionType | null;
+  allowedIncoming: Record<CardinalDirection, boolean>;
+  allowedOutgoing: Record<CardinalDirection, boolean>;
 }
 
 const OPPOSITE_DIRECTION: Record<CardinalDirection, CardinalDirection> = {
@@ -54,8 +65,13 @@ export class GridManager extends BaseManager {
   private readonly centerY: number;
   private readonly rows: number;
   private readonly cols: number;
-  private cells: GridCell[][] = [];
+  private cells: GridCellData[][] = [];
   private pendingRedraw: boolean = false;
+  
+  // Zone and boundary caches
+  private rowEntryCells: BoundaryCell[] = [];
+  private stairLandingCells: BoundaryCell[] = [];
+  private corridorEntryCells: BoundaryCell[] = [];
 
   constructor(options: GridManagerOptions) {
     super({ name: 'Grid', category: 'manager:grid', logLevel: 'info' });
@@ -140,15 +156,68 @@ export class GridManager extends BaseManager {
     return { x: this.offsetX, y: this.offsetY };
   }
 
-  public getCell(row: number, col: number): GridCell | null {
+  public getCell(row: number, col: number): GridCellData | null {
     if (!this.isValidCell(row, col)) return null;
     return this.cells[row][col];
   }
 
-  public getCellAtWorld(x: number, y: number): GridCell | null {
+  public getCellAtWorld(x: number, y: number): GridCellData | null {
     const coords = this.worldToGrid(x, y);
     if (!coords) return null;
     return this.getCell(coords.row, coords.col);
+  }
+
+  /**
+   * Get render depth for an animated actor at a grid position.
+   * Applies per-row penalty above ground and clamps to [animatedActorMin, animatedActorMax].
+   */
+  public getDepthForPosition(row: number, col: number): number {
+    // Determine rows above ground plane using configured ground line
+    const rowsFromBottom = gameBalance.grid.groundLine.rowsFromBottom ?? 0;
+    const groundRow = this.rows - 1 - rowsFromBottom;
+    const rowsAboveGround = Math.max(0, row - groundRow);
+
+    const base = gameBalance.ui.depths.animatedActorBase;
+    const penalty = gameBalance.ui.depths.animatedActorRowPenalty * rowsAboveGround;
+    const min = gameBalance.ui.depths.animatedActorMin;
+    const max = gameBalance.ui.depths.animatedActorMax;
+    const raw = base - penalty;
+    return Math.max(min, Math.min(max, raw));
+  }
+
+  /**
+   * Compute actor render depth using world position with intra-cell interpolation.
+   * Above the cell center (toward sky) is "further back" (lower depth) within the row band.
+   */
+  public getDepthForWorld(x: number, y: number): number {
+    // Determine grid cell and center
+    const coords = this.worldToGrid(x, y);
+    if (!coords) {
+      // Fallback to mid-depth if outside grid
+      return gameBalance.ui.depths.animatedActorBase;
+    }
+    const cellCenter = this.gridToWorld(coords.row, coords.col);
+
+    // Base depth from row band
+    let depth = this.getDepthForPosition(coords.row, coords.col);
+
+    // Intra-cell interpolation within band width
+    const bandWidth = gameBalance.ui.depths.animatedActorRowPenalty; // typically 10
+    const intraRange = Math.max(0, bandWidth - 2); // leave 1-2 units buffer to avoid crossing bands
+    const halfCell = this.cellSize / 2;
+
+    // Positive fraction when above center (y smaller), negative when below center
+    const fraction = (cellCenter.y - y) / halfCell; // range approx [-1, 1]
+    const clampedFraction = Math.max(-1, Math.min(1, fraction));
+
+    // Adjust depth: above center → reduce depth (further back), below center → increase depth (closer)
+    const intraAdjustment = (intraRange / 2) * clampedFraction;
+    depth = depth - intraAdjustment;
+
+    // Final clamp to [min, max]
+    const min = gameBalance.ui.depths.animatedActorMin;
+    const max = gameBalance.ui.depths.animatedActorMax;
+    return Math.max(min, Math.min(max, depth));
   }
 
   public setCellPassable(row: number, col: number, passable: boolean): void {
@@ -248,7 +317,7 @@ export class GridManager extends BaseManager {
     this.addOccupant(coords.row, coords.col, occupant);
   }
 
-  public getAllCells(): GridCell[] {
+  public getAllCells(): GridCellData[] {
     return this.cells.flat();
   }
 
@@ -265,7 +334,7 @@ export class GridManager extends BaseManager {
   private buildGrid(): void {
     this.cells = [];
     for (let row = 0; row < this.rows; row++) {
-      const rowCells: GridCell[] = [];
+      const rowCells: GridCellData[] = [];
       for (let col = 0; col < this.cols; col++) {
         rowCells.push({
           row,
@@ -276,6 +345,10 @@ export class GridManager extends BaseManager {
           occupants: new Map(),
           walls: { top: false, right: false, bottom: false, left: false },
           defaultWalls: { top: false, right: false, bottom: false, left: false },
+          zoneType: 'corridor', // Default zone type
+          transitionType: null,
+          allowedIncoming: { top: true, right: true, bottom: true, left: true },
+          allowedOutgoing: { top: true, right: true, bottom: true, left: true },
         });
       }
       this.cells.push(rowCells);
@@ -307,7 +380,7 @@ export class GridManager extends BaseManager {
     }
   }
 
-  private recalculateWallsForCell(cell: GridCell): void {
+  private recalculateWallsForCell(cell: GridCellData): void {
     const desiredWalls: Record<CardinalDirection, boolean> = {
       top: cell.defaultWalls.top,
       right: cell.defaultWalls.right,
@@ -392,5 +465,441 @@ export class GridManager extends BaseManager {
   private flagGridChanged(payload: unknown): void {
     this.pendingRedraw = true;
     this.emit('gridChanged', payload);
+  }
+
+  /**
+   * Load zone configuration from JSON
+   * Processes cellRanges first (fill rectangular regions), then cells (specific overrides)
+   */
+  public loadZoneConfig(config: StadiumSceneConfig): void {
+    console.log('[GridManager] loadZoneConfig called with:', {
+      cellRanges: config.cellRanges?.length,
+      cells: config.cells?.length,
+      sections: config.sections?.length,
+      stairs: config.stairs?.length
+    });
+
+    // Process cell ranges first
+    if (config.cellRanges) {
+      console.log('[GridManager] Processing', config.cellRanges.length, 'cell ranges');
+      for (const range of config.cellRanges) {
+        this.applyCellRange(range);
+      }
+    }
+
+    // Process individual cells (overrides ranges)
+    if (config.cells) {
+      console.log('[GridManager] Processing', config.cells.length, 'individual cells');
+      for (const cellDesc of config.cells) {
+        this.applyCell(cellDesc);
+      }
+    }
+
+    // Build boundary caches
+    this.buildBoundaryCaches();
+
+    // Emit event
+    this.emit('zonesLoaded', { config });
+    this.flagGridChanged({ type: 'zonesLoaded' });
+    
+    console.log('[GridManager] Zone config loaded. Sample cells:', {
+      '0,0': this.getCell(0, 0)?.zoneType,
+      '14,5': this.getCell(14, 5)?.zoneType,
+      '15,5': this.getCell(15, 5)?.zoneType,
+      '20,5': this.getCell(20, 5)?.zoneType,
+    });
+  }
+
+  /**
+   * Apply zone properties to a rectangular range of cells
+   */
+  private applyCellRange(range: import('@/managers/interfaces/ZoneConfig').CellRangeDescriptor): void {
+    const { rowStart, rowEnd, colStart, colEnd } = range;
+
+    console.log(`[GridManager] Applying range: rows ${rowStart}-${rowEnd}, cols ${colStart}-${colEnd}, zone: ${range.zoneType}`);
+    
+    // Debug: Check if directional flags are present in range
+    if (range.zoneType === 'sky') {
+      console.log(`[GridManager] Sky range allowedIncoming.top=${range.allowedIncoming?.top} bottom=${range.allowedIncoming?.bottom} left=${range.allowedIncoming?.left} right=${range.allowedIncoming?.right}`);
+      console.log(`[GridManager] Sky range allowedOutgoing.top=${range.allowedOutgoing?.top} bottom=${range.allowedOutgoing?.bottom} left=${range.allowedOutgoing?.left} right=${range.allowedOutgoing?.right}`);
+    }
+
+    // Validate bounds
+    if (!this.isValidCell(rowStart, colStart) || !this.isValidCell(rowEnd, colEnd)) {
+      console.warn(`[GridManager] Invalid cell range bounds: (${rowStart},${colStart}) to (${rowEnd},${colEnd})`);
+      return;
+    }
+
+    let cellsUpdated = 0;
+    for (let row = rowStart; row <= rowEnd; row++) {
+      for (let col = colStart; col <= colEnd; col++) {
+        const cell = this.getCell(row, col);
+        if (!cell) continue;
+
+        this.applyCellProperties(cell, range);
+        cellsUpdated++;
+      }
+    }
+    
+    console.log(`[GridManager] Updated ${cellsUpdated} cells to zone type: ${range.zoneType}`);
+  }
+
+  /**
+   * Apply zone properties to a single cell
+   */
+  private applyCell(cellDesc: import('@/managers/interfaces/ZoneConfig').CellDescriptor): void {
+    const { row, col } = cellDesc;
+
+    if (!this.isValidCell(row, col)) {
+      console.warn(`[GridManager] Invalid cell coords: (${row},${col})`);
+      return;
+    }
+
+    const cell = this.getCell(row, col);
+    if (!cell) return;
+
+    this.applyCellProperties(cell, cellDesc);
+  }
+
+  /**
+   * Apply zone properties to a cell from a descriptor
+   */
+  private applyCellProperties(
+    cell: GridCellData,
+    props: { 
+      zoneType: ZoneType; 
+      transitionType?: TransitionType; 
+      allowedIncoming?: DirectionalFlags; 
+      allowedOutgoing?: DirectionalFlags; 
+      passable?: boolean;
+    }
+  ): void {
+    cell.zoneType = props.zoneType;
+    cell.transitionType = props.transitionType ?? null;
+
+    // Debug: Log props for sky cells at edges
+    if (props.zoneType === 'sky' && (cell.col === 0 || cell.col === 1 || cell.col === 30 || cell.col === 31) && cell.row === 0) {
+      console.log(`[GridManager] applyCellProperties for sky cell (${cell.row},${cell.col})`);
+      console.log(`  props.allowedIncoming:`, props.allowedIncoming);
+      console.log(`  props.allowedIncoming?.top:`, props.allowedIncoming?.top);
+    }
+
+    // Set default directional flags based on zone type (before applying explicit flags)
+    const zoneDefaults = this.getZoneDirectionalDefaults(props.zoneType);
+    cell.allowedIncoming = { ...zoneDefaults.incoming };
+    cell.allowedOutgoing = { ...zoneDefaults.outgoing };
+
+    // Apply explicit directional flags (override defaults)
+    if (props.allowedIncoming) {
+      CARDINAL_DIRECTIONS.forEach(dir => {
+        if (typeof props.allowedIncoming![dir] === 'boolean') {
+          cell.allowedIncoming[dir] = props.allowedIncoming![dir]!;
+        }
+      });
+    }
+
+    if (props.allowedOutgoing) {
+      CARDINAL_DIRECTIONS.forEach(dir => {
+        if (typeof props.allowedOutgoing![dir] === 'boolean') {
+          cell.allowedOutgoing[dir] = props.allowedOutgoing![dir]!;
+        }
+      });
+    }
+    
+    // Debug log for sky cells on edges
+    if (props.zoneType === 'sky' && (cell.col === 0 || cell.col === 1 || cell.col === 30 || cell.col === 31)) {
+      console.log(`[GridManager] Sky cell (${cell.row},${cell.col}) IN: T=${cell.allowedIncoming.top} B=${cell.allowedIncoming.bottom} L=${cell.allowedIncoming.left} R=${cell.allowedIncoming.right} OUT: T=${cell.allowedOutgoing.top} B=${cell.allowedOutgoing.bottom} L=${cell.allowedOutgoing.left} R=${cell.allowedOutgoing.right}`);
+    }
+
+    // Apply passable if specified, otherwise derive from zoneType
+    if (typeof props.passable === 'boolean') {
+      cell.passable = props.passable;
+    } else {
+      // Sky and seat zones are not passable by default
+      cell.passable = props.zoneType !== 'sky' && props.zoneType !== 'seat';
+    }
+  }
+
+  /**
+   * Get default directional flags for a zone type
+   */
+  private getZoneDirectionalDefaults(zoneType: ZoneType): {
+    incoming: Record<CardinalDirection, boolean>;
+    outgoing: Record<CardinalDirection, boolean>;
+  } {
+    switch (zoneType) {
+      case 'sky':
+        // Sky is completely impassable
+        return {
+          incoming: { top: false, right: false, bottom: false, left: false },
+          outgoing: { top: false, right: false, bottom: false, left: false },
+        };
+      
+      case 'seat':
+        // Seats allow horizontal movement only (left/right within rows)
+        return {
+          incoming: { top: false, right: true, bottom: false, left: true },
+          outgoing: { top: false, right: true, bottom: false, left: true },
+        };
+      
+      case 'stair':
+        // Stairs allow both vertical and horizontal ties into seats/corridors
+        return {
+          incoming: { top: true, right: true, bottom: true, left: true },
+          outgoing: { top: true, right: true, bottom: true, left: true },
+        };
+      
+      case 'ground':
+      case 'corridor':
+      case 'rowEntry':
+        // Ground, corridors, and row entries are fully passable
+        return {
+          incoming: { top: true, right: true, bottom: true, left: true },
+          outgoing: { top: true, right: true, bottom: true, left: true },
+        };
+      
+      default:
+        // Default: fully passable
+        return {
+          incoming: { top: true, right: true, bottom: true, left: true },
+          outgoing: { top: true, right: true, bottom: true, left: true },
+        };
+    }
+  }
+
+  /**
+   * Build boundary cell caches for quick lookup
+   */
+  private buildBoundaryCaches(): void {
+    this.rowEntryCells = [];
+    this.stairLandingCells = [];
+    this.corridorEntryCells = [];
+
+    let totalCellsChecked = 0;
+    let cellsWithTransitionType = 0;
+
+    for (const row of this.cells) {
+      for (const cell of row) {
+        totalCellsChecked++;
+        if (cell.transitionType) {
+          cellsWithTransitionType++;
+          const boundaryCell: BoundaryCell = {
+            row: cell.row,
+            col: cell.col,
+            transitionType: cell.transitionType
+          };
+
+          switch (cell.transitionType) {
+            case 'rowBoundary':
+              this.rowEntryCells.push(boundaryCell);
+              break;
+            case 'stairLanding':
+              this.stairLandingCells.push(boundaryCell);
+              break;
+            case 'corridorEntry':
+              this.corridorEntryCells.push(boundaryCell);
+              break;
+          }
+        }
+      }
+    }
+
+    console.log(`[GridManager] Built boundary caches: ${this.rowEntryCells.length} rowEntry, ${this.stairLandingCells.length} stairLanding, ${this.corridorEntryCells.length} corridorEntry`);
+    console.log(`[GridManager] Total cells checked: ${totalCellsChecked}, cells with transitionType: ${cellsWithTransitionType}`);
+    
+    // Sample check
+    if (cellsWithTransitionType === 0) {
+      console.warn('[GridManager] No cells have transitionType set! Checking sample cells:');
+      console.log('  Cell (14,2):', this.getCell(14, 2)?.transitionType);
+      console.log('  Cell (14,10):', this.getCell(14, 10)?.transitionType);
+      console.log('  Cell (19,10):', this.getCell(19, 10)?.transitionType);
+    }
+  }
+
+  /**
+   * Get zone type of a cell
+   */
+  public getZoneType(row: number, col: number): ZoneType | null {
+    const cell = this.getCell(row, col);
+    return cell ? cell.zoneType : null;
+  }
+
+  /**
+   * Check if cell is a transition of specific type
+   */
+  public isTransition(row: number, col: number, type?: TransitionType): boolean {
+    const cell = this.getCell(row, col);
+    if (!cell || !cell.transitionType) return false;
+    return type ? cell.transitionType === type : true;
+  }
+
+  /**
+   * Get all boundary cells of a specific type
+   */
+  public getBoundarySet(type: TransitionType): BoundaryCell[] {
+    switch (type) {
+      case 'rowBoundary':
+        return [...this.rowEntryCells];
+      case 'stairLanding':
+        return [...this.stairLandingCells];
+      case 'corridorEntry':
+        return [...this.corridorEntryCells];
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * Check if movement from one cell to another is allowed (directional passability)
+   * Considers: bounds, passability, walls, directional flags, and zone transition rules
+   */
+  public isPassableDirection(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
+    // Bounds check
+    if (!this.isValidCell(fromRow, fromCol) || !this.isValidCell(toRow, toCol)) {
+      return false;
+    }
+
+    const fromCell = this.getCell(fromRow, fromCol);
+    const toCell = this.getCell(toRow, toCol);
+
+    if (!fromCell || !toCell) return false;
+
+    // Both cells must be passable
+    if (!fromCell.passable || !toCell.passable) return false;
+
+    // Determine direction
+    const direction = this.getDirection(fromRow, fromCol, toRow, toCol);
+    if (!direction) return false; // Not adjacent
+
+    const oppositeDir = OPPOSITE_DIRECTION[direction];
+
+    // Check walls
+    if (fromCell.walls[direction] || toCell.walls[oppositeDir]) {
+      return false;
+    }
+
+    // Check directional flags
+    if (!fromCell.allowedOutgoing[direction] || !toCell.allowedIncoming[direction]) {
+      return false;
+    }
+
+    // Zone transition rules
+    return this.isZoneTransitionAllowed(fromCell, toCell);
+  }
+
+  /**
+   * Get cardinal direction from one cell to an adjacent cell
+   */
+  private getDirection(fromRow: number, fromCol: number, toRow: number, toCol: number): CardinalDirection | null {
+    const dRow = toRow - fromRow;
+    const dCol = toCol - fromCol;
+
+    if (dRow === -1 && dCol === 0) return 'top';
+    if (dRow === 1 && dCol === 0) return 'bottom';
+    if (dRow === 0 && dCol === -1) return 'left';
+    if (dRow === 0 && dCol === 1) return 'right';
+
+    return null; // Not adjacent or diagonal
+  }
+
+  /**
+   * Check if zone transition is allowed between two cells
+   */
+  private isZoneTransitionAllowed(fromCell: GridCellData, toCell: GridCellData): boolean {
+    const fromZone = fromCell.zoneType;
+    const toZone = toCell.zoneType;
+
+    // Same zone always allowed
+    if (fromZone === toZone) return true;
+
+    // Sky never accessible
+    if (toZone === 'sky') return false;
+
+    // Seat <-> stair always allowed (handles horizontal transitions at landings)
+    if ((fromZone === 'seat' && toZone === 'stair') || (fromZone === 'stair' && toZone === 'seat')) {
+      return true;
+    }
+
+    // Seat <-> corridor/ground must go via rowEntry boundary
+    if ((fromZone === 'seat' && (toZone === 'corridor' || toZone === 'ground')) ||
+        ((fromZone === 'corridor' || fromZone === 'ground') && toZone === 'seat')) {
+      // At least one cell must be rowEntry transition
+      return fromCell.transitionType === 'rowBoundary' || 
+             toCell.transitionType === 'rowBoundary' ||
+             toCell.zoneType === 'rowEntry' ||
+             fromCell.zoneType === 'rowEntry';
+    }
+
+    // Stair transitions should use stairLanding
+    if (fromZone === 'stair' || toZone === 'stair') {
+      // More permissive for now - stairs can connect to corridors/rowEntry
+      return toZone !== 'seat' && fromZone !== 'seat';
+    }
+
+    // All other transitions allowed (corridor <-> ground, rowEntry <-> corridor, etc.)
+    return true;
+  }
+
+  /**
+   * Get nearest vertical access point (corridor or ground) for a given seat position
+   * Evaluates corridor (row 14) and top ground (row 19) at the same column
+   * Returns the closest passable access point using Manhattan distance
+   * 
+   * @param seatRow Row of the seat position
+   * @param seatCol Column of the seat position
+   * @returns Access cell info or null if both candidates blocked
+   */
+  public getNearestVerticalAccess(
+    seatRow: number,
+    seatCol: number
+  ): { row: number; col: number; zone: 'corridor' | 'ground' } | null {
+    // Hardcoded zone row indices based on stadium layout
+    const corridorRow = 14;
+    const topGroundRow = 19;
+
+    // Evaluate corridor candidate
+    const corridorCell = this.getCell(corridorRow, seatCol);
+    const corridorValid = corridorCell && 
+                         corridorCell.passable && 
+                         corridorCell.zoneType === 'corridor';
+
+    // Evaluate ground candidate
+    const groundCell = this.getCell(topGroundRow, seatCol);
+    const groundValid = groundCell && 
+                       groundCell.passable && 
+                       groundCell.zoneType === 'ground';
+
+    // If both blocked, return null
+    if (!corridorValid && !groundValid) {
+      return null;
+    }
+
+    // If only one valid, return it
+    if (corridorValid && !groundValid) {
+      if (gameBalance.vendorDebug.logAccessSelection) {
+        console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): corridor (${corridorRow},${seatCol})`);
+      }
+      return { row: corridorRow, col: seatCol, zone: 'corridor' };
+    }
+
+    if (groundValid && !corridorValid) {
+      if (gameBalance.vendorDebug.logAccessSelection) {
+        console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): ground (${topGroundRow},${seatCol})`);
+      }
+      return { row: topGroundRow, col: seatCol, zone: 'ground' };
+    }
+
+    // Both valid - pick closest by Manhattan distance (vertical only since column is same)
+    const corridorDistance = Math.abs(seatRow - corridorRow);
+    const groundDistance = Math.abs(seatRow - topGroundRow);
+
+    const chosen = corridorDistance <= groundDistance ? 'corridor' : 'ground';
+    const chosenRow = chosen === 'corridor' ? corridorRow : topGroundRow;
+
+    if (gameBalance.vendorDebug.logAccessSelection) {
+      console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): ${chosen} (${chosenRow},${seatCol}) - distances: corridor=${corridorDistance}, ground=${groundDistance}`);
+    }
+
+    return { row: chosenRow, col: seatCol, zone: chosen };
   }
 }

@@ -125,7 +125,7 @@ export class PersonalityIntegrationManager {
     
     const personality = this.content.mascots[index];
 
-    return new Mascot(scene, x, y, personality, this.dialogueManager);
+    return new Mascot(scene, x, y, personality);
   }
 
   /**

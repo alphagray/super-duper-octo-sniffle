@@ -1,4 +1,4 @@
-import { UtilityActor } from '@/actors/Actor';
+import { UtilityActor } from '@/actors/base/Actor';
 import type { Wave } from '@/managers/Wave';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 

@@ -3,7 +3,9 @@ import Phaser from 'phaser';
 import { gameBalance } from '@/config/gameBalance';
 import { GridManager, CardinalDirection } from '@/managers/GridManager';
 import type { AIManager } from '@/managers/AIManager';
-import type { HybridPathResolver } from '@/managers/HybridPathResolver';
+// HybridPathResolver import removed during generic pathfinding refactor
+import type { PathfindingService } from '@/services/PathfindingService';
+import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
 
 export class GridOverlay extends Phaser.GameObjects.Graphics {
   private readonly grid: GridManager;
@@ -12,10 +14,16 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
   private readonly gridChangedHandler: () => void;
   private aiManager?: AIManager;
   private stadiumScene?: Phaser.Scene;
+  private pathfindingService?: PathfindingService;
   public showNodes: boolean = false;
   public showVendorPaths: boolean = false;
+  public showZones: boolean = false;
+  public showTransitions: boolean = false;
+  public showDirectionalEdges: boolean = false;
   private pulseAlpha: number = 0.5;
   private pulseDirection: number = 1;
+  private pathHistory: Array<{ path: GridPathCell[]; success: boolean; fromX: number; fromY: number; toX: number; toY: number }> = [];
+  private readonly maxHistory: number = 5;
 
   constructor(scene: Phaser.Scene, grid: GridManager) {
     super(scene);
@@ -40,6 +48,31 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     
     // Subscribe to vendor path planning events
     aiManager.on('vendorPathPlanned', () => {
+      if (this.showVendorPaths) {
+        this.needsRedraw = true;
+      }
+    });
+  }
+
+  /**
+   * Attach PathfindingService to enable generic path visualization.
+   */
+  public setPathfindingService(service: PathfindingService): void {
+    this.pathfindingService = service;
+    // Subscribe to pathCalculated events from underlying GridPathfinder
+    service.on('pathCalculated', (evt: { path: GridPathCell[]; success: boolean; fromX: number; fromY: number; toX: number; toY: number }) => {
+      // Maintain history buffer
+      this.pathHistory.push({
+        path: evt.path,
+        success: evt.success,
+        fromX: evt.fromX,
+        fromY: evt.fromY,
+        toX: evt.toX,
+        toY: evt.toY,
+      });
+      if (this.pathHistory.length > this.maxHistory) {
+        this.pathHistory.shift();
+      }
       if (this.showVendorPaths) {
         this.needsRedraw = true;
       }
@@ -75,7 +108,28 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     if (!this.visible) return; // Only toggle if grid is visible
     this.showVendorPaths = !this.showVendorPaths;
     this.needsRedraw = true;
-    console.log(`[GridOverlay] Vendor paths: ${this.showVendorPaths ? 'ON' : 'OFF'}`);
+    console.log(`[GridOverlay] Paths: ${this.showVendorPaths ? 'ON' : 'OFF'}`);
+  }
+
+  public toggleZones(): void {
+    if (!this.visible) return;
+    this.showZones = !this.showZones;
+    this.needsRedraw = true;
+    console.log(`[GridOverlay] Zone visualization: ${this.showZones ? 'ON' : 'OFF'}`);
+  }
+
+  public toggleTransitions(): void {
+    if (!this.visible) return;
+    this.showTransitions = !this.showTransitions;
+    this.needsRedraw = true;
+    console.log(`[GridOverlay] Transition markers: ${this.showTransitions ? 'ON' : 'OFF'}`);
+  }
+
+  public toggleDirectionalEdges(): void {
+    if (!this.visible) return;
+    this.showDirectionalEdges = !this.showDirectionalEdges;
+    this.needsRedraw = true;
+    console.log(`[GridOverlay] Directional edges: ${this.showDirectionalEdges ? 'ON' : 'OFF'}`);
   }
 
   private setBackgroundVisible(visible: boolean): void {
@@ -128,22 +182,36 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
 
     this.clear();
 
+    // Render zone background tints if enabled (drawn first, under grid lines)
+    if (this.showZones) {
+      this.renderZones(cellSize);
+    }
+
     this.lineStyle(gridLineWidth, gridColor, gridAlpha);
     this.drawGridLines(rows, cols, cellSize, origin.x, origin.y);
 
     this.lineStyle(wallLineWidth, wallColor, wallAlpha);
     this.drawWalls(cellSize);
 
-    // Render navigation nodes and edges if enabled
+    // Render transition markers if enabled
+    if (this.showTransitions) {
+      this.renderTransitions(cellSize);
+    }
+
+    // Render directional edges if enabled
+    if (this.showDirectionalEdges) {
+      this.renderDirectionalEdges(cellSize);
+    }
+
+    // Legacy navigation graph removed; showNodes currently has no effect
     if (this.showNodes) {
-      console.log('[GridOverlay.redraw] Rendering navigation nodes...');
-      this.renderNavigationNodes();
+      // Placeholder: could repurpose to highlight passable cells or path endpoints
     }
 
     // Render vendor paths if enabled
     if (this.showVendorPaths) {
-      console.log('[GridOverlay.redraw] Rendering vendor paths...');
-      this.renderVendorPaths();
+      console.log('[GridOverlay.redraw] Rendering recent paths...');
+      this.renderRecentPaths();
     }
     
     console.log('[GridOverlay.redraw] Redraw complete');
@@ -191,105 +259,182 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
     this.strokePath();
   }
 
-  private renderNavigationNodes(): void {
-    if (!this.aiManager) {
-      console.warn('[GridOverlay] Cannot render nodes: no AIManager');
-      return;
-    }
-    
-    const pathResolver = this.aiManager.getPathResolver();
-    if (!pathResolver) {
-      console.warn('[GridOverlay] Cannot render nodes: no PathResolver');
-      return;
-    }
-    
-    const graph = pathResolver.getGraph();
-    if (!graph) {
-      console.warn('[GridOverlay] Cannot render nodes: no navigation graph');
-      return;
-    }
+  private renderZones(cellSize: number): void {
+    const cells = this.grid.getAllCells();
 
-    console.log(`[GridOverlay] Rendering ${graph.nodes.size} navigation nodes, ${graph.edges.size} edge sources`);
-
-    // Define colors for each node type
-    const nodeColors = {
-      corridor: 0x0099ff,   // Blue
-      stair: 0xffff00,      // Yellow
-      rowEntry: 0x00ff00,   // Green
-      seat: 0xff00ff,       // Purple
-      ground: 0xff8800,     // Orange
+    // Zone colors with transparency - more distinct and visible
+    const zoneColors: Record<string, number> = {
+      ground: 0x00aa00,    // Bright green
+      corridor: 0x0088ff,  // Bright blue
+      seat: 0xcc6600,      // Orange/brown (distinct from stairs)
+      rowEntry: 0xffff00,  // Yellow/Gold
+      stair: 0x666666,     // Gray
+      sky: 0x000055,       // Dark blue (very low alpha)
     };
 
-    // First, draw edges (connections between nodes)
-    this.lineStyle(1, 0x666666, 0.3);
-    let edgesDrawn = 0;
-    for (const [nodeId, edges] of graph.edges.entries()) {
-      const fromNode = graph.nodes.get(nodeId);
-      if (!fromNode) continue;
+    cells.forEach((cell) => {
+      const zoneType = cell.zoneType || 'corridor';
+      const color = zoneColors[zoneType] || 0x666666;
+      const alpha = zoneType === 'sky' ? 0.05 : 0.3; // Higher alpha for better visibility
 
-      for (const edge of edges) {
-        const toNode = graph.nodes.get(edge.targetNodeId);
-        if (!toNode) continue;
-
-        this.beginPath();
-        this.moveTo(fromNode.x, fromNode.y);
-        this.lineTo(toNode.x, toNode.y);
-        this.strokePath();
-        edgesDrawn++;
-      }
-    }
-    console.log(`[GridOverlay] Drew ${edgesDrawn} edges`);
-
-    // Then, draw nodes (so they appear on top of edges)
-    let nodesDrawn = 0;
-    for (const [nodeId, node] of graph.nodes.entries()) {
-      const color = nodeColors[node.type] || 0xffffff;
-      this.fillStyle(color, 0.8);
-      this.fillCircle(node.x, node.y, 6);
-      nodesDrawn++;
-    }
-    console.log(`[GridOverlay] Drew ${nodesDrawn} nodes`);
+      const bounds = this.grid.getCellBounds(cell.row, cell.col);
+      this.fillStyle(color, alpha);
+      this.fillRect(bounds.x, bounds.y, cellSize, cellSize);
+    });
   }
 
-  private renderVendorPaths(): void {
-    if (!this.aiManager) {
-      console.warn('[GridOverlay] Cannot render vendor paths: no AIManager');
-      return;
-    }
-    
-    const vendors = this.aiManager.getVendorInstances();
-    console.log(`[GridOverlay] Rendering paths for ${vendors.size} vendors`);
-    
-    let pathsRendered = 0;
-    for (const [vendorId, instance] of vendors.entries()) {
-      if (!instance.currentPath || instance.currentPath.length === 0) continue;
+  private renderTransitions(cellSize: number): void {
+    const cells = this.grid.getAllCells();
 
-      pathsRendered++;
-      console.log(`[GridOverlay] Vendor ${vendorId} path: ${instance.currentPath.length} segments, current index: ${instance.currentSegmentIndex}`);
+    cells.forEach((cell) => {
+      if (!cell.transitionType) return;
 
-      // Draw bright red line through all path segments
-      this.lineStyle(4, 0xff0000, 1.0);
-      this.beginPath();
-      
-      // Start from vendor's current position
-      this.moveTo(instance.position.x, instance.position.y);
-      
-      // Draw line through each segment
-      for (const segment of instance.currentPath) {
-        this.lineTo(segment.x, segment.y);
+      const bounds = this.grid.getCellBounds(cell.row, cell.col);
+      const centerX = bounds.x + cellSize / 2;
+      const centerY = bounds.y + cellSize / 2;
+
+      // Draw different glyphs for each transition type
+      switch (cell.transitionType) {
+        case 'rowBoundary':
+          // Draw horizontal line across cell (row entry point)
+          this.lineStyle(3, 0x00ff00, 0.8);
+          this.beginPath();
+          this.moveTo(bounds.x + 2, centerY);
+          this.lineTo(bounds.x + cellSize - 2, centerY);
+          this.strokePath();
+          break;
+
+        case 'stairLanding':
+          // Draw triangle pointing up (stairs)
+          this.fillStyle(0xffff00, 0.6);
+          this.beginPath();
+          this.moveTo(centerX, bounds.y + 4);
+          this.lineTo(bounds.x + 4, bounds.y + cellSize - 4);
+          this.lineTo(bounds.x + cellSize - 4, bounds.y + cellSize - 4);
+          this.closePath();
+          this.fillPath();
+          break;
+
+        case 'corridorEntry':
+          // Draw circle (corridor access point)
+          this.fillStyle(0x00ccff, 0.6);
+          this.fillCircle(centerX, centerY, cellSize / 4);
+          break;
       }
-      
-      this.strokePath();
+    });
+  }
 
-      // Highlight current target segment with pulsing circle
-      const currentSegment = instance.currentPath[instance.currentSegmentIndex];
-      if (currentSegment) {
-        this.fillStyle(0xff0000, this.pulseAlpha);
-        this.fillCircle(currentSegment.x, currentSegment.y, 8);
+  private renderDirectionalEdges(cellSize: number): void {
+    const cells = this.grid.getAllCells();
+
+    cells.forEach((cell) => {
+      const bounds = this.grid.getCellBounds(cell.row, cell.col);
+      const centerX = bounds.x + cellSize / 2;
+      const centerY = bounds.y + cellSize / 2;
+      const arrowLength = cellSize / 3;
+      const arrowSize = 4;
+
+      // Draw arrows for allowed outgoing directions
+      const directions: Array<{ key: CardinalDirection; dx: number; dy: number }> = [
+        { key: 'top', dx: 0, dy: -1 },
+        { key: 'right', dx: 1, dy: 0 },
+        { key: 'bottom', dx: 0, dy: 1 },
+        { key: 'left', dx: -1, dy: 0 },
+      ];
+
+      directions.forEach(({ key, dx, dy }) => {
+        // Only get the actual values from the cell (no defaults)
+        const outgoing = cell.allowedOutgoing?.[key] ?? false;
+        const incoming = cell.allowedIncoming?.[key] ?? false;
+
+        // Debug logging for sky cells at edges
+        if (cell.zoneType === 'sky' && (cell.col === 0 || cell.col === 1 || cell.col === 30 || cell.col === 31) && cell.row === 0 && key === 'top') {
+          console.log(`[GridOverlay] Sky cell (${cell.row},${cell.col}) ${key}: outgoing=${outgoing} incoming=${incoming}`);
+          console.log(`[GridOverlay] cell.allowedOutgoing:`, cell.allowedOutgoing);
+        }
+
+        if (!outgoing && !incoming) return; // Skip if both blocked
+
+        // Debug: Log any cell at cols 0,1,30,31 that's drawing arrows
+        if ((cell.col === 0 || cell.col === 1 || cell.col === 30 || cell.col === 31) && cell.row <= 14) {
+          console.log(`[GridOverlay] Drawing arrow for cell (${cell.row},${cell.col}) zone=${cell.zoneType} ${key}: out=${outgoing} in=${incoming}`);
+        }
+
+        const endX = centerX + dx * arrowLength;
+        const endY = centerY + dy * arrowLength;
+
+        // Color: green if both allowed, yellow if only one direction
+        const color = outgoing && incoming ? 0x00ff00 : 0xffaa00;
+        const alpha = outgoing && incoming ? 0.6 : 0.4;
+
+        this.lineStyle(2, color, alpha);
+        this.beginPath();
+        this.moveTo(centerX, centerY);
+        this.lineTo(endX, endY);
+        this.strokePath();
+
+        // Draw arrowhead if outgoing is allowed
+        if (outgoing) {
+          this.fillStyle(color, alpha);
+          this.beginPath();
+          if (dx === 0) {
+            // Vertical arrow
+            this.moveTo(endX, endY);
+            this.lineTo(endX - arrowSize, endY - dy * arrowSize);
+            this.lineTo(endX + arrowSize, endY - dy * arrowSize);
+          } else {
+            // Horizontal arrow
+            this.moveTo(endX, endY);
+            this.lineTo(endX - dx * arrowSize, endY - arrowSize);
+            this.lineTo(endX - dx * arrowSize, endY + arrowSize);
+          }
+          this.closePath();
+          this.fillPath();
+        }
+      });
+    });
+  }
+
+
+  /**
+   * Render recent generic paths from pathHistory.
+   * Success paths are green, failed attempts red outline from start to end.
+   */
+  private renderRecentPaths(): void {
+    if (this.pathHistory.length === 0) return;
+    let rendered = 0;
+    this.pathHistory.forEach((entry, idx) => {
+      if (!entry.path || entry.path.length === 0) {
+        // Failed path attempt: draw red dashed line start->end
+        this.lineStyle(2, 0xff0000, 0.8);
+        this.beginPath();
+        this.moveTo(entry.fromX, entry.fromY);
+        this.lineTo(entry.toX, entry.toY);
+        this.strokePath();
+        return;
       }
-    }
-    
-    console.log(`[GridOverlay] Rendered ${pathsRendered} vendor paths`);
+      // Choose color cycling for differentiation
+      const colors = [0x00ff00, 0x00ccff, 0xffaa00, 0xff00ff, 0xffffff];
+      const color = colors[idx % colors.length];
+      for (let i = 0; i < entry.path.length - 1; i++) {
+        const from = entry.path[i];
+        const to = entry.path[i + 1];
+        this.lineStyle(3, color, 0.9);
+        this.beginPath();
+        this.moveTo(from.x, from.y);
+        this.lineTo(to.x, to.y);
+        this.strokePath();
+      }
+      // Highlight start and end cells
+      const start = entry.path[0];
+      const end = entry.path[entry.path.length - 1];
+      this.fillStyle(color, 0.6);
+      this.fillCircle(start.x, start.y, 6);
+      this.fillStyle(0xffff00, this.pulseAlpha);
+      this.fillCircle(end.x, end.y, 7);
+      rendered++;
+    });
+    console.log(`[GridOverlay] Rendered ${rendered} recent paths (history size=${this.pathHistory.length})`);
   }
 }
 
