@@ -1,5 +1,6 @@
 import { AnimatedActor } from '@/actors/base/Actor';
 import { Vendor } from '@/sprites/Vendor';
+import PersonalityIntegrationManager from '@/systems/PersonalityIntegrationManager';
 import type { GridManager } from '@/managers/GridManager';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
@@ -12,6 +13,7 @@ import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
  */
 export class VendorActor extends AnimatedActor {
   protected vendor: Vendor;
+  protected personality: any;
   protected position: { x: number; y: number };
   protected gridManager?: GridManager;
 
@@ -27,11 +29,22 @@ export class VendorActor extends AnimatedActor {
     // Initialize base actor with placeholder grid coords (0,0); we'll set real grid below
     super(id, 'vendor', category, 0, 0, enableLogging);
     
-    // Create vendor sprite internally
-    this.vendor = new Vendor(scene, x, y);
+
+    // Fetch personality (by id, index, or random; here: by index if id is numeric)
+    let personality = undefined;
+    const manager = PersonalityIntegrationManager();
+    // If id is of form 'actor:vendor-<n>', try to use n as index
+    const match = id.match(/vendor-(\d+)/);
+    if (match) {
+      const idx = parseInt(match[1], 10);
+      personality = manager.getVendorPersonalityByIndex(idx);
+    } else {
+      personality = manager.getVendorPersonalityByIndex();
+    }
+    this.personality = personality;
+    this.vendor = new Vendor(scene, x, y, personality, manager.getDialogueManager());
     this.vendor.setDepth(1000); // Render above fans
     scene.add.existing(this.vendor);
-    
     this.position = { x, y };
 
     // Store grid manager reference
@@ -51,6 +64,23 @@ export class VendorActor extends AnimatedActor {
     }
     this.logger.debug(`VendorActor created at world (${x}, ${y}) grid (${this.gridRow}, ${this.gridCol})`);
   }
+
+  /**
+   * Get the assigned personality (for UI, dialogue, etc)
+   */
+  public getPersonality() {
+    return this.personality;
+  }
+
+  /**
+   * Get the personality name for UI display
+   */
+  public getPersonalityName(): string {
+    if (this.personality && this.personality.name) return this.personality.name;
+    if (this.personality && this.personality.id) return this.personality.id;
+    return '';
+  }
+
 
   /**
    * Set path for vendor to follow

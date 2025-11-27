@@ -298,10 +298,10 @@ export class AIManager {
       return;
     }
     
-    // Delegate assignment to behavior (handles state transition, cooldown, pathfinding)
-    behavior.assignToSection(sectionIdx);
+    // Delegate assignment to behavior with target seat coordinates
+    behavior.assignToSection(sectionIdx, seatRow, seatCol);
     
-    console.log(`[AIManager] Vendor ${vendorId} assigned to section ${sectionIdx}`);
+    console.log(`[AIManager] Vendor ${vendorId} assigned to section ${sectionIdx}${seatRow !== undefined ? ` at seat (${seatRow},${seatCol})` : ''}`);
     this.emit('vendorAssigned', { vendorId, sectionIdx });
   }
   
@@ -546,6 +546,14 @@ export class AIManager {
       this.eventListeners.set(event, []);
     }
     this.eventListeners.get(event)!.push(callback);
+  }
+
+  /**
+   * Public helper to notify listeners that a vendor has reached its target.
+   * Avoids exposing generic emit() while enabling specific arrival signaling.
+   */
+  public notifyVendorArrival(vendorId: number, position: { x: number; y: number }): void {
+    this.emit('vendorReachedTarget', { vendorId, position });
   }
 
   /**

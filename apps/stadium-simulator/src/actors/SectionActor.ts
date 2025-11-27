@@ -186,6 +186,19 @@ export class SectionActor extends SceneryActor {
   }
 
   /**
+   * Get FanActor using global grid coordinates (converts to section-local indices)
+   * @param globalRow Absolute grid row
+   * @param globalCol Absolute grid col
+   */
+  public getFanActorAtGlobal(globalRow: number, globalCol: number): FanActor | undefined {
+    if (!this.sectionData) return undefined;
+    const localRow = globalRow - this.sectionData.gridTop;
+    const localCol = globalCol - this.sectionData.gridLeft;
+    if (localRow < 0 || localCol < 0) return undefined;
+    return this.getFanActorAt(localRow, localCol);
+  }
+
+  /**
    * Query fans by criteria (e.g., thirstiest for AI targeting)
    * @deprecated Use queryFanActors for game logic
    */

@@ -1,5 +1,8 @@
 import { BaseManager } from '@/managers/helpers/BaseManager';
 import { gameBalance } from '@/config/gameBalance';
+
+// Gate verbose grid/zone logs behind the same flag as pathfinding
+const DEBUG_PATHFIND = import.meta.env.VITE_DEBUG_PATHFIND === 'true';
 import type { 
   ZoneType, 
   TransitionType, 
@@ -105,8 +108,12 @@ export class GridManager extends BaseManager {
     // Centered grid: (0,0) is at (centerX, centerY)
     const localX = x - this.centerX;
     const localY = y - this.centerY;
-    const col = Math.round(localX / this.cellSize);
-    const row = Math.round(localY / this.cellSize);
+    // Use floor instead of round so that world positions at cell centers
+    // (which include +cellSize/2 in gridToWorld) map back to the original
+    // grid indices. Previous use of Math.round caused center coordinates
+    // to shift (e.g. 5.5 -> 6) producing off-by-one errors.
+    const col = Math.floor(localX / this.cellSize + 0.0000001); // tiny epsilon to counter FP edge cases
+    const row = Math.floor(localY / this.cellSize + 0.0000001);
     if (!this.isValidCell(row + Math.floor(this.rows / 2), col + Math.floor(this.cols / 2))) return null;
     // Shift grid so (0,0) is center
     return {
@@ -374,9 +381,24 @@ export class GridManager extends BaseManager {
     const rowsFromBottom = groundConfig.rowsFromBottom ?? 0;
     const targetRow = this.rows - 1 - rowsFromBottom;
     if (!this.isValidCell(targetRow, 0)) return;
-
+    // Existing implementation placed a horizontal wall on targetRow regardless of zone,
+    // which (given current stadium config) fell inside seat/stair bands (row 17) and
+    // blocked vertical ascent from stair cells to higher seat rows. We only want a
+    // ground separation wall above actual ground cells, not within seating.
+    // Revised logic: apply top walls ONLY on cells whose zoneType is currently 'ground'.
+    // This preserves intended ground boundary while allowing vertical movement on stairs.
     for (let col = 0; col < this.cols; col++) {
-      this.setWallState(targetRow, col, 'top', true, true, true);
+      const cell = this.getCell(targetRow, col);
+      if (!cell) continue;
+      if (cell.zoneType === 'ground') {
+        this.setWallState(targetRow, col, 'top', true, true, true);
+      } else {
+        // Ensure any previously set default top wall (from earlier builds) is cleared
+        // to avoid stale blocking in seating/stair zones.
+        if (cell.walls.top) {
+          this.setWallState(targetRow, col, 'top', false, true, true);
+        }
+      }
     }
   }
 
@@ -472,16 +494,18 @@ export class GridManager extends BaseManager {
    * Processes cellRanges first (fill rectangular regions), then cells (specific overrides)
    */
   public loadZoneConfig(config: StadiumSceneConfig): void {
-    console.log('[GridManager] loadZoneConfig called with:', {
-      cellRanges: config.cellRanges?.length,
-      cells: config.cells?.length,
-      sections: config.sections?.length,
-      stairs: config.stairs?.length
-    });
+    if (DEBUG_PATHFIND) {
+      console.log('[GridManager] loadZoneConfig called with:', {
+        cellRanges: config.cellRanges.length,
+        cells: config.cells.length,
+        sections: config.sections.length,
+        stairs: config.stairs.length,
+      });
+    }
 
     // Process cell ranges first
     if (config.cellRanges) {
-      console.log('[GridManager] Processing', config.cellRanges.length, 'cell ranges');
+      if (DEBUG_PATHFIND) console.log('[GridManager] Processing', config.cellRanges.length, 'cell ranges');
       for (const range of config.cellRanges) {
         this.applyCellRange(range);
       }
@@ -489,7 +513,7 @@ export class GridManager extends BaseManager {
 
     // Process individual cells (overrides ranges)
     if (config.cells) {
-      console.log('[GridManager] Processing', config.cells.length, 'individual cells');
+      if (DEBUG_PATHFIND) console.log('[GridManager] Processing', config.cells.length, 'individual cells');
       for (const cellDesc of config.cells) {
         this.applyCell(cellDesc);
       }
@@ -502,12 +526,14 @@ export class GridManager extends BaseManager {
     this.emit('zonesLoaded', { config });
     this.flagGridChanged({ type: 'zonesLoaded' });
     
-    console.log('[GridManager] Zone config loaded. Sample cells:', {
-      '0,0': this.getCell(0, 0)?.zoneType,
-      '14,5': this.getCell(14, 5)?.zoneType,
-      '15,5': this.getCell(15, 5)?.zoneType,
-      '20,5': this.getCell(20, 5)?.zoneType,
-    });
+    if (DEBUG_PATHFIND) {
+      console.log('[GridManager] Zone config loaded. Sample cells:', {
+        '0,0': this.getCell(0, 0)?.zoneType,
+        '14,5': this.getCell(14, 5)?.zoneType,
+        '15,5': this.getCell(15, 5)?.zoneType,
+        '20,5': this.getCell(20, 5)?.zoneType,
+      });
+    }
   }
 
   /**
@@ -516,17 +542,19 @@ export class GridManager extends BaseManager {
   private applyCellRange(range: import('@/managers/interfaces/ZoneConfig').CellRangeDescriptor): void {
     const { rowStart, rowEnd, colStart, colEnd } = range;
 
-    console.log(`[GridManager] Applying range: rows ${rowStart}-${rowEnd}, cols ${colStart}-${colEnd}, zone: ${range.zoneType}`);
+    if (DEBUG_PATHFIND) console.log(`[GridManager] Applying range: rows ${rowStart}-${rowEnd}, cols ${colStart}-${colEnd}, zone: ${range.zoneType}`);
     
     // Debug: Check if directional flags are present in range
     if (range.zoneType === 'sky') {
-      console.log(`[GridManager] Sky range allowedIncoming.top=${range.allowedIncoming?.top} bottom=${range.allowedIncoming?.bottom} left=${range.allowedIncoming?.left} right=${range.allowedIncoming?.right}`);
-      console.log(`[GridManager] Sky range allowedOutgoing.top=${range.allowedOutgoing?.top} bottom=${range.allowedOutgoing?.bottom} left=${range.allowedOutgoing?.left} right=${range.allowedOutgoing?.right}`);
+      if (DEBUG_PATHFIND) {
+        console.log(`[GridManager] Sky range allowedIncoming.top=${range.allowedIncoming?.top} bottom=${range.allowedIncoming?.bottom} left=${range.allowedIncoming?.left} right=${range.allowedIncoming?.right}`);
+        console.log(`[GridManager] Sky range allowedOutgoing.top=${range.allowedOutgoing?.top} bottom=${range.allowedOutgoing?.bottom} left=${range.allowedOutgoing?.left} right=${range.allowedOutgoing?.right}`);
+      }
     }
 
     // Validate bounds
     if (!this.isValidCell(rowStart, colStart) || !this.isValidCell(rowEnd, colEnd)) {
-      console.warn(`[GridManager] Invalid cell range bounds: (${rowStart},${colStart}) to (${rowEnd},${colEnd})`);
+      if (DEBUG_PATHFIND) console.warn(`[GridManager] Invalid cell range bounds: (${rowStart},${colStart}) to (${rowEnd},${colEnd})`);
       return;
     }
 
@@ -541,7 +569,7 @@ export class GridManager extends BaseManager {
       }
     }
     
-    console.log(`[GridManager] Updated ${cellsUpdated} cells to zone type: ${range.zoneType}`);
+    if (DEBUG_PATHFIND) console.log(`[GridManager] Updated ${cellsUpdated} cells to zone type: ${range.zoneType}`);
   }
 
   /**
@@ -551,7 +579,7 @@ export class GridManager extends BaseManager {
     const { row, col } = cellDesc;
 
     if (!this.isValidCell(row, col)) {
-      console.warn(`[GridManager] Invalid cell coords: (${row},${col})`);
+      if (DEBUG_PATHFIND) console.warn(`[GridManager] Invalid cell coords: (${row},${col})`);
       return;
     }
 
@@ -579,7 +607,7 @@ export class GridManager extends BaseManager {
 
     // Debug: Log props for sky cells at edges
     if (props.zoneType === 'sky' && (cell.col === 0 || cell.col === 1 || cell.col === 30 || cell.col === 31) && cell.row === 0) {
-      console.log(`[GridManager] applyCellProperties for sky cell (${cell.row},${cell.col})`);
+      if (DEBUG_PATHFIND) console.log(`[GridManager] applyCellProperties for sky cell (${cell.row},${cell.col})`);
       console.log(`  props.allowedIncoming:`, props.allowedIncoming);
       console.log(`  props.allowedIncoming?.top:`, props.allowedIncoming?.top);
     }
@@ -608,7 +636,7 @@ export class GridManager extends BaseManager {
     
     // Debug log for sky cells on edges
     if (props.zoneType === 'sky' && (cell.col === 0 || cell.col === 1 || cell.col === 30 || cell.col === 31)) {
-      console.log(`[GridManager] Sky cell (${cell.row},${cell.col}) IN: T=${cell.allowedIncoming.top} B=${cell.allowedIncoming.bottom} L=${cell.allowedIncoming.left} R=${cell.allowedIncoming.right} OUT: T=${cell.allowedOutgoing.top} B=${cell.allowedOutgoing.bottom} L=${cell.allowedOutgoing.left} R=${cell.allowedOutgoing.right}`);
+      if (DEBUG_PATHFIND) console.log(`[GridManager] Sky cell (${cell.row},${cell.col}) IN: T=${cell.allowedIncoming.top} B=${cell.allowedIncoming.bottom} L=${cell.allowedIncoming.left} R=${cell.allowedIncoming.right} OUT: T=${cell.allowedOutgoing.top} B=${cell.allowedOutgoing.bottom} L=${cell.allowedOutgoing.left} R=${cell.allowedOutgoing.right}`);
     }
 
     // Apply passable if specified, otherwise derive from zoneType
@@ -704,12 +732,14 @@ export class GridManager extends BaseManager {
       }
     }
 
-    console.log(`[GridManager] Built boundary caches: ${this.rowEntryCells.length} rowEntry, ${this.stairLandingCells.length} stairLanding, ${this.corridorEntryCells.length} corridorEntry`);
-    console.log(`[GridManager] Total cells checked: ${totalCellsChecked}, cells with transitionType: ${cellsWithTransitionType}`);
+    if (DEBUG_PATHFIND) {
+      console.log(`[GridManager] Built boundary caches: ${this.rowEntryCells.length} rowEntry, ${this.stairLandingCells.length} stairLanding, ${this.corridorEntryCells.length} corridorEntry`);
+      console.log(`[GridManager] Total cells checked: ${totalCellsChecked}, cells with transitionType: ${cellsWithTransitionType}`);
+    }
     
     // Sample check
     if (cellsWithTransitionType === 0) {
-      console.warn('[GridManager] No cells have transitionType set! Checking sample cells:');
+      if (DEBUG_PATHFIND) console.warn('[GridManager] No cells have transitionType set! Checking sample cells:');
       console.log('  Cell (14,2):', this.getCell(14, 2)?.transitionType);
       console.log('  Cell (14,10):', this.getCell(14, 10)?.transitionType);
       console.log('  Cell (19,10):', this.getCell(19, 10)?.transitionType);
@@ -762,6 +792,7 @@ export class GridManager extends BaseManager {
     const fromCell = this.getCell(fromRow, fromCol);
     const toCell = this.getCell(toRow, toCol);
 
+    // Early return if cells don't exist (prevents expansion beyond grid bounds)
     if (!fromCell || !toCell) return false;
 
     // Both cells must be passable
@@ -779,7 +810,21 @@ export class GridManager extends BaseManager {
     }
 
     // Check directional flags
-    if (!fromCell.allowedOutgoing[direction] || !toCell.allowedIncoming[direction]) {
+    // When entering toCell, check the OPPOSITE direction (e.g., moving 'top' means entering from 'bottom')
+    const outgoingAllowed = fromCell.allowedOutgoing[direction];
+    const incomingAllowed = toCell.allowedIncoming[oppositeDir];
+    
+    if (!outgoingAllowed || !incomingAllowed) {
+      if (DEBUG_PATHFIND) console.warn(`[GridManager] Directional check failed (${fromRow},${fromCol})->${direction}→(${toRow},${toCol}):`, {
+        fromZone: fromCell.zoneType,
+        toZone: toCell.zoneType,
+        direction,
+        oppositeDir,
+        outgoingAllowed,
+        incomingAllowed,
+        fromAllowedOutgoing: fromCell.allowedOutgoing,
+        toAllowedIncoming: toCell.allowedIncoming
+      });
       return false;
     }
 
@@ -830,10 +875,10 @@ export class GridManager extends BaseManager {
              fromCell.zoneType === 'rowEntry';
     }
 
-    // Stair transitions should use stairLanding
+    // Stair transitions: stairs can connect to seats (horizontally at landings), ground, corridor, rowEntry
     if (fromZone === 'stair' || toZone === 'stair') {
-      // More permissive for now - stairs can connect to corridors/rowEntry
-      return toZone !== 'seat' && fromZone !== 'seat';
+      // All transitions allowed (stair <-> seat, stair <-> ground, stair <-> corridor, stair <-> rowEntry)
+      return true;
     }
 
     // All other transitions allowed (corridor <-> ground, rowEntry <-> corridor, etc.)
@@ -877,14 +922,14 @@ export class GridManager extends BaseManager {
     // If only one valid, return it
     if (corridorValid && !groundValid) {
       if (gameBalance.vendorDebug.logAccessSelection) {
-        console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): corridor (${corridorRow},${seatCol})`);
+        if (DEBUG_PATHFIND) console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): corridor (${corridorRow},${seatCol})`);
       }
       return { row: corridorRow, col: seatCol, zone: 'corridor' };
     }
 
     if (groundValid && !corridorValid) {
       if (gameBalance.vendorDebug.logAccessSelection) {
-        console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): ground (${topGroundRow},${seatCol})`);
+        if (DEBUG_PATHFIND) console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): ground (${topGroundRow},${seatCol})`);
       }
       return { row: topGroundRow, col: seatCol, zone: 'ground' };
     }
@@ -897,7 +942,7 @@ export class GridManager extends BaseManager {
     const chosenRow = chosen === 'corridor' ? corridorRow : topGroundRow;
 
     if (gameBalance.vendorDebug.logAccessSelection) {
-      console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): ${chosen} (${chosenRow},${seatCol}) - distances: corridor=${corridorDistance}, ground=${groundDistance}`);
+      if (DEBUG_PATHFIND) console.log(`[GridManager] Nearest access for seat (${seatRow},${seatCol}): ${chosen} (${chosenRow},${seatCol}) - distances: corridor=${corridorDistance}, ground=${groundDistance}`);
     }
 
     return { row: chosenRow, col: seatCol, zone: chosen };

@@ -27,6 +27,7 @@ import { PathfindingService } from '@/services/PathfindingService';
 import { TargetingIndicator } from '@/components/TargetingIndicator';
 import { TargetingReticle } from '@/ui/TargetingReticle';
 import { OverlayManager } from '@/managers/OverlayManager';
+import PersonalityIntegrationManager from '@/systems/PersonalityIntegrationManager';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -87,6 +88,12 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+
+    // Initialize personality integration manager (loads AI content)
+    console.log('[StadiumScene] Initializing PersonalityIntegrationManager...');
+    const personalityManager = PersonalityIntegrationManager();
+    await personalityManager.initialize();
+    console.log('[StadiumScene] PersonalityIntegrationManager initialized');
 
     // Load level data (sections, seats, fans, vendors)
     const levelData = await LevelService.loadLevel();
@@ -932,7 +939,7 @@ export class StadiumScene extends Phaser.Scene {
     this.updateVendorCooldowns();
 
     // Update targeting reticle cursor validation (real-time)
-    if (this.vendorTargetingActive && this.targetingReticle) {
+    if (this.vendorTargetingActive !== null && this.targetingReticle) {
       this.updateTargetingReticle();
     }
   }
@@ -1676,18 +1683,24 @@ export class StadiumScene extends Phaser.Scene {
     const vendorActors = Array.from(this.aiManager.getVendorActors().entries());
     console.log(`[rebuildVendorControls] Building controls for ${vendorActors.length} vendors`);
     
-    vendorActors.forEach(([vendorId, vendorActor]) => {
+    vendorActors.forEach(([vendorId, vendorActor], displayIndex) => {
       const row = document.createElement('div');
       row.className = 'vendor-controls';
       row.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:8px;';
-      
+
       // Main vendor button
       const btn = document.createElement('button');
       btn.className = 'vendor-btn';
       btn.id = `vendor-btn-${vendorId}`;
-      btn.textContent = `Vendor ${vendorId}`;
+
+      // Personality label logic using new helper
+      const personalityName = vendorActor.getPersonalityName?.();
+      const label = personalityName || `Vendor #${displayIndex + 1}`;
+      btn.textContent = label;
+      // Persist personality for dynamic state changes (targeting, exit, cooldown)
+      (btn as any).dataset.personality = label;
       btn.style.cssText = 'background:#111;border:1px solid #555;color:#eee;font-size:11px;padding:4px 8px;cursor:pointer;';
-      
+
       // Check cooldown status
       const onCooldown = this.aiManager.isVendorOnCooldown(vendorId);
       if (onCooldown) {
@@ -1695,19 +1708,19 @@ export class StadiumScene extends Phaser.Scene {
         btn.style.opacity = '0.5';
         btn.style.cursor = 'not-allowed';
       }
-      
+
       btn.onclick = () => {
         if (!onCooldown) {
           this.enterVendorTargetingMode(vendorId);
         }
       };
       row.appendChild(btn);
-      
+
       // Status label
       const statusLabel = document.createElement('span');
       statusLabel.id = `vendor-status-${vendorId}`;
       statusLabel.style.cssText = 'font-size:10px;color:#999;text-align:center;';
-      
+
       if (onCooldown) {
         const remaining = this.aiManager.getVendorCooldownRemaining(vendorId);
         statusLabel.textContent = `Cooldown: ${Math.ceil(remaining / 1000)}s`;
@@ -1715,7 +1728,7 @@ export class StadiumScene extends Phaser.Scene {
         // Check if vendor is assigned to a section via behavior
         const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
         const assignedSection = behavior.getAssignedSection();
-        
+
         if (assignedSection !== null && assignedSection >= 0 && assignedSection <= 2) {
           const sectionNames = ['Section A', 'Section B', 'Section C'];
           statusLabel.textContent = sectionNames[assignedSection];
@@ -1723,7 +1736,7 @@ export class StadiumScene extends Phaser.Scene {
           statusLabel.textContent = 'Available';
         }
       }
-      
+
       row.appendChild(statusLabel);
       controlsRoot.appendChild(row);
     });
@@ -1747,11 +1760,12 @@ export class StadiumScene extends Phaser.Scene {
     }
     
     // Update button state
-    const btn = document.getElementById(`vendor-btn-${vendorId}`);
+    const btn = document.getElementById(`vendor-btn-${vendorId}`) as HTMLElement | null;
     if (btn) {
+      const personality = (btn as any).dataset?.personality || `Vendor ${vendorId}`;
       btn.style.border = '2px solid #0f0';
       btn.style.background = '#030';
-      btn.textContent = `▶ Vendor ${vendorId} ◀`;
+      btn.textContent = `▶ ${personality} ◀`;
     }
   }
 
@@ -1770,11 +1784,12 @@ export class StadiumScene extends Phaser.Scene {
     }
     
     // Restore button state
-    const btn = document.getElementById(`vendor-btn-${vendorId}`);
+    const btn = document.getElementById(`vendor-btn-${vendorId}`) as HTMLElement | null;
     if (btn) {
+      const personality = (btn as any).dataset?.personality || `Vendor ${vendorId}`;
       btn.style.border = '1px solid #555';
       btn.style.background = '#111';
-      btn.textContent = `Vendor ${vendorId}`;
+      btn.textContent = personality;
     }
     
     this.vendorTargetingActive = null;
@@ -1901,6 +1916,7 @@ export class StadiumScene extends Phaser.Scene {
 
     // Check if cursor is over a seat zone
     const zone = this.gridManager.getZoneType(gridPos.row, gridPos.col);
+    console.log(`[TargetingReticle] Hovered cell at row=${gridPos.row}, col=${gridPos.col}, zoneType=${zone}`);
     const isValidTarget = zone === 'seat';
 
     if (isValidTarget) {

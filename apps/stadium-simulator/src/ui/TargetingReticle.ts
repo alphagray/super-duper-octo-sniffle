@@ -112,21 +112,54 @@ export class TargetingReticle extends Phaser.GameObjects.Container {
     this.sectionHighlight = this.scene.add.graphics();
     this.sectionHighlight.setDepth(999); // Below reticle but above everything else
     
-    // Section bounds (hardcoded for now, should be passed in or queried)
-    // Section layout: A (left), B (center), C (right)
-    const sectionWidth = 256;
-    const sectionHeight = 128;
-    const offsetX = 128;
-    const offsetY = 480;
-    
-    const x = offsetX + (sectionIdx * (sectionWidth + 64));
-    const y = offsetY;
-    
+    // Dynamic section bounds derived from grid seat ranges.
+    // Seat grid ranges duplicated from StadiumScene.getSectionAtGridPosition:
+    // Section A: cols 2-9, rows 15-18
+    // Section B: cols 12-19, rows 15-18
+    // Section C: cols 22-29, rows 15-18
+    // We compute world-space rectangle by converting the top-left and bottom-right
+    // seat cell centers to world coords via gridToWorld and then expanding to cover
+    // full cell extents.
+    const sceneAny: any = this.scene as any;
+    const gridManager = sceneAny.gridManager; // Access private via any (surgical, replace later with injected ref)
+    if (!gridManager) {
+      console.warn('[TargetingReticle] gridManager unavailable; using legacy hardcoded highlight');
+      const legacyWidth = 256;
+      const legacyHeight = 128;
+      const legacyOffsetX = 128;
+      const legacyOffsetY = 480;
+      const lx = legacyOffsetX + (sectionIdx * (legacyWidth + 64));
+      const ly = legacyOffsetY;
+      this.sectionHighlight.fillStyle(0x00ff00, 0.15);
+      this.sectionHighlight.fillRect(lx, ly, legacyWidth, legacyHeight);
+      this.sectionHighlight.lineStyle(2, 0x00ff00, 0.5);
+      this.sectionHighlight.strokeRect(lx, ly, legacyWidth, legacyHeight);
+      return;
+    }
+
+    const cellSize = gridManager.getWorldSize().cellSize;
+
+    interface Range { colStart: number; colEnd: number; rowStart: number; rowEnd: number; }
+    const ranges: Range[] = [
+      { colStart: 2, colEnd: 9, rowStart: 15, rowEnd: 18 },   // A
+      { colStart: 12, colEnd: 19, rowStart: 15, rowEnd: 18 }, // B
+      { colStart: 22, colEnd: 29, rowStart: 15, rowEnd: 18 }  // C
+    ];
+    const r = ranges[sectionIdx];
+    if (!r) return;
+
+    // Convert top-left seat cell center then adjust by half cell size to get true top-left corner.
+    const topLeftCenter = gridManager.gridToWorld(r.rowStart, r.colStart);
+    const bottomRightCenter = gridManager.gridToWorld(r.rowEnd, r.colEnd);
+    const x = topLeftCenter.x - cellSize / 2;
+    const y = topLeftCenter.y - cellSize / 2;
+    const width = (r.colEnd - r.colStart + 1) * cellSize;
+    const height = (r.rowEnd - r.rowStart + 1) * cellSize;
+
     this.sectionHighlight.fillStyle(0x00ff00, 0.15);
-    this.sectionHighlight.fillRect(x, y, sectionWidth, sectionHeight);
-    
+    this.sectionHighlight.fillRect(x, y, width, height);
     this.sectionHighlight.lineStyle(2, 0x00ff00, 0.5);
-    this.sectionHighlight.strokeRect(x, y, sectionWidth, sectionHeight);
+    this.sectionHighlight.strokeRect(x, y, width, height);
   }
 
   /**
