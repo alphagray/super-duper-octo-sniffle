@@ -557,6 +557,25 @@ export class AIManager {
   }
 
   /**
+   * Force recall of a vendor (abort current assignment/service and start patrol)
+   */
+  public recallVendor(vendorId: number): void {
+    const vendorActor = this.vendorActors.get(vendorId);
+    if (!vendorActor) {
+      console.warn(`[AIManager] recallVendor: unknown vendor ${vendorId}`);
+      return;
+    }
+    const behavior = vendorActor.getBehavior() as any;
+    if (behavior && typeof behavior.forceRecallPatrol === 'function') {
+      behavior.forceRecallPatrol();
+      this.emit('vendorRecalled', { vendorId });
+      console.log(`[AIManager] Vendor ${vendorId} recalled -> patrol mode`);
+    } else {
+      console.warn(`[AIManager] recallVendor: behavior missing forceRecallPatrol for vendor ${vendorId}`);
+    }
+  }
+
+  /**
    * Emits an event to all registered listeners
    * @param event - The event name
    * @param data - The event data to pass to listeners

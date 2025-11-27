@@ -141,7 +141,7 @@ export class SectionActor extends SceneryActor {
           const worldPos = this.gridManager
             ? this.gridManager.gridToWorld(fd.gridRow, fd.gridCol)
             : { x: 0, y: 0 };
-          const seatOffsetY = 5; // Offset to align with top of row floor divider (matches SectionRow seat positioning)
+          const seatOffsetY = -10; // Offset to align with top of row floor divider (matches SectionRow seat positioning)
           const fanY = worldPos.y - seatOffsetY; // Adjust from cell center by seat offset
           const fan = new Fan(this.section.scene, worldPos.x, fanY);
           // Create FanActor for game logic

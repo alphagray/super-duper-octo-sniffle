@@ -43,7 +43,6 @@ export class VendorActor extends AnimatedActor {
     }
     this.personality = personality;
     this.vendor = new Vendor(scene, x, y, personality, manager.getDialogueManager());
-    this.vendor.setDepth(1000); // Render above fans
     scene.add.existing(this.vendor);
     this.position = { x, y };
 
@@ -55,11 +54,15 @@ export class VendorActor extends AnimatedActor {
       if (gridPos) {
         this.gridRow = gridPos.row;
         this.gridCol = gridPos.col;
-      }
-      // Initialize depth based on world position
-      const depth = this.gridManager.getDepthForWorld(x, y);
-      if (typeof depth === 'number') {
+        const depth = this.gridManager.getDepthForPosition(gridPos.row, gridPos.col);
         this.vendor.setDepth(depth);
+        console.log(`[VendorActor] Init depth for vendor at grid (${gridPos.row},${gridPos.col}): ${depth}`);
+      } else {
+        const fallbackDepth = this.gridManager.getDepthForWorld(x, y);
+        if (typeof fallbackDepth === 'number') {
+          this.vendor.setDepth(fallbackDepth);
+          console.log(`[VendorActor] Init fallback depth: ${fallbackDepth}`);
+        }
       }
     }
     this.logger.debug(`VendorActor created at world (${x}, ${y}) grid (${this.gridRow}, ${this.gridCol})`);
@@ -236,9 +239,19 @@ export class VendorActor extends AnimatedActor {
    */
   private updateDepthForPosition(x: number, y: number): void {
     if (!this.gridManager) return;
-    const depth = this.gridManager.getDepthForWorld(x, y);
-    if (typeof depth === 'number') {
+    const coords = this.gridManager.worldToGrid(x, y);
+    if (coords) {
+      // Vendors render slightly in front of fans in the same row (+2 depth offset)
+      const baseDepth = this.gridManager.getDepthForPosition(coords.row, coords.col);
+      const depth = baseDepth + 2;
       this.vendor.setDepth(depth);
+      // Debug log occasionally
+      if (Math.random() < 0.01) {
+        console.log(`[VendorActor] Update depth at grid (${coords.row},${coords.col}): ${depth} (base: ${baseDepth}), actual depth: ${this.vendor.depth}`);
+      }
+    } else {
+      const depth = this.gridManager.getDepthForWorld(x, y);
+      if (typeof depth === 'number') this.vendor.setDepth(depth + 2);
     }
   }
 

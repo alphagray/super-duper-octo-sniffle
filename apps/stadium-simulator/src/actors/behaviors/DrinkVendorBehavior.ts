@@ -366,6 +366,34 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   }
 
   /**
+   * Force immediate recall/patrol: abort service or movement and start patrol cycle.
+   * Used by UI recall button to hard overwrite current assignment.
+   */
+  public forceRecallPatrol(): void {
+    console.log('[DrinkVendorBehavior] forceRecallPatrol invoked - aborting current activity');
+    // Clear any active service/target
+    this.targetFanActor = null;
+    this.targetPosition = null;
+    this.serviceTimer = 0;
+    // Clear path so movement halts immediately
+    this.vendorActor.clearPath();
+    // Remove assignment so vendor returns to global scanning later
+    this.assignedSectionIdx = null;
+    // Enter patrol mode directly
+    this.startPatrol();
+  }
+  
+  /**
+   * Ensure arrival at patrol waypoint resets state back to patrolling (no targetFanActor)
+   */
+  public finalizePatrolArrival(): void {
+    if (this.state === 'moving' && !this.targetFanActor) {
+      this.state = 'patrolling' as AIActorState;
+      console.log('[DrinkVendorBehavior] Patrol waypoint reached -> patrolling');
+    }
+  }
+
+  /**
    * Handle arrival at destination
    */
   public onArrival(): void {
@@ -386,7 +414,12 @@ export class DrinkVendorBehavior implements AIActorBehavior {
       // this.vendorActor.emit('serviceStarted', { fanPosition: this.targetFanActor.getPosition() });
     } else if (this.state === 'moving') {
       // Reached movement destination without a fan target (e.g., patrol waypoint)
-      console.log('[DrinkVendorBehavior] Arrived at movement destination (no fan target)');
+      console.log('[DrinkVendorBehavior] Arrived at patrol waypoint');
+      // Resume patrolling idle between waypoints
+      this.state = 'patrolling' as AIActorState;
+      this.patrolTimer = this.config.patrol.intervalMs;
+      // Clear any residual path to avoid lingering movement state
+      this.vendorActor.clearPath();
     }
 
     // Emit arrival event through AI manager for scene listeners (vendorReachedTarget)
@@ -577,28 +610,56 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   private updatePatrol(deltaTime: number): void {
     this.patrolTimer -= deltaTime;
     
+    // If currently moving along a patrol path, let VendorActor handle progression
+    if (this.state === 'moving' && !this.targetFanActor) {
+      return;
+    }
+
     if (this.patrolTimer <= 0) {
-      // Pick random waypoint
       const currentPos = this.vendorActor.getGridPosition();
       const allowedZones = this.config.patrol.zones as ReadonlyArray<ZoneType>;
-      const validCells = this.gridManager.getAllCells().filter(cell => {
-        // Filter to patrol zones within ±5 columns
-        return (
-          allowedZones.includes(cell.zoneType) &&
-          cell.passable &&
-          Math.abs(cell.col - currentPos.col) <= 5
-        );
-      });
-      
-      if (validCells.length > 0) {
-        const randomCell = validCells[Math.floor(Math.random() * validCells.length)];
-        console.log(`[DrinkVendorBehavior] Patrol waypoint selected: (${randomCell.row},${randomCell.col})`);
-        
-        // TODO: Request path to waypoint
-        this.state = 'moving' as AIActorState;
+      const allCells = this.gridManager.getAllCells();
+
+      const validCells = allCells.filter(cell => (
+        allowedZones.includes(cell.zoneType) &&
+        cell.passable &&
+        // Stay within a modest horizontal band to avoid extreme wandering
+        Math.abs(cell.col - currentPos.col) <= 6 &&
+        // Avoid selecting current cell
+        (cell.row !== currentPos.row || cell.col !== currentPos.col)
+      ));
+
+      if (validCells.length === 0) {
+        // No patrol candidates; wait and retry
+        this.patrolTimer = 1000;
+        console.warn('[DrinkVendorBehavior] No valid patrol cells found; retrying in 1s');
+        return;
       }
-      
-      // Reset timer
+
+      const randomCell = validCells[Math.floor(Math.random() * validCells.length)];
+      console.log(`[DrinkVendorBehavior] Patrol waypoint selected: (${randomCell.row},${randomCell.col}) zone=${randomCell.zoneType}`);
+
+      if (this.pathfindingService) {
+        const targetWorld = this.gridManager.gridToWorld(randomCell.row, randomCell.col);
+        const vendorPos = this.vendorActor.getPosition();
+        const path = this.pathfindingService.requestPath(
+          vendorPos.x,
+          vendorPos.y,
+          targetWorld.x,
+          targetWorld.y
+        );
+        if (path && path.length > 0) {
+          this.vendorActor.setPath(path);
+          this.state = 'moving' as AIActorState;
+          console.log(`[DrinkVendorBehavior] Patrol path assigned (${path.length} cells)`);
+        } else {
+          console.warn('[DrinkVendorBehavior] Failed to generate patrol path; will retry');
+        }
+      } else {
+        console.warn('[DrinkVendorBehavior] No pathfindingService for patrol movement');
+      }
+
+      // Reset patrol timer for next waypoint selection (even if path failed)
       this.patrolTimer = this.config.patrol.intervalMs;
     }
   }

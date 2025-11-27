@@ -43,7 +43,7 @@ export class Fan extends BaseActorContainer {
 
     // Bottom is taller than it is wide
     const bottomW = Math.round(size * 0.6);
-    const bottomH = Math.round(size * 1.6);
+    const bottomH = Math.round(size * 1.3);
 
     // Choose top color between pale yellow and medium brown
     const topColor = Fan.randomTopColor();

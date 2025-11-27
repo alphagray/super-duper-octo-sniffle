@@ -253,7 +253,7 @@ export const gameBalance = {
       scenery: 100,
       animatedActorBase: 150,
       animatedActorMin: 101,
-      animatedActorMax: 200,
+      animatedActorMax: 350, // Increased to accommodate 24-row grid (101 + 24*10 = 341)
       animatedActorRowPenalty: 10,
     },
     waveCelebration: {

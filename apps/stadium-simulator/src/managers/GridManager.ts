@@ -176,20 +176,18 @@ export class GridManager extends BaseManager {
 
   /**
    * Get render depth for an animated actor at a grid position.
-   * Applies per-row penalty above ground and clamps to [animatedActorMin, animatedActorMax].
+   * Higher row numbers (closer to bottom of screen) = higher depth (render in front)
+   * Lower row numbers (closer to top of screen) = lower depth (render behind)
    */
   public getDepthForPosition(row: number, col: number): number {
-    // Determine rows above ground plane using configured ground line
-    const rowsFromBottom = gameBalance.grid.groundLine.rowsFromBottom ?? 0;
-    const groundRow = this.rows - 1 - rowsFromBottom;
-    const rowsAboveGround = Math.max(0, row - groundRow);
-
-    const base = gameBalance.ui.depths.animatedActorBase;
-    const penalty = gameBalance.ui.depths.animatedActorRowPenalty * rowsAboveGround;
     const min = gameBalance.ui.depths.animatedActorMin;
     const max = gameBalance.ui.depths.animatedActorMax;
-    const raw = base - penalty;
-    return Math.max(min, Math.min(max, raw));
+    const rowPenalty = gameBalance.ui.depths.animatedActorRowPenalty;
+    
+    // Map row to depth range: row 0 → min, higher rows → higher depth
+    const depth = min + (row * rowPenalty);
+    
+    return Math.max(min, Math.min(max, depth));
   }
 
   /**
