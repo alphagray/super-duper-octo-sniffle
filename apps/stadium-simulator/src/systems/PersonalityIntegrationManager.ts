@@ -69,63 +69,25 @@ export class PersonalityIntegrationManager {
   }
 
   /**
-   * Create a vendor sprite with personality
-   * 
-   * @param scene - Phaser scene to add vendor to
-   * @param x - X coordinate
-   * @param y - Y coordinate
-   * @param vendorIndex - Index of vendor personality to use (defaults to random)
-   * @returns Vendor sprite with personality
+   * Get a vendor personality by index (or random if not specified)
    */
-  public createVendor(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    vendorIndex?: number
-  ): Vendor {
-    if (!this.content || this.content.vendors.length === 0) {
-      console.warn('No vendor personalities loaded, creating vendor without personality');
-      return new Vendor(scene, x, y);
+  public getVendorPersonalityByIndex(index?: number): VendorPersonality | undefined {
+    if (!this.content || this.content.vendors.length === 0) return undefined;
+    if (index === undefined) {
+      return this.content.vendors[Math.floor(Math.random() * this.content.vendors.length)];
     }
-
-    // Select vendor personality
-    const index = vendorIndex !== undefined 
-      ? vendorIndex % this.content.vendors.length
-      : Math.floor(Math.random() * this.content.vendors.length);
-    
-    const personality = this.content.vendors[index];
-
-    return new Vendor(scene, x, y, personality, this.dialogueManager);
+    return this.content.vendors[index % this.content.vendors.length];
   }
 
   /**
-   * Create a mascot sprite with personality
-   * 
-   * @param scene - Phaser scene to add mascot to
-   * @param x - X coordinate
-   * @param y - Y coordinate
-   * @param mascotIndex - Index of mascot personality to use (defaults to random)
-   * @returns Mascot sprite with personality
+   * Get a mascot personality by index (or random if not specified)
    */
-  public createMascot(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    mascotIndex?: number
-  ): Mascot {
-    if (!this.content || this.content.mascots.length === 0) {
-      console.warn('No mascot personalities loaded, creating mascot without personality');
-      return new Mascot(scene, x, y);
+  public getMascotPersonalityByIndex(index?: number): MascotPersonality | undefined {
+    if (!this.content || this.content.mascots.length === 0) return undefined;
+    if (index === undefined) {
+      return this.content.mascots[Math.floor(Math.random() * this.content.mascots.length)];
     }
-
-    // Select mascot personality
-    const index = mascotIndex !== undefined
-      ? mascotIndex % this.content.mascots.length
-      : Math.floor(Math.random() * this.content.mascots.length);
-    
-    const personality = this.content.mascots[index];
-
-    return new Mascot(scene, x, y, personality);
+    return this.content.mascots[index % this.content.mascots.length];
   }
 
   /**

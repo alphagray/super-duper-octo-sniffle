@@ -1,3 +1,4 @@
+ 
 import Phaser from 'phaser';
 
 import { gameBalance } from '@/config/gameBalance';
@@ -24,6 +25,11 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
   private pulseDirection: number = 1;
   private pathHistory: Array<{ path: GridPathCell[]; success: boolean; fromX: number; fromY: number; toX: number; toY: number }> = [];
   private readonly maxHistory: number = 5;
+  // Pointer tracking for grid display
+  private pointerX: number = 0;
+  private pointerY: number = 0;
+  private pointerGrid: { row: number; col: number } | null = null;
+  private cursorText?: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, grid: GridManager) {
     super(scene);
@@ -39,6 +45,17 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
 
     this.grid.on('gridChanged', this.gridChangedHandler);
     this.scene.events.on(Phaser.Scenes.Events.UPDATE, this.handleSceneUpdate, this);
+
+    // Pointer move tracking
+    scene.input.on('pointermove', this.handlePointerMove, this);
+
+    // Create persistent cursor text (hidden initially)
+    this.cursorText = scene.add.text(0, 0, '', {
+      font: '16px monospace',
+      color: '#00ff00',
+      backgroundColor: '#222',
+      padding: { left: 2, right: 2, top: 1, bottom: 1 },
+    }).setDepth(2000).setScrollFactor(0).setAlpha(0.9).setVisible(false);
 
     scene.add.existing(this);
   }
@@ -149,6 +166,11 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
   public destroy(fromScene?: boolean): void {
     this.grid.off('gridChanged', this.gridChangedHandler);
     this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.handleSceneUpdate, this);
+    this.scene.input.off('pointermove', this.handlePointerMove, this);
+    if (this.cursorText) {
+      this.cursorText.destroy();
+      this.cursorText = undefined;
+    }
     super.destroy(fromScene);
   }
 
@@ -213,8 +235,29 @@ export class GridOverlay extends Phaser.GameObjects.Graphics {
       console.log('[GridOverlay.redraw] Rendering recent paths...');
       this.renderRecentPaths();
     }
+    // Update persistent cursor text with current grid position
+    if (this.cursorText) {
+      if (this.visible && this.pointerGrid) {
+        this.cursorText.setText(`(${this.pointerGrid.row}, ${this.pointerGrid.col})`);
+        this.cursorText.setPosition(this.pointerX + 12, this.pointerY + 12);
+        this.cursorText.setVisible(true);
+      } else {
+        this.cursorText.setVisible(false);
+      }
+    }
     
     console.log('[GridOverlay.redraw] Redraw complete');
+  }
+  /**
+   * Update pointer position and grid cell
+   */
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    this.pointerX = pointer.worldX;
+    this.pointerY = pointer.worldY;
+    this.pointerGrid = this.grid.worldToGrid(pointer.worldX, pointer.worldY);
+    if (this.visible) {
+      this.needsRedraw = true;
+    }
   }
 
   private drawGridLines(rows: number, cols: number, cellSize: number, originX: number, originY: number): void {

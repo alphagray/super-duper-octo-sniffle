@@ -15,6 +15,7 @@ import { manhattanDistance } from '@/utils/gridMath';
  * Handles seat assignment, cluster targeting, retry logic, recall, and patrol
  */
 export class DrinkVendorBehavior implements AIActorBehavior {
+  // Removed TEST_MODE hardcoded targeting (was used for debugging pathfinding)
   private vendorActor: DrinkVendorActor;
   private aiManager: AIManager;
   private gridManager: GridManager;
@@ -79,14 +80,85 @@ export class DrinkVendorBehavior implements AIActorBehavior {
    * Assign vendor to specific section (player-driven)
    * Vendor will scan only this section for targets
    */
-  public assignToSection(sectionIdx: number): void {
+  public assignToSection(sectionIdx: number, targetRow?: number, targetCol?: number): void {
     this.assignedSectionIdx = sectionIdx;
     this.state = 'idle' as AIActorState;
     this.scanTimer = 0; // Scan immediately
     this.idleTimer = 0; // Reset idle timeout
     this.cooldownTimer = gameBalance.vendorAssignment.cooldownMs;
-    
-    console.log(`[DrinkVendorBehavior] Assigned to section ${sectionIdx}`);
+
+    console.log(`[DrinkVendorBehavior] assignToSection called: section=${sectionIdx}, targetRow=${targetRow}, targetCol=${targetCol}, hasPathfinding=${!!this.pathfindingService}`);
+
+    // Set targetFanActor if possible
+    this.targetFanActor = null;
+    if (
+      sectionIdx !== undefined &&
+      targetRow !== undefined &&
+      targetCol !== undefined
+    ) {
+      const sectionActors = this.aiManager.getSectionActors();
+      const sectionActor = sectionActors[sectionIdx];
+      if (!sectionActor) {
+        console.error(`[DrinkVendorBehavior] No section actor found at index ${sectionIdx}`);
+      } else {
+        // Try global lookup first (preferred) then fallback to local indices if provided seat data used local row/col
+        if (typeof sectionActor.getFanActorAtGlobal === 'function') {
+          this.targetFanActor = sectionActor.getFanActorAtGlobal(targetRow, targetCol) || null;
+        } else if (typeof sectionActor.getFanActorAt === 'function') {
+          this.targetFanActor = sectionActor.getFanActorAt(targetRow, targetCol) || null;
+        }
+        if (this.targetFanActor) {
+          console.log(`[DrinkVendorBehavior] Target fan actor set for section=${sectionIdx}, row=${targetRow}, col=${targetCol}`);
+        } else {
+          console.warn(`[DrinkVendorBehavior] No fan actor found at section=${sectionIdx}, row=${targetRow}, col=${targetCol}`);
+        }
+      }
+    }
+
+    // Use provided targetRow/targetCol directly (no debug override)
+    const desiredRow = targetRow;
+    const desiredCol = targetCol;
+
+    // If we have a resolved target and pathfinding service, request a path
+    if (desiredRow !== undefined && desiredCol !== undefined && this.pathfindingService) {
+      const targetWorld = this.gridManager.gridToWorld(desiredRow, desiredCol);
+      const vendorPos = this.vendorActor.getPosition();
+      console.log(`[DrinkVendorBehavior] Requesting path from (${vendorPos.x},${vendorPos.y}) to (${targetWorld.x},${targetWorld.y})`);
+
+      const path = this.pathfindingService.requestPath(
+        vendorPos.x,
+        vendorPos.y,
+        targetWorld.x,
+        targetWorld.y
+      );
+
+      console.log(`[DrinkVendorBehavior] Path result: ${path ? `${path.length} cells` : 'null'}`);
+
+      if (path && path.length > 0) {
+        this.vendorActor.setPath(path);
+        this.targetPosition = { row: desiredRow, col: desiredCol, sectionIdx } as { row: number; col: number; sectionIdx: number };
+        // Use unified 'moving' state so onArrival() logic triggers correctly
+        this.state = 'moving' as AIActorState;
+        console.log(`[DrinkVendorBehavior] Pathing to target (${desiredRow},${desiredCol}), path has ${path.length} cells (state=moving)`);
+      } else {
+        // Detailed failure diagnostics
+        const startGrid = this.gridManager.worldToGrid(vendorPos.x, vendorPos.y);
+        const endGrid = this.gridManager.worldToGrid(targetWorld.x, targetWorld.y);
+        console.warn(`[DrinkVendorBehavior] No path to target (${desiredRow},${desiredCol}). startGrid=${startGrid ? `${startGrid.row},${startGrid.col}` : 'null'} endGrid=${endGrid ? `${endGrid.row},${endGrid.col}` : 'null'}`);
+        if (startGrid) {
+          const c = this.gridManager.getCell(startGrid.row, startGrid.col);
+          console.warn('[StartCell]', { passable: c?.passable, zone: c?.zoneType, walls: c?.walls, out: c?.allowedOutgoing, inc: c?.allowedIncoming });
+        }
+        if (endGrid) {
+          const c = this.gridManager.getCell(endGrid.row, endGrid.col);
+          console.warn('[EndCell]', { passable: c?.passable, zone: c?.zoneType, walls: c?.walls, out: c?.allowedOutgoing, inc: c?.allowedIncoming });
+        }
+      }
+    } else {
+      console.log(`[DrinkVendorBehavior] No target coordinates or pathfinding service unavailable, will scan for targets`);
+    }
+
+    console.log(`[DrinkVendorBehavior] Assigned to section ${sectionIdx}, final state: ${this.state}`);
   }
   
   /**
@@ -294,6 +366,34 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   }
 
   /**
+   * Force immediate recall/patrol: abort service or movement and start patrol cycle.
+   * Used by UI recall button to hard overwrite current assignment.
+   */
+  public forceRecallPatrol(): void {
+    console.log('[DrinkVendorBehavior] forceRecallPatrol invoked - aborting current activity');
+    // Clear any active service/target
+    this.targetFanActor = null;
+    this.targetPosition = null;
+    this.serviceTimer = 0;
+    // Clear path so movement halts immediately
+    this.vendorActor.clearPath();
+    // Remove assignment so vendor returns to global scanning later
+    this.assignedSectionIdx = null;
+    // Enter patrol mode directly
+    this.startPatrol();
+  }
+  
+  /**
+   * Ensure arrival at patrol waypoint resets state back to patrolling (no targetFanActor)
+   */
+  public finalizePatrolArrival(): void {
+    if (this.state === 'moving' && !this.targetFanActor) {
+      this.state = 'patrolling' as AIActorState;
+      console.log('[DrinkVendorBehavior] Patrol waypoint reached -> patrolling');
+    }
+  }
+
+  /**
    * Handle arrival at destination
    */
   public onArrival(): void {
@@ -312,6 +412,22 @@ export class DrinkVendorBehavior implements AIActorBehavior {
       
       // Emit event for UI feedback (optional)
       // this.vendorActor.emit('serviceStarted', { fanPosition: this.targetFanActor.getPosition() });
+    } else if (this.state === 'moving') {
+      // Reached movement destination without a fan target (e.g., patrol waypoint)
+      console.log('[DrinkVendorBehavior] Arrived at patrol waypoint');
+      // Resume patrolling idle between waypoints
+      this.state = 'patrolling' as AIActorState;
+      this.patrolTimer = this.config.patrol.intervalMs;
+      // Clear any residual path to avoid lingering movement state
+      this.vendorActor.clearPath();
+    }
+
+    // Emit arrival event through AI manager for scene listeners (vendorReachedTarget)
+    // StadiumScene listens for this to trigger arrival visuals
+    try {
+      this.aiManager.notifyVendorArrival((this.vendorActor as any).id, this.vendorActor.getPosition());
+    } catch (e) {
+      // Fail silently if AIManager method signature changes
     }
   }
 
@@ -494,28 +610,56 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   private updatePatrol(deltaTime: number): void {
     this.patrolTimer -= deltaTime;
     
+    // If currently moving along a patrol path, let VendorActor handle progression
+    if (this.state === 'moving' && !this.targetFanActor) {
+      return;
+    }
+
     if (this.patrolTimer <= 0) {
-      // Pick random waypoint
       const currentPos = this.vendorActor.getGridPosition();
       const allowedZones = this.config.patrol.zones as ReadonlyArray<ZoneType>;
-      const validCells = this.gridManager.getAllCells().filter(cell => {
-        // Filter to patrol zones within ±5 columns
-        return (
-          allowedZones.includes(cell.zoneType) &&
-          cell.passable &&
-          Math.abs(cell.col - currentPos.col) <= 5
-        );
-      });
-      
-      if (validCells.length > 0) {
-        const randomCell = validCells[Math.floor(Math.random() * validCells.length)];
-        console.log(`[DrinkVendorBehavior] Patrol waypoint selected: (${randomCell.row},${randomCell.col})`);
-        
-        // TODO: Request path to waypoint
-        this.state = 'moving' as AIActorState;
+      const allCells = this.gridManager.getAllCells();
+
+      const validCells = allCells.filter(cell => (
+        allowedZones.includes(cell.zoneType) &&
+        cell.passable &&
+        // Stay within a modest horizontal band to avoid extreme wandering
+        Math.abs(cell.col - currentPos.col) <= 6 &&
+        // Avoid selecting current cell
+        (cell.row !== currentPos.row || cell.col !== currentPos.col)
+      ));
+
+      if (validCells.length === 0) {
+        // No patrol candidates; wait and retry
+        this.patrolTimer = 1000;
+        console.warn('[DrinkVendorBehavior] No valid patrol cells found; retrying in 1s');
+        return;
       }
-      
-      // Reset timer
+
+      const randomCell = validCells[Math.floor(Math.random() * validCells.length)];
+      console.log(`[DrinkVendorBehavior] Patrol waypoint selected: (${randomCell.row},${randomCell.col}) zone=${randomCell.zoneType}`);
+
+      if (this.pathfindingService) {
+        const targetWorld = this.gridManager.gridToWorld(randomCell.row, randomCell.col);
+        const vendorPos = this.vendorActor.getPosition();
+        const path = this.pathfindingService.requestPath(
+          vendorPos.x,
+          vendorPos.y,
+          targetWorld.x,
+          targetWorld.y
+        );
+        if (path && path.length > 0) {
+          this.vendorActor.setPath(path);
+          this.state = 'moving' as AIActorState;
+          console.log(`[DrinkVendorBehavior] Patrol path assigned (${path.length} cells)`);
+        } else {
+          console.warn('[DrinkVendorBehavior] Failed to generate patrol path; will retry');
+        }
+      } else {
+        console.warn('[DrinkVendorBehavior] No pathfindingService for patrol movement');
+      }
+
+      // Reset patrol timer for next waypoint selection (even if path failed)
       this.patrolTimer = this.config.patrol.intervalMs;
     }
   }

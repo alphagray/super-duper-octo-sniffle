@@ -48,6 +48,10 @@ export abstract class Actor {
   public setGridPosition(row: number, col: number, gridManager?: any): void {
     this.gridRow = row;
     this.gridCol = col;
+    // Store gridManager reference for subclasses that need it (e.g., FanActor for depth updates)
+    if (gridManager) {
+      (this as any).gridManager = gridManager;
+    }
     if (this.sprite && gridManager) {
       const { x, y } = gridManager.gridToWorld(row, col);
       this.sprite.setPosition(x, y);

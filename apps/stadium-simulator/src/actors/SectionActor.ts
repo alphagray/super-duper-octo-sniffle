@@ -141,7 +141,7 @@ export class SectionActor extends SceneryActor {
           const worldPos = this.gridManager
             ? this.gridManager.gridToWorld(fd.gridRow, fd.gridCol)
             : { x: 0, y: 0 };
-          const seatOffsetY = 5; // Offset to align with top of row floor divider (matches SectionRow seat positioning)
+          const seatOffsetY = -10; // Offset to align with top of row floor divider (matches SectionRow seat positioning)
           const fanY = worldPos.y - seatOffsetY; // Adjust from cell center by seat offset
           const fan = new Fan(this.section.scene, worldPos.x, fanY);
           // Create FanActor for game logic
@@ -183,6 +183,19 @@ export class SectionActor extends SceneryActor {
    */
   public getFanActorAt(row: number, col: number): FanActor | undefined {
     return this.fanActors.get(`${row}-${col}`);
+  }
+
+  /**
+   * Get FanActor using global grid coordinates (converts to section-local indices)
+   * @param globalRow Absolute grid row
+   * @param globalCol Absolute grid col
+   */
+  public getFanActorAtGlobal(globalRow: number, globalCol: number): FanActor | undefined {
+    if (!this.sectionData) return undefined;
+    const localRow = globalRow - this.sectionData.gridTop;
+    const localCol = globalCol - this.sectionData.gridLeft;
+    if (localRow < 0 || localCol < 0) return undefined;
+    return this.getFanActorAt(localRow, localCol);
   }
 
   /**

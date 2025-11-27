@@ -298,10 +298,10 @@ export class AIManager {
       return;
     }
     
-    // Delegate assignment to behavior (handles state transition, cooldown, pathfinding)
-    behavior.assignToSection(sectionIdx);
+    // Delegate assignment to behavior with target seat coordinates
+    behavior.assignToSection(sectionIdx, seatRow, seatCol);
     
-    console.log(`[AIManager] Vendor ${vendorId} assigned to section ${sectionIdx}`);
+    console.log(`[AIManager] Vendor ${vendorId} assigned to section ${sectionIdx}${seatRow !== undefined ? ` at seat (${seatRow},${seatCol})` : ''}`);
     this.emit('vendorAssigned', { vendorId, sectionIdx });
   }
   
@@ -546,6 +546,33 @@ export class AIManager {
       this.eventListeners.set(event, []);
     }
     this.eventListeners.get(event)!.push(callback);
+  }
+
+  /**
+   * Public helper to notify listeners that a vendor has reached its target.
+   * Avoids exposing generic emit() while enabling specific arrival signaling.
+   */
+  public notifyVendorArrival(vendorId: number, position: { x: number; y: number }): void {
+    this.emit('vendorReachedTarget', { vendorId, position });
+  }
+
+  /**
+   * Force recall of a vendor (abort current assignment/service and start patrol)
+   */
+  public recallVendor(vendorId: number): void {
+    const vendorActor = this.vendorActors.get(vendorId);
+    if (!vendorActor) {
+      console.warn(`[AIManager] recallVendor: unknown vendor ${vendorId}`);
+      return;
+    }
+    const behavior = vendorActor.getBehavior() as any;
+    if (behavior && typeof behavior.forceRecallPatrol === 'function') {
+      behavior.forceRecallPatrol();
+      this.emit('vendorRecalled', { vendorId });
+      console.log(`[AIManager] Vendor ${vendorId} recalled -> patrol mode`);
+    } else {
+      console.warn(`[AIManager] recallVendor: behavior missing forceRecallPatrol for vendor ${vendorId}`);
+    }
   }
 
   /**

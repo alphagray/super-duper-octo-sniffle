@@ -1,5 +1,6 @@
 import { AnimatedActor } from '@/actors/base/Actor';
 import { Vendor } from '@/sprites/Vendor';
+import PersonalityIntegrationManager from '@/systems/PersonalityIntegrationManager';
 import type { GridManager } from '@/managers/GridManager';
 import type { ActorCategory } from '@/actors/interfaces/ActorTypes';
 import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
@@ -12,6 +13,7 @@ import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
  */
 export class VendorActor extends AnimatedActor {
   protected vendor: Vendor;
+  protected personality: any;
   protected position: { x: number; y: number };
   protected gridManager?: GridManager;
 
@@ -27,11 +29,21 @@ export class VendorActor extends AnimatedActor {
     // Initialize base actor with placeholder grid coords (0,0); we'll set real grid below
     super(id, 'vendor', category, 0, 0, enableLogging);
     
-    // Create vendor sprite internally
-    this.vendor = new Vendor(scene, x, y);
-    this.vendor.setDepth(1000); // Render above fans
+
+    // Fetch personality (by id, index, or random; here: by index if id is numeric)
+    let personality = undefined;
+    const manager = PersonalityIntegrationManager();
+    // If id is of form 'actor:vendor-<n>', try to use n as index
+    const match = id.match(/vendor-(\d+)/);
+    if (match) {
+      const idx = parseInt(match[1], 10);
+      personality = manager.getVendorPersonalityByIndex(idx);
+    } else {
+      personality = manager.getVendorPersonalityByIndex();
+    }
+    this.personality = personality;
+    this.vendor = new Vendor(scene, x, y, personality, manager.getDialogueManager());
     scene.add.existing(this.vendor);
-    
     this.position = { x, y };
 
     // Store grid manager reference
@@ -42,15 +54,36 @@ export class VendorActor extends AnimatedActor {
       if (gridPos) {
         this.gridRow = gridPos.row;
         this.gridCol = gridPos.col;
-      }
-      // Initialize depth based on world position
-      const depth = this.gridManager.getDepthForWorld(x, y);
-      if (typeof depth === 'number') {
+        const depth = this.gridManager.getDepthForPosition(gridPos.row, gridPos.col);
         this.vendor.setDepth(depth);
+        console.log(`[VendorActor] Init depth for vendor at grid (${gridPos.row},${gridPos.col}): ${depth}`);
+      } else {
+        const fallbackDepth = this.gridManager.getDepthForWorld(x, y);
+        if (typeof fallbackDepth === 'number') {
+          this.vendor.setDepth(fallbackDepth);
+          console.log(`[VendorActor] Init fallback depth: ${fallbackDepth}`);
+        }
       }
     }
     this.logger.debug(`VendorActor created at world (${x}, ${y}) grid (${this.gridRow}, ${this.gridCol})`);
   }
+
+  /**
+   * Get the assigned personality (for UI, dialogue, etc)
+   */
+  public getPersonality() {
+    return this.personality;
+  }
+
+  /**
+   * Get the personality name for UI display
+   */
+  public getPersonalityName(): string {
+    if (this.personality && this.personality.name) return this.personality.name;
+    if (this.personality && this.personality.id) return this.personality.id;
+    return '';
+  }
+
 
   /**
    * Set path for vendor to follow
@@ -206,9 +239,19 @@ export class VendorActor extends AnimatedActor {
    */
   private updateDepthForPosition(x: number, y: number): void {
     if (!this.gridManager) return;
-    const depth = this.gridManager.getDepthForWorld(x, y);
-    if (typeof depth === 'number') {
+    const coords = this.gridManager.worldToGrid(x, y);
+    if (coords) {
+      // Vendors render slightly in front of fans in the same row (+2 depth offset)
+      const baseDepth = this.gridManager.getDepthForPosition(coords.row, coords.col);
+      const depth = baseDepth + 2;
       this.vendor.setDepth(depth);
+      // Debug log occasionally
+      if (Math.random() < 0.01) {
+        console.log(`[VendorActor] Update depth at grid (${coords.row},${coords.col}): ${depth} (base: ${baseDepth}), actual depth: ${this.vendor.depth}`);
+      }
+    } else {
+      const depth = this.gridManager.getDepthForWorld(x, y);
+      if (typeof depth === 'number') this.vendor.setDepth(depth + 2);
     }
   }
 

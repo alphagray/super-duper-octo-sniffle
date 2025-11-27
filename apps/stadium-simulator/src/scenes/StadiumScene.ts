@@ -27,6 +27,7 @@ import { PathfindingService } from '@/services/PathfindingService';
 import { TargetingIndicator } from '@/components/TargetingIndicator';
 import { TargetingReticle } from '@/ui/TargetingReticle';
 import { OverlayManager } from '@/managers/OverlayManager';
+import PersonalityIntegrationManager from '@/systems/PersonalityIntegrationManager';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -87,6 +88,12 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+
+    // Initialize personality integration manager (loads AI content)
+    console.log('[StadiumScene] Initializing PersonalityIntegrationManager...');
+    const personalityManager = PersonalityIntegrationManager();
+    await personalityManager.initialize();
+    console.log('[StadiumScene] PersonalityIntegrationManager initialized');
 
     // Load level data (sections, seats, fans, vendors)
     const levelData = await LevelService.loadLevel();
@@ -932,7 +939,7 @@ export class StadiumScene extends Phaser.Scene {
     this.updateVendorCooldowns();
 
     // Update targeting reticle cursor validation (real-time)
-    if (this.vendorTargetingActive && this.targetingReticle) {
+    if (this.vendorTargetingActive !== null && this.targetingReticle) {
       this.updateTargetingReticle();
     }
   }
@@ -1676,18 +1683,24 @@ export class StadiumScene extends Phaser.Scene {
     const vendorActors = Array.from(this.aiManager.getVendorActors().entries());
     console.log(`[rebuildVendorControls] Building controls for ${vendorActors.length} vendors`);
     
-    vendorActors.forEach(([vendorId, vendorActor]) => {
+    vendorActors.forEach(([vendorId, vendorActor], displayIndex) => {
       const row = document.createElement('div');
       row.className = 'vendor-controls';
       row.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:8px;';
-      
+
       // Main vendor button
       const btn = document.createElement('button');
       btn.className = 'vendor-btn';
       btn.id = `vendor-btn-${vendorId}`;
-      btn.textContent = `Vendor ${vendorId}`;
+
+      // Personality label logic using new helper
+      const personalityName = vendorActor.getPersonalityName?.();
+      const label = personalityName || `Vendor #${displayIndex + 1}`;
+      btn.textContent = label;
+      // Persist personality for dynamic state changes (targeting, exit, cooldown)
+      (btn as any).dataset.personality = label;
       btn.style.cssText = 'background:#111;border:1px solid #555;color:#eee;font-size:11px;padding:4px 8px;cursor:pointer;';
-      
+
       // Check cooldown status
       const onCooldown = this.aiManager.isVendorOnCooldown(vendorId);
       if (onCooldown) {
@@ -1695,36 +1708,62 @@ export class StadiumScene extends Phaser.Scene {
         btn.style.opacity = '0.5';
         btn.style.cursor = 'not-allowed';
       }
-      
+
       btn.onclick = () => {
-        if (!onCooldown) {
-          this.enterVendorTargetingMode(vendorId);
+        const liveCooldown = this.aiManager.isVendorOnCooldown(vendorId);
+        if (liveCooldown) {
+          console.log(`[VendorControls] Click ignored; vendor ${vendorId} still on cooldown`);
+          return;
         }
+        console.log(`[VendorControls] Initiating targeting for vendor ${vendorId}`);
+        this.enterVendorTargetingMode(vendorId);
       };
       row.appendChild(btn);
-      
-      // Status label
+
+      // Status + recall container
+      const statusWrap = document.createElement('div');
+      statusWrap.id = `vendor-status-wrap-${vendorId}`;
+      statusWrap.style.cssText = 'display:flex;align-items:center;gap:6px;justify-content:center;';
+
       const statusLabel = document.createElement('span');
       statusLabel.id = `vendor-status-${vendorId}`;
-      statusLabel.style.cssText = 'font-size:10px;color:#999;text-align:center;';
-      
+      statusLabel.style.cssText = 'font-size:10px;color:#999;';
+
+      const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
+      const assignedSection = behavior.getAssignedSection();
+      const sectionNames = ['Section A', 'Section B', 'Section C'];
+
       if (onCooldown) {
         const remaining = this.aiManager.getVendorCooldownRemaining(vendorId);
         statusLabel.textContent = `Cooldown: ${Math.ceil(remaining / 1000)}s`;
+      } else if (assignedSection !== null && assignedSection >= 0 && assignedSection <= 2) {
+        statusLabel.textContent = sectionNames[assignedSection];
       } else {
-        // Check if vendor is assigned to a section via behavior
-        const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
-        const assignedSection = behavior.getAssignedSection();
-        
-        if (assignedSection !== null && assignedSection >= 0 && assignedSection <= 2) {
-          const sectionNames = ['Section A', 'Section B', 'Section C'];
-          statusLabel.textContent = sectionNames[assignedSection];
-        } else {
-          statusLabel.textContent = 'Available';
-        }
+        const state = behavior.getState();
+        statusLabel.textContent = state === 'patrolling' ? 'Patrolling' : 'Available';
       }
-      
-      row.appendChild(statusLabel);
+
+      statusWrap.appendChild(statusLabel);
+
+      // Recall button appears only if actively working (serving/moving) or assignedSection set
+      const state = behavior.getState();
+      const working = state === 'serving' || state === 'moving';
+      // Show recall button only if NOT on cooldown and vendor is working or assigned
+      if (!onCooldown && (working || assignedSection !== null)) {
+        const recallBtn = document.createElement('button');
+        recallBtn.id = `vendor-recall-${vendorId}`;
+        recallBtn.title = 'Force recall to patrol';
+        recallBtn.textContent = '⟳'; // refresh symbol
+        recallBtn.style.cssText = 'background:#400;border:1px solid #a00;color:#faa;font-size:11px;padding:2px 6px;cursor:pointer;line-height:12px;';
+        recallBtn.onclick = () => {
+          this.aiManager.recallVendor(vendorId);
+          // Refresh controls after recall
+          setTimeout(() => this.rebuildVendorControls(), 50);
+        };
+        statusWrap.appendChild(recallBtn);
+      }
+
+      row.appendChild(statusWrap);
       controlsRoot.appendChild(row);
     });
   }
@@ -1747,11 +1786,12 @@ export class StadiumScene extends Phaser.Scene {
     }
     
     // Update button state
-    const btn = document.getElementById(`vendor-btn-${vendorId}`);
+    const btn = document.getElementById(`vendor-btn-${vendorId}`) as HTMLElement | null;
     if (btn) {
+      const personality = (btn as any).dataset?.personality || `Vendor ${vendorId}`;
       btn.style.border = '2px solid #0f0';
       btn.style.background = '#030';
-      btn.textContent = `▶ Vendor ${vendorId} ◀`;
+      btn.textContent = `▶ ${personality} ◀`;
     }
   }
 
@@ -1770,11 +1810,12 @@ export class StadiumScene extends Phaser.Scene {
     }
     
     // Restore button state
-    const btn = document.getElementById(`vendor-btn-${vendorId}`);
+    const btn = document.getElementById(`vendor-btn-${vendorId}`) as HTMLElement | null;
     if (btn) {
+      const personality = (btn as any).dataset?.personality || `Vendor ${vendorId}`;
       btn.style.border = '1px solid #555';
       btn.style.background = '#111';
-      btn.textContent = `Vendor ${vendorId}`;
+      btn.textContent = personality;
     }
     
     this.vendorTargetingActive = null;
@@ -1855,27 +1896,61 @@ export class StadiumScene extends Phaser.Scene {
       if (!statusLabel) return;
 
       // Check if vendor is on cooldown
-      if (this.aiManager.isVendorOnCooldown(vendorId)) {
+      const btn = document.getElementById(`vendor-btn-${vendorId}`) as HTMLButtonElement | null;
+      const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
+      const assignedSection = behavior.getAssignedSection();
+      const sectionNames = ['Section A', 'Section B', 'Section C'];
+      const onCooldown = this.aiManager.isVendorOnCooldown(vendorId);
+      const state = behavior.getState();
+
+      if (onCooldown) {
         const cooldownMs = this.aiManager.getVendorCooldownRemaining(vendorId);
         const cooldownSec = Math.ceil(cooldownMs / 1000);
         statusLabel.textContent = `Cooldown: ${cooldownSec}s`;
-      } else {
-        // Check if vendor is assigned to a section
-        const behavior = vendorActor.getBehavior() as DrinkVendorBehavior;
-        const assignedSection = behavior.getAssignedSection();
-
-        if (assignedSection !== null && assignedSection >= 0 && assignedSection <= 2) {
-          const sectionNames = ['Section A', 'Section B', 'Section C'];
-          statusLabel.textContent = sectionNames[assignedSection];
-        } else {
-          // Check if vendor is patrolling
-          const state = behavior.getState();
-          if (state === 'patrolling') {
-            statusLabel.textContent = 'Patrolling';
-          } else {
-            statusLabel.textContent = 'Available';
-          }
+        if (btn) {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
         }
+      } else {
+        if (btn && btn.disabled) {
+          // Re-enable button when cooldown expires
+          btn.disabled = false;
+          btn.style.opacity = '1.0';
+          btn.style.cursor = 'pointer';
+        }
+        if (assignedSection !== null && assignedSection >= 0 && assignedSection <= 2) {
+          statusLabel.textContent = sectionNames[assignedSection];
+        } else if (state === 'patrolling') {
+          statusLabel.textContent = 'Patrolling';
+        } else if (state === 'serving') {
+          statusLabel.textContent = 'Serving';
+        } else if (state === 'moving') {
+          statusLabel.textContent = 'En Route';
+        } else {
+          statusLabel.textContent = 'Available';
+        }
+      }
+
+      // Reactive recall button visibility without full rebuild
+      const workingNow = state === 'serving' || state === 'moving';
+      const shouldShowRecall = !onCooldown && (workingNow || assignedSection !== null);
+      const existingRecall = document.getElementById(`vendor-recall-${vendorId}`);
+      if (shouldShowRecall && !existingRecall) {
+        const wrap = document.getElementById(`vendor-status-wrap-${vendorId}`);
+        if (wrap) {
+          const recallBtn = document.createElement('button');
+          recallBtn.id = `vendor-recall-${vendorId}`;
+          recallBtn.title = 'Force recall to patrol';
+          recallBtn.textContent = '⟳';
+          recallBtn.style.cssText = 'background:#400;border:1px solid #a00;color:#faa;font-size:11px;padding:2px 6px;cursor:pointer;line-height:12px;';
+          recallBtn.onclick = () => {
+            this.aiManager.recallVendor(vendorId);
+          };
+          wrap.appendChild(recallBtn);
+        }
+      } else if (!shouldShowRecall && existingRecall) {
+        existingRecall.remove();
       }
     });
   }
@@ -1901,6 +1976,7 @@ export class StadiumScene extends Phaser.Scene {
 
     // Check if cursor is over a seat zone
     const zone = this.gridManager.getZoneType(gridPos.row, gridPos.col);
+    console.log(`[TargetingReticle] Hovered cell at row=${gridPos.row}, col=${gridPos.col}, zoneType=${zone}`);
     const isValidTarget = zone === 'seat';
 
     if (isValidTarget) {

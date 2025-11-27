@@ -11,13 +11,13 @@ export const gameBalance = {
     // Initial stat ranges
 
     initialHappiness: 70,
-    initialThirstMin: 0,
+    initialThirstMin: 15,
     initialThirstMax: 30,
     initialAttention: 70,
 
     // Thirst two-phase system
-    thirstRollChance: 0.01, // Phase 1: Chance per second to START getting thirsty (0-1)
-    thirstActivationAmount: 15, // Phase 1: Big jump when roll succeeds (pushes over threshold)
+    thirstRollChance: 0.33, // Phase 1: Chance per second to START getting thirsty (0-1)
+    thirstActivationAmount: 5, // Phase 1: Big jump when roll succeeds (pushes over threshold)
     thirstThreshold: 50, // Threshold for state transition (Phase 1 → Phase 2)
     thirstDecayRate: 2, // Phase 2: Linear pts/sec after threshold
     unhappyHappinessThreshold: 30, // When happiness drops below this, fan becomes unhappy
@@ -253,7 +253,7 @@ export const gameBalance = {
       scenery: 100,
       animatedActorBase: 150,
       animatedActorMin: 101,
-      animatedActorMax: 200,
+      animatedActorMax: 350, // Increased to accommodate 24-row grid (101 + 24*10 = 341)
       animatedActorRowPenalty: 10,
     },
     waveCelebration: {
