@@ -35,6 +35,9 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   // Assignment tracking (player-driven)
   private assignedSectionIdx: number | null = null;
   private retryCount: number = 0;
+
+  // Drop zone target tracking
+  private currentDropZone: { row: number; col: number } | null = null;
   
   // Timing
   private serviceTimer: number = 0;
@@ -44,6 +47,9 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   
   // Patrol tracking
   private patrolTimer: number = 0;
+  
+  // Scoring tracking
+  private pointsEarned: number = 0;
   
   constructor(
     vendorActor: DrinkVendorActor,
@@ -360,29 +366,82 @@ export class DrinkVendorBehavior implements AIActorBehavior {
         // Movement to neutral zone, onArrival() handles transition
         break;
         
+      case 'droppingOff':
+        // Movement to drop zone, onArrival() handles fade sequence
+        break;
+        
       default:
         break;
     }
   }
 
   /**
-   * Force immediate recall/patrol: abort service or movement and start patrol cycle.
+   * Force immediate recall/patrol: abort service or movement and start dropoff sequence.
    * Used by UI recall button to hard overwrite current assignment.
    */
   public forceRecallPatrol(): void {
-    console.log('[DrinkVendorBehavior] forceRecallPatrol invoked - aborting current activity');
+    console.log('[DrinkVendorBehavior] forceRecallPatrol invoked - starting dropoff sequence');
+    
     // Clear any active service/target
     this.targetFanActor = null;
     this.targetPosition = null;
     this.serviceTimer = 0;
+    
     // Clear path so movement halts immediately
     this.vendorActor.clearPath();
-    // Remove assignment so vendor returns to global scanning later
-    this.assignedSectionIdx = null;
-    // Enter patrol mode directly
-    this.startPatrol();
+    
+    // Find nearest drop zone
+    const dropZones = this.gridManager.getDropZones();
+    
+    if (dropZones.length === 0) {
+      console.warn('[DrinkVendorBehavior] No drop zones configured, falling back to patrol');
+      this.assignedSectionIdx = null;
+      this.startPatrol();
+      return;
+    }
+    
+    // Calculate nearest drop zone
+    const vendorGridPos = this.vendorActor.getGridPosition();
+    const vendorWorldPos = this.vendorActor.getPosition();
+    let nearestDropZone = dropZones[0];
+    let minDistance = manhattanDistance(vendorGridPos.row, vendorGridPos.col, nearestDropZone.row, nearestDropZone.col);
+    for (let i = 1; i < dropZones.length; i++) {
+      const distance = manhattanDistance(vendorGridPos.row, vendorGridPos.col, dropZones[i].row, dropZones[i].col);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestDropZone = dropZones[i];
+      }
+    }
+    console.log(`[DrinkVendorBehavior] Nearest drop zone: (${nearestDropZone.row},${nearestDropZone.col}), distance: ${minDistance}`);
+    // Store drop zone target for arrival check
+    this.currentDropZone = { row: nearestDropZone.row, col: nearestDropZone.col };
+    // Transition to droppingOff state
+    this.state = 'droppingOff' as AIActorState;
+    // Path to drop zone
+    if (this.pathfindingService) {
+      const targetWorld = this.gridManager.gridToWorld(nearestDropZone.row, nearestDropZone.col);
+      const path = this.pathfindingService.requestPath(
+        vendorWorldPos.x,
+        vendorWorldPos.y,
+        targetWorld.x,
+        targetWorld.y
+      );
+      if (path && path.length > 0) {
+        this.vendorActor.setPath(path);
+        console.log(`[DrinkVendorBehavior] Path to drop zone set, ${path.length} waypoints`);
+      } else {
+        console.warn('[DrinkVendorBehavior] No path to drop zone found, staying in place');
+      }
+    }
   }
-  
+
+  /**
+   * Get the current drop zone target (row, col) or null
+   */
+  public getCurrentDropZone(): { row: number; col: number } | null {
+    return this.currentDropZone;
+  }
+
   /**
    * Ensure arrival at patrol waypoint resets state back to patrolling (no targetFanActor)
    */
@@ -399,7 +458,10 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   public onArrival(): void {
     console.log('[DrinkVendorBehavior] onArrival called, current state:', this.state);
     
-    if (this.state === 'recalling') {
+    if (this.state === 'droppingOff') {
+      // Start dropoff sequence at drop zone
+      this.startDropoffSequence();
+    } else if (this.state === 'recalling') {
       // Transition to patrol
       this.state = 'patrolling' as AIActorState;
       this.patrolTimer = this.config.patrol.intervalMs;
@@ -436,6 +498,25 @@ export class DrinkVendorBehavior implements AIActorBehavior {
    */
   public onServeComplete(): void {
     if (this.targetFanActor) {
+      // Calculate points earned based on fan stats before service
+      const fanThirst = this.targetFanActor.getThirst();
+      const fanHappiness = this.targetFanActor.getHappiness();
+      
+      let points = gameBalance.vendorScoring.basePoints;
+      
+      if (fanThirst > gameBalance.vendorScoring.highThirstThreshold) {
+        points += gameBalance.vendorScoring.highThirstBonus;
+        console.log('[DrinkVendorBehavior] High thirst bonus:', gameBalance.vendorScoring.highThirstBonus);
+      }
+      
+      if (fanHappiness < gameBalance.vendorScoring.lowHappinessThreshold) {
+        points += gameBalance.vendorScoring.lowHappinessBonus;
+        console.log('[DrinkVendorBehavior] Low happiness bonus:', gameBalance.vendorScoring.lowHappinessBonus);
+      }
+      
+      this.pointsEarned += points;
+      console.log('[DrinkVendorBehavior] Service complete - earned', points, 'points, total:', this.pointsEarned);
+      
       // Final happiness boost
       const currentHappiness = this.targetFanActor.getHappiness();
       this.targetFanActor.setHappiness(Math.min(100, currentHappiness + 15));
@@ -458,6 +539,61 @@ export class DrinkVendorBehavior implements AIActorBehavior {
    */
   public getState(): AIActorState {
     return this.state;
+  }
+
+  /**
+   * Get points earned since last dropoff
+   */
+  public getPointsEarned(): number {
+    return this.pointsEarned;
+  }
+
+  // === Private Update Methods ===
+
+  /**
+   * Start dropoff sequence: fade out, delay, fade in, emit event
+   */
+  private startDropoffSequence(): void {
+    console.log('[DrinkVendorBehavior] Starting dropoff sequence, points earned:', this.pointsEarned);
+    
+    const vendorSprite = this.vendorActor.getVendor();
+    const scene = vendorSprite.scene;
+    const vendorId = (this.vendorActor as any).id;
+    
+    // Emit dropoff event with points earned via AIManager
+    this.aiManager.notifyVendorDropoff(vendorId, this.pointsEarned);
+    
+    // Phase 1: Fade out + scale down (2s)
+    scene.tweens.add({
+      targets: vendorSprite,
+      alpha: 0,
+      scale: 0.8, // Scale down to 80%
+      duration: gameBalance.dropZone.fadeOutDuration,
+      onComplete: () => {
+        console.log('[DrinkVendorBehavior] Fade out complete, starting unavailable delay');
+        
+        // Phase 2: Unavailable delay (3s)
+        scene.time.delayedCall(gameBalance.dropZone.unavailableDelay, () => {
+          console.log('[DrinkVendorBehavior] Unavailable delay complete, fading in');
+          
+          // Phase 3: Fade in + scale up (1s)
+          scene.tweens.add({
+            targets: vendorSprite,
+            alpha: 1,
+            scale: 1.0, // Scale back to 100%
+            duration: gameBalance.dropZone.fadeInDuration,
+            onComplete: () => {
+              console.log('[DrinkVendorBehavior] Dropoff complete, returning to awaitingAssignment');
+              
+              // Reset points and return to awaiting assignment
+              this.pointsEarned = 0;
+              this.assignedSectionIdx = null;
+              this.state = 'awaitingAssignment' as AIActorState;
+            }
+          });
+        });
+      }
+    });
   }
 
   // === Private Update Methods ===

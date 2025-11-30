@@ -253,7 +253,7 @@ export const gameBalance = {
       scenery: 100,
       animatedActorBase: 150,
       animatedActorMin: 101,
-      animatedActorMax: 350, // Increased to accommodate 24-row grid (101 + 24*10 = 341)
+      animatedActorMax: 360, // Increased for floating text above animated actors
       animatedActorRowPenalty: 10,
     },
     waveCelebration: {
@@ -683,6 +683,34 @@ export const gameBalance = {
     attentionTriggerThreshold: 45, // fire early if avg attention below this
     minFloorMs: 30000, // minimum effective cooldown floor (adjusted per Option A)
     diminishingReturnFactor: 0.25, // reduce future momentum effectiveness by 25% after an ultimate
+  },
+
+  /**
+   * Vendor scoring configuration
+   * Points earned based on service quality and dropoff mechanics
+   */
+  vendorScoring: {
+    basePoints: 1, // base points for any drink service
+    highThirstBonus: 2, // bonus points when fan thirst > 80
+    lowHappinessBonus: 3, // bonus points when fan happiness < 20
+    highThirstThreshold: 80, // thirst threshold for bonus
+    lowHappinessThreshold: 20, // happiness threshold for bonus
+  },
+
+  /**
+   * Drop zone configuration
+   * Visual and timing settings for vendor dropoff locations
+   */
+  dropZone: {
+    flashDuration: 500, // ms for white outline flash
+    flashColor: 0xffffff, // white
+    fadeOutDuration: 2000, // ms for vendor fade out
+    unavailableDelay: 3000, // ms vendor unavailable at drop zone
+    fadeInDuration: 1000, // ms for vendor fade in
+    floatingTextDuration: 1500, // ms for score text animation
+    floatingTextRiseDistance: 30, // pixels to rise
+    floatingTextColor: 0x00ff00, // green for positive score
+    floatingTextDepth: 360, // depth for floating text (above animated actors)
   },
 };
 

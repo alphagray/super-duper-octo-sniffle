@@ -45,12 +45,27 @@ export class DrinkVendorActor extends VendorActor {
     // Update movement (if path active)
     if (this.hasPath() && !this.isAtPathEnd()) {
       this.updateMovement(delta);
-      
       // Check if we just reached the end after movement
       if (this.isAtPathEnd()) {
-        console.log('[DrinkVendorActor] ✓ Reached end of path, calling onArrival()');
-        this.behavior.onArrival();
-        this.clearPath(); // Clear the completed path
+        // Only trigger arrival if on the correct drop zone cell (if dropping off)
+        const behaviorState = this.behavior.getState();
+        if (behaviorState === 'droppingOff' && typeof this.behavior.getCurrentDropZone === 'function') {
+          const dropZone = this.behavior.getCurrentDropZone();
+          const pos = this.getGridPosition();
+          if (dropZone && pos.row === dropZone.row && pos.col === dropZone.col) {
+            console.log('[DrinkVendorActor] ✓ Reached drop zone cell, calling onArrival()');
+            this.behavior.onArrival();
+            this.clearPath();
+          } else {
+            console.warn('[DrinkVendorActor] At path end but not on drop zone cell:', pos, 'expected:', dropZone);
+            // Optionally: retry pathfinding or halt
+          }
+        } else {
+          // Not dropping off, normal arrival
+          console.log('[DrinkVendorActor] ✓ Reached end of path, calling onArrival()');
+          this.behavior.onArrival();
+          this.clearPath();
+        }
       }
     }
   }

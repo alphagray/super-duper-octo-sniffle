@@ -557,6 +557,13 @@ export class AIManager {
   }
 
   /**
+   * Notify listeners that a vendor has completed dropoff and earned points
+   */
+  public notifyVendorDropoff(vendorId: number, pointsEarned: number): void {
+    this.emit('vendorDropoff', { vendorId, pointsEarned });
+  }
+
+  /**
    * Force recall of a vendor (abort current assignment/service and start patrol)
    */
   public recallVendor(vendorId: number): void {

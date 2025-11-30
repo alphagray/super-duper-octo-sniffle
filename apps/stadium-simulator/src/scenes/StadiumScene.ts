@@ -17,6 +17,7 @@ import { SectionActor } from '@/actors/SectionActor';
 import { StairsActor } from '@/actors/StairsActor';
 import { GroundActor } from '@/actors/GroundActor';
 import { SkyboxActor } from '@/actors/SkyboxActor';
+import { DropZoneActor } from '@/actors/DropZoneActor';
 import { FanActor } from '@/actors/FanActor';
 import { VendorActor } from '@/actors/VendorActor';
 import { DrinkVendorBehavior } from '@/actors/behaviors/DrinkVendorBehavior';
@@ -48,6 +49,7 @@ export class StadiumScene extends Phaser.Scene {
   private sessionTimerText?: Phaser.GameObjects.Text;
   private sections: StadiumSection[] = [];
   private vendorSprites: Map<number, Vendor> = new Map(); // Track vendor visual sprites
+  private dropZoneActors: DropZoneActor[] = []; // Track drop zone actors
   private mascotActors: MascotActor[] = []; // Track mascot actors (logic + sprite)
   private mascotSectionMap: Map<string, MascotActor> = new Map(); // Map sectionId -> mascot actor
   private autoRotationMode: boolean = false; // Auto-rotation mode for mascots
@@ -193,15 +195,17 @@ export class StadiumScene extends Phaser.Scene {
       levelData.stairs.forEach((stairData) => {
         const actorId = ActorFactory.generateId('stairs', stairData.id);
         // Calculate world bounds from grid bounds
-        const topLeft = this.gridManager!.gridToWorld(stairData.gridTop, stairData.gridLeft);
-        const bottomRight = this.gridManager!.gridToWorld(
+        // Use simple multiplication for width/height since we want exact cell coverage
+        const cellSize = this.gridManager!.getWorldSize().cellSize;
+        const topLeftCenter = this.gridManager!.gridToWorld(stairData.gridTop, stairData.gridLeft);
+        const bottomRightCenter = this.gridManager!.gridToWorld(
           stairData.gridTop + stairData.height - 1,
           stairData.gridLeft + stairData.width - 1
         );
-        const cellSize = this.gridManager!.getWorldSize().cellSize;
+        
         const worldBounds = {
-          x: (topLeft.x + bottomRight.x) / 2,
-          y: (topLeft.y + bottomRight.y) / 2,
+          x: (topLeftCenter.x + bottomRightCenter.x) / 2,
+          y: (topLeftCenter.y + bottomRightCenter.y) / 2,
           width: stairData.width * cellSize,
           height: stairData.height * cellSize
         };
@@ -224,6 +228,33 @@ export class StadiumScene extends Phaser.Scene {
         // Mark stair cells as passable in grid (Phase 2.2 - Option A)
         // Stairs are passable for pathfinding (don't mark as occupied)
         // GridManager.addOccupant marks cells as occupied, so we skip that for stairs
+      });
+    }
+
+    // Create drop zone actors from grid configuration
+    if (this.gridManager) {
+      const dropZones = this.gridManager.getDropZones();
+      console.log(`[StadiumScene] Creating ${dropZones.length} drop zone actors`);
+      
+      dropZones.forEach((dropZone, idx) => {
+        const actorId = ActorFactory.generateId('dropzone', idx);
+        const worldPos = this.gridManager!.gridToWorld(dropZone.row, dropZone.col);
+        const cellSize = this.gridManager!.getWorldSize().cellSize;
+        
+        const dropZoneActor = new DropZoneActor({
+          id: actorId,
+          scene: this,
+          x: worldPos.x,
+          y: worldPos.y,
+          cellSize,
+          gridRow: dropZone.row,
+          gridCol: dropZone.col
+        });
+        
+        this.actorRegistry.register(dropZoneActor);
+        this.dropZoneActors.push(dropZoneActor);
+        
+        console.log(`[StadiumScene] Created drop zone at grid (${dropZone.row},${dropZone.col})`);
       });
     }
 
@@ -1513,6 +1544,69 @@ export class StadiumScene extends Phaser.Scene {
       // Update UI highlight
       this.rebuildVendorControls();
     });
+
+    // Vendor dropoff event (scoring)
+    this.aiManager.on('vendorDropoff', (data: { vendorId: number; pointsEarned: number }) => {
+      console.log(`[Vendor] Vendor ${data.vendorId} dropped off ${data.pointsEarned} points`);
+      
+      // Add score to GameStateManager
+      this.gameState.addVendorScore(data.pointsEarned);
+      
+      // Find nearest drop zone to vendor
+      const vendorActor = this.aiManager.getVendorActor(data.vendorId);
+      if (vendorActor) {
+        const vendorPos = vendorActor.getGridPosition();
+        let nearestDropZone: DropZoneActor | null = null;
+        let minDistance = Infinity;
+        
+        for (const dropZone of this.dropZoneActors) {
+          const dropPos = dropZone.getGridPosition();
+          const distance = Math.abs(vendorPos.row - dropPos.row) + Math.abs(vendorPos.col - dropPos.col);
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestDropZone = dropZone;
+          }
+        }
+        
+        // Flash the drop zone
+        if (nearestDropZone) {
+          nearestDropZone.flash();
+        }
+        
+        // Spawn floating score text at vendor position
+        const worldPos = vendorActor.getPosition();
+        const floatingText = this.add.text(
+          worldPos.x,
+          worldPos.y,
+          `+${data.pointsEarned} pts`,
+          {
+            fontSize: '24px',
+            fontFamily: 'Arial',
+            color: '#00ff00', // Green
+            stroke: '#000000',
+            strokeThickness: 3
+          }
+        );
+        floatingText.setOrigin(0.5, 0.5);
+        floatingText.setDepth(gameBalance.dropZone.floatingTextDepth);
+        
+        // Animate floating text (move up and fade)
+        this.tweens.add({
+          targets: floatingText,
+          y: worldPos.y - gameBalance.dropZone.floatingTextRiseDistance,
+          alpha: 0,
+          duration: gameBalance.dropZone.floatingTextDuration,
+          onComplete: () => {
+            floatingText.destroy();
+          }
+        });
+      }
+      
+      // Update score display
+      if (this.scoreText) {
+        this.scoreText.setText(`Score: ${this.gameState.getVendorScore()}`);
+      }
+    });
   }
 
   /**
@@ -1835,7 +1929,7 @@ export class StadiumScene extends Phaser.Scene {
       return;
     }
     
-    // Validate click is in seat zone
+    // Validate click: allow 'seat' zone only
     const cell = this.gridManager.getCell(gridPos.row, gridPos.col);
     if (!cell || cell.zoneType !== 'seat') {
       console.log('[StadiumScene] Click on non-seat tile, cancelling targeting');
@@ -1869,16 +1963,37 @@ export class StadiumScene extends Phaser.Scene {
    * @returns Section index (0-2) or null if not in any section
    */
   private getSectionAtGridPosition(row: number, col: number): number | null {
-    // Section seat ranges from level data
-    // Section A: cols 2-9, rows 15-18
-    // Section B: cols 12-19, rows 15-18
-    // Section C: cols 22-29, rows 15-18
+    // Query actual section bounds from SectionActors instead of hardcoding
+    const sectionActors = this.actorRegistry.getByCategory('section');
     
-    if (row < 15 || row > 18) return null;
-    
-    if (col >= 2 && col <= 9) return 0; // Section A
-    if (col >= 12 && col <= 19) return 1; // Section B
-    if (col >= 22 && col <= 29) return 2; // Section C
+    for (let i = 0; i < sectionActors.length; i++) {
+      const sectionActor = sectionActors[i] as any; // Cast to access getSectionData
+      const sectionData = sectionActor.getSectionData?.();
+      if (!sectionData) continue;
+      
+      // Check if position is within section's seat bounds (4 rows)
+      const rowStart = sectionData.gridTop;
+      const rowEnd = sectionData.gridTop + 3; // 4 seat rows
+      const colStart = sectionData.gridLeft;
+      const colEnd = sectionData.gridRight;
+      
+      // Debug logging for row 15
+      if (row === 15 && col >= colStart && col <= colEnd) {
+        console.log(`[getSectionAtGridPosition] Checking row=${row}, col=${col}`, {
+          sectionId: sectionData.id,
+          rowStart,
+          rowEnd,
+          colStart,
+          colEnd,
+          rowInRange: row >= rowStart && row <= rowEnd,
+          colInRange: col >= colStart && col <= colEnd
+        });
+      }
+      
+      if (row >= rowStart && row <= rowEnd && col >= colStart && col <= colEnd) {
+        return i; // Return section index
+      }
+    }
     
     return null;
   }
@@ -1974,18 +2089,13 @@ export class StadiumScene extends Phaser.Scene {
       return;
     }
 
-    // Check if cursor is over a seat zone
+    // Check zone, allow seats and rowEntry boundary cells on seat rows
     const zone = this.gridManager.getZoneType(gridPos.row, gridPos.col);
     console.log(`[TargetingReticle] Hovered cell at row=${gridPos.row}, col=${gridPos.col}, zoneType=${zone}`);
-    const isValidTarget = zone === 'seat';
+    const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
+    const isValidTarget = zone === 'seat' && sectionIdx !== null;
 
-    if (isValidTarget) {
-      // Check which section this seat belongs to
-      const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
-      this.targetingReticle.setTargetable(true, sectionIdx);
-    } else {
-      this.targetingReticle.setTargetable(false, null);
-    }
+    this.targetingReticle.setTargetable(!!isValidTarget, isValidTarget ? sectionIdx : null);
   }
 
   /**

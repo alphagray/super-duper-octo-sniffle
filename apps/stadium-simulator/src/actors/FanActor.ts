@@ -76,9 +76,9 @@ export class FanActor extends AnimatedActor {
         const depth = this.gridManager.getDepthForPosition(coords.row, coords.col);
         this.fan.setDepth(depth);
         // Log first fan only
-        if (id.includes('fan-0-0')) {
-          console.log(`[FanActor] Init depth for fan at grid (${coords.row},${coords.col}): ${depth}`);
-        }
+        // if (id.includes('fan-0-0')) {
+        //   console.log(`[FanActor] Init depth for fan at grid (${coords.row},${coords.col}): ${depth}`);
+        // }
       } else {
         const depth = this.gridManager.getDepthForWorld(this.fan.x, this.fan.y);
         if (typeof depth === 'number') {
@@ -430,9 +430,9 @@ export class FanActor extends AnimatedActor {
         const depth = this.gridManager.getDepthForPosition(coords.row, coords.col);
         this.fan.setDepth(depth);
         // Debug log occasionally
-        if (Math.random() < 0.50) {
-          console.log(`[FanActor] Update depth at grid (${coords.row},${coords.col}): ${depth}, actual depth: ${this.fan.depth}`);
-        }
+        // if (Math.random() < 0.50) {
+        //   console.log(`[FanActor] Update depth at grid (${coords.row},${coords.col}): ${depth}, actual depth: ${this.fan.depth}`);
+        // }
       }
     }
   }

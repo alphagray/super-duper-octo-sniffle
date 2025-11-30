@@ -41,22 +41,26 @@ export class SectionActor extends SceneryActor {
     this.gridManager = gridManager;
     this.sectionData = sectionData;
     // Calculate world position from grid boundaries
-    // Section container is centered, so calculate center point of grid rectangle
+    // Section has 5 grid rows but only 4 visual seat rows (row 18 is corridor base)
     const topLeft = gridManager ? gridManager.gridToWorld(sectionData.gridTop, sectionData.gridLeft) : { x: 0, y: 0 };
     const bottomRight = gridManager ? gridManager.gridToWorld(sectionData.gridBottom, sectionData.gridRight) : { x: 256, y: 200 };
-    const worldPos = {
-      x: (topLeft.x + bottomRight.x) / 2,
-      y: (topLeft.y + bottomRight.y) / 2
-    };
-    const rowCount = sectionData.gridBottom - sectionData.gridTop + 1;
+    const totalRowCount = sectionData.gridBottom - sectionData.gridTop + 1; // 5 rows (14-18)
+    const visualRowCount = 4; // Only 4 seat rows (14-17)
     const seatsPerRow = sectionData.gridRight - sectionData.gridLeft + 1;
     const cellSize = gridManager ? gridManager.getWorldSize().cellSize : 32;
     const sectionWidth = seatsPerRow * cellSize;
-    const sectionHeight = rowCount * cellSize;
+    // Position section: gridToWorld returns cell CENTER, so we need to calculate
+    // the center Y of the 4 visual seat rows (14-17)
+    const visualRowsTop = topLeft.y; // Center of row 14
+    const visualRowsBottom = gridManager ? gridManager.gridToWorld(sectionData.gridTop + 3, sectionData.gridLeft).y : topLeft.y + (3 * cellSize); // Center of row 17
+    const worldPos = {
+      x: (topLeft.x + bottomRight.x) / 2,
+      y: (visualRowsTop + visualRowsBottom) / 2 // Center between row 14 and 17 centers
+    };
     this.section = new StadiumSection(scene, worldPos.x, worldPos.y, {
       width: sectionWidth,
-      height: sectionHeight,
-      rowCount,
+      height: visualRowCount * cellSize, // Height of 4 seat rows only
+      rowCount: visualRowCount, // 4 seat rows
       seatsPerRow,
       rowBaseHeightPercent: 0.15,
       startLightness: 62,

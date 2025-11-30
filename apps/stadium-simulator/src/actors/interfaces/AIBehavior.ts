@@ -23,6 +23,8 @@ export enum AIActorState {
   Recalling = 'recalling',
   /** Vendor is patrolling in neutral zone */
   Patrolling = 'patrolling',
+  /** Vendor is dropping off at drop zone (fade out, delay, fade in) */
+  DroppingOff = 'droppingOff',
 }
 
 /**

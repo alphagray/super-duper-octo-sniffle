@@ -47,6 +47,7 @@ interface GridCellData {
   transitionType: TransitionType | null;
   allowedIncoming: Record<CardinalDirection, boolean>;
   allowedOutgoing: Record<CardinalDirection, boolean>;
+  dropZone: boolean;
 }
 
 const OPPOSITE_DIRECTION: Record<CardinalDirection, CardinalDirection> = {
@@ -354,6 +355,7 @@ export class GridManager extends BaseManager {
           transitionType: null,
           allowedIncoming: { top: true, right: true, bottom: true, left: true },
           allowedOutgoing: { top: true, right: true, bottom: true, left: true },
+          dropZone: false,
         });
       }
       this.cells.push(rowCells);
@@ -494,10 +496,10 @@ export class GridManager extends BaseManager {
   public loadZoneConfig(config: StadiumSceneConfig): void {
     if (DEBUG_PATHFIND) {
       console.log('[GridManager] loadZoneConfig called with:', {
-        cellRanges: config.cellRanges.length,
-        cells: config.cells.length,
-        sections: config.sections.length,
-        stairs: config.stairs.length,
+        cellRanges: config.cellRanges?.length ?? 0,
+        cells: config.cells?.length ?? 0,
+        sections: config.sections?.length ?? 0,
+        stairs: config.stairs?.length ?? 0,
       });
     }
 
@@ -520,6 +522,23 @@ export class GridManager extends BaseManager {
     // Build boundary caches
     this.buildBoundaryCaches();
 
+    // Enforce edge corridor cells at row 13, columns near edges to be non-passable
+    // This prevents unintended horizontal arrows/debug and movement spillover at sky boundary
+    const edgeRow = 13;
+    [0,1,this.cols-2,this.cols-1].forEach(col => {
+      if (this.isValidCell(edgeRow, col)) {
+        const cell = this.getCell(edgeRow, col);
+        if (cell) {
+          // Keep their zone type but block directional allowance
+          CARDINAL_DIRECTIONS.forEach(dir => {
+            cell.allowedIncoming[dir] = false;
+            cell.allowedOutgoing[dir] = false;
+          });
+          cell.passable = false;
+        }
+      }
+    });
+
     // Emit event
     this.emit('zonesLoaded', { config });
     this.flagGridChanged({ type: 'zonesLoaded' });
@@ -538,7 +557,11 @@ export class GridManager extends BaseManager {
    * Apply zone properties to a rectangular range of cells
    */
   private applyCellRange(range: import('@/managers/interfaces/ZoneConfig').CellRangeDescriptor): void {
-    const { rowStart, rowEnd, colStart, colEnd } = range;
+    // Default missing bounds to full extent so ranges like sky can cover all columns
+    const rowStart = (range as any).rowStart ?? 0;
+    const rowEnd = (range as any).rowEnd ?? (this.rows - 1);
+    const colStart = (range as any).colStart ?? 0;
+    const colEnd = (range as any).colEnd ?? (this.cols - 1);
 
     if (DEBUG_PATHFIND) console.log(`[GridManager] Applying range: rows ${rowStart}-${rowEnd}, cols ${colStart}-${colEnd}, zone: ${range.zoneType}`);
     
@@ -598,6 +621,7 @@ export class GridManager extends BaseManager {
       allowedIncoming?: DirectionalFlags; 
       allowedOutgoing?: DirectionalFlags; 
       passable?: boolean;
+      dropZone?: boolean;
     }
   ): void {
     cell.zoneType = props.zoneType;
@@ -631,6 +655,14 @@ export class GridManager extends BaseManager {
         }
       });
     }
+
+    // Hard guard: sky must have NO directional allowance regardless of overrides
+    if (props.zoneType === 'sky') {
+      CARDINAL_DIRECTIONS.forEach(dir => {
+        cell.allowedIncoming[dir] = false;
+        cell.allowedOutgoing[dir] = false;
+      });
+    }
     
     // Debug log for sky cells on edges
     if (props.zoneType === 'sky' && (cell.col === 0 || cell.col === 1 || cell.col === 30 || cell.col === 31)) {
@@ -643,6 +675,19 @@ export class GridManager extends BaseManager {
     } else {
       // Sky and seat zones are not passable by default
       cell.passable = props.zoneType !== 'sky' && props.zoneType !== 'seat';
+    }
+
+    // Hard guard: sky must never be passable, regardless of overrides
+    if (props.zoneType === 'sky') {
+      if (cell.passable) {
+        if (DEBUG_PATHFIND) console.warn(`[GridManager] Forcing sky cell (${cell.row},${cell.col}) to non-passable`);
+      }
+      cell.passable = false;
+    }
+
+    // Apply dropZone flag if specified
+    if (typeof props.dropZone === 'boolean') {
+      cell.dropZone = props.dropZone;
     }
   }
 
@@ -881,6 +926,22 @@ export class GridManager extends BaseManager {
 
     // All other transitions allowed (corridor <-> ground, rowEntry <-> corridor, etc.)
     return true;
+  }
+
+  /**
+   * Get all cells marked as drop zones
+   * @returns Array of {row, col} positions for vendor dropoff points
+   */
+  public getDropZones(): Array<{ row: number; col: number }> {
+    const dropZones: Array<{ row: number; col: number }> = [];
+    for (const row of this.cells) {
+      for (const cell of row) {
+        if (cell.dropZone) {
+          dropZones.push({ row: cell.row, col: cell.col });
+        }
+      }
+    }
+    return dropZones;
   }
 
   /**

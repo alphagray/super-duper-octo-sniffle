@@ -155,7 +155,7 @@ export class LevelService {
       return {
         id: cfg.id,
         label: cfg.label,
-        gridTop: 15,
+        gridTop: 14,
         gridLeft: cfg.left,
         gridRight: cfg.left + 7,
         gridBottom: 18,
@@ -168,17 +168,17 @@ export class LevelService {
       {
         id: 'stairs-A-B',
         gridLeft: 10,  // Directly after Section A (2-9)
-        gridTop: 15,
+        gridTop: 14,
         width: 2,
-        height: 4,
+        height: 5,
         connectsSections: ['A', 'B']
       },
       {
         id: 'stairs-B-C',
         gridLeft: 20, // Directly after Section B (12-19)
-        gridTop: 15,
+        gridTop: 14,
         width: 2,
-        height: 4,
+        height: 5,
         connectsSections: ['B', 'C']
       }
     ];

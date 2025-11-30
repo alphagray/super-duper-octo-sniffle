@@ -112,18 +112,13 @@ export class TargetingReticle extends Phaser.GameObjects.Container {
     this.sectionHighlight = this.scene.add.graphics();
     this.sectionHighlight.setDepth(999); // Below reticle but above everything else
     
-    // Dynamic section bounds derived from grid seat ranges.
-    // Seat grid ranges duplicated from StadiumScene.getSectionAtGridPosition:
-    // Section A: cols 2-9, rows 15-18
-    // Section B: cols 12-19, rows 15-18
-    // Section C: cols 22-29, rows 15-18
-    // We compute world-space rectangle by converting the top-left and bottom-right
-    // seat cell centers to world coords via gridToWorld and then expanding to cover
-    // full cell extents.
+    // Get actual section bounds from SectionActors instead of hardcoding
     const sceneAny: any = this.scene as any;
-    const gridManager = sceneAny.gridManager; // Access private via any (surgical, replace later with injected ref)
-    if (!gridManager) {
-      console.warn('[TargetingReticle] gridManager unavailable; using legacy hardcoded highlight');
+    const actorRegistry = sceneAny.actorRegistry;
+    const gridManager = sceneAny.gridManager;
+    
+    if (!actorRegistry || !gridManager) {
+      console.warn('[TargetingReticle] actorRegistry or gridManager unavailable; using legacy hardcoded highlight');
       const legacyWidth = 256;
       const legacyHeight = 128;
       const legacyOffsetX = 128;
@@ -137,24 +132,35 @@ export class TargetingReticle extends Phaser.GameObjects.Container {
       return;
     }
 
-    const cellSize = gridManager.getWorldSize().cellSize;
+    // Query SectionActors from registry
+    const sectionActors = actorRegistry.getByCategory('section');
+    if (!sectionActors || sectionActors.length <= sectionIdx) {
+      console.warn(`[TargetingReticle] Section ${sectionIdx} not found in registry`);
+      return;
+    }
 
-    interface Range { colStart: number; colEnd: number; rowStart: number; rowEnd: number; }
-    const ranges: Range[] = [
-      { colStart: 2, colEnd: 9, rowStart: 15, rowEnd: 18 },   // A
-      { colStart: 12, colEnd: 19, rowStart: 15, rowEnd: 18 }, // B
-      { colStart: 22, colEnd: 29, rowStart: 15, rowEnd: 18 }  // C
-    ];
-    const r = ranges[sectionIdx];
-    if (!r) return;
+    const sectionActor = sectionActors[sectionIdx];
+    const sectionData = sectionActor.getSectionData();
+    if (!sectionData) {
+      console.warn(`[TargetingReticle] Section ${sectionIdx} has no data`);
+      return;
+    }
+
+    const cellSize = gridManager.getWorldSize().cellSize;
+    
+    // Get seat row bounds from actual section data (e.g., rows 14-17)
+    const rowStart = sectionData.gridTop;
+    const rowEnd = sectionData.gridTop + 3; // 4 seat rows
+    const colStart = sectionData.gridLeft;
+    const colEnd = sectionData.gridRight;
 
     // Convert top-left seat cell center then adjust by half cell size to get true top-left corner.
-    const topLeftCenter = gridManager.gridToWorld(r.rowStart, r.colStart);
-    const bottomRightCenter = gridManager.gridToWorld(r.rowEnd, r.colEnd);
+    const topLeftCenter = gridManager.gridToWorld(rowStart, colStart);
+    const bottomRightCenter = gridManager.gridToWorld(rowEnd, colEnd);
     const x = topLeftCenter.x - cellSize / 2;
     const y = topLeftCenter.y - cellSize / 2;
-    const width = (r.colEnd - r.colStart + 1) * cellSize;
-    const height = (r.rowEnd - r.rowStart + 1) * cellSize;
+    const width = (colEnd - colStart + 1) * cellSize;
+    const height = (rowEnd - rowStart + 1) * cellSize;
 
     this.sectionHighlight.fillStyle(0x00ff00, 0.15);
     this.sectionHighlight.fillRect(x, y, width, height);

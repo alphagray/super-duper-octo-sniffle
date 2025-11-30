@@ -153,8 +153,21 @@ export class VendorActor extends AnimatedActor {
     }
 
     // Move toward current waypoint
-    const targetX = currentSegment.x;
-    const targetY = currentSegment.y;
+    let targetX = currentSegment.x;
+    let targetY = currentSegment.y;
+    
+    // Add visual offset to make sprite appear fully in the target cell
+    // Vendor sprite is 20px wide, so offset by 8px in movement direction
+    // This ensures 75% of the sprite bounding box is in the target cell
+    const isLastWaypoint = this.currentPathIndex >= path.length - 1;
+    if (isLastWaypoint) {
+      const prevSegment = path[Math.max(0, this.currentPathIndex - 1)];
+      const dirX = Math.sign(targetX - prevSegment.x);
+      const dirY = Math.sign(targetY - prevSegment.y);
+      targetX += dirX * 8; // 8px offset = 75% into cell for 32px cells
+      targetY += dirY * 8;
+    }
+    
     const dx = targetX - this.position.x;
     const dy = targetY - this.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -163,25 +176,37 @@ export class VendorActor extends AnimatedActor {
     const speed = 64; // pixels per second
     const moveDistance = (speed * deltaTime) / 1000;
 
-    if (distance <= moveDistance) {
-      // Reached current waypoint - snap to it and advance
+    // Always snap if within moveDistance OR if distance is small (< 3px to avoid Zeno's paradox)
+    if (distance <= moveDistance || distance < 3.0) {
       this.position.x = targetX;
       this.position.y = targetY;
       this.vendor.setPosition(targetX, targetY);
       this.updateDepthForPosition(targetX, targetY);
-      
-      const wasLastSegment = this.currentPathIndex >= path.length - 1;
-      const advanced = this.advanceSegment();
-      
-      if (!advanced) {
-        // Reached the final waypoint
-        console.log('[VendorActor] Reached final waypoint at', this.currentPathIndex);
-      }
+      this.advanceSegment();
+      return;
+    }
+
+    // Calculate new position
+    const ratio = Math.min(moveDistance / distance, 1.0);
+    const newX = this.position.x + dx * ratio;
+    const newY = this.position.y + dy * ratio;
+    
+    // Calculate distance from new position to target
+    const newDx = targetX - newX;
+    const newDy = targetY - newY;
+    const newDistance = Math.sqrt(newDx * newDx + newDy * newDy);
+    
+    // If moving would increase distance OR new position is very close, snap to target
+    if (newDistance >= distance || newDistance < 1.0) {
+      this.position.x = targetX;
+      this.position.y = targetY;
+      this.vendor.setPosition(targetX, targetY);
+      this.updateDepthForPosition(targetX, targetY);
+      this.advanceSegment();
     } else {
-      // Move toward waypoint
-      const ratio = moveDistance / distance;
-      this.position.x += dx * ratio;
-      this.position.y += dy * ratio;
+      // Safe to move
+      this.position.x = newX;
+      this.position.y = newY;
       this.vendor.setPosition(this.position.x, this.position.y);
       this.updateDepthForPosition(this.position.x, this.position.y);
     }

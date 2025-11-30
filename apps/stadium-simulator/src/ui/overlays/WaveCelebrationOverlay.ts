@@ -18,7 +18,7 @@ export class WaveCelebrationOverlay extends BaseOverlay {
   constructor(scene: Phaser.Scene, x: number, y: number, options: WaveCelebrationOptions) {
     const defaults: BaseOverlayOptions = {
       depth: gameBalance.ui.depths.uiOverlayDefault,
-      durationMs: 1500,
+      durationMs: 3000,
     };
     
     super(scene, x, y, { ...defaults, ...options });

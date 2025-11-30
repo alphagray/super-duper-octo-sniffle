@@ -39,6 +39,7 @@ export class GameStateManager {
   private completedWaves: number = 0;
   private waveAttempts: number = 0;
   private totalSectionSuccesses: number = 0;
+  private vendorScore: number = 0; // Track vendor service points
   private initialAggregateStats: AggregateStats | null = null;
   private eventListeners: Map<string, Array<Function>>;
   private waveBoosts: Map<string, WaveBoost> = new Map(); // Track temporary boosts per section
@@ -288,7 +289,27 @@ export class GameStateManager {
   }
 
   /**
-   * Increment completed waves counter
+   * Get vendor service score
+   */
+  public getVendorScore(): number {
+    return this.vendorScore;
+  }
+
+  /**
+   * Add points from vendor service
+   */
+  public addVendorScore(points: number): void {
+    this.vendorScore += points;
+    this.logger.push({
+      level: 'info',
+      category: 'system:gamestate',
+      message: `Vendor score: +${points} (total: ${this.vendorScore})`,
+      ts: Date.now()
+    });
+  }
+
+  /**
+   * Increment wave count
    */
   public incrementCompletedWaves(): void {
     this.completedWaves++;

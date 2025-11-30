@@ -7,9 +7,7 @@
   "cellRanges": [
     {
       "rowStart": 0,
-      "rowEnd": 13,
-      "colStart": 0,
-      "colEnd": 31,
+      "rowEnd": 12,
       "zoneType": "sky",
       "passable": false,
       "allowedIncoming": {
@@ -26,8 +24,8 @@
       }
     },
     {
-      "rowStart": 14,
-      "rowEnd": 14,
+      "rowStart": 13,
+      "rowEnd": 13,
       "colStart": 0,
       "colEnd": 31,
       "zoneType": "corridor",
@@ -46,31 +44,31 @@
       }
     },
     {
-      "rowStart": 15,
-      "rowEnd": 18,
+      "rowStart": 14,
+      "rowEnd": 17,
       "colStart": 2,
       "colEnd": 9,
       "zoneType": "seat",
       "passable": true
     },
     {
-      "rowStart": 15,
-      "rowEnd": 18,
+      "rowStart": 14,
+      "rowEnd": 17,
       "colStart": 12,
       "colEnd": 19,
       "zoneType": "seat",
       "passable": true
     },
     {
-      "rowStart": 15,
-      "rowEnd": 18,
+      "rowStart": 14,
+      "rowEnd": 17,
       "colStart": 22,
       "colEnd": 29,
       "zoneType": "seat",
       "passable": true
     },
     {
-      "rowStart": 15,
+      "rowStart": 14,
       "rowEnd": 18,
       "colStart": 10,
       "colEnd": 11,
@@ -91,7 +89,7 @@
       }
     },
     {
-      "rowStart": 15,
+      "rowStart": 14,
       "rowEnd": 18,
       "colStart": 20,
       "colEnd": 21,
@@ -112,6 +110,30 @@
       }
     },
     {
+      "rowStart": 18,
+      "rowEnd": 18,
+      "colStart": 2,
+      "colEnd": 9,
+      "zoneType": "corridor",
+      "passable": true
+    },
+    {
+      "rowStart": 18,
+      "rowEnd": 18,
+      "colStart": 12,
+      "colEnd": 19,
+      "zoneType": "corridor",
+      "passable": true
+    },
+    {
+      "rowStart": 18,
+      "rowEnd": 18,
+      "colStart": 22,
+      "colEnd": 29,
+      "zoneType": "corridor",
+      "passable": true
+    },
+    {
       "rowStart": 19,
       "rowEnd": 23,
       "colStart": 0,
@@ -123,534 +145,274 @@
   "cells": [
     {
       "row": 14,
-      "col": 2,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
+      "col": 10,
+      "zoneType": "corridor",
+      "transitionType": "stairLanding",
       "allowedIncoming": {
         "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
+        "right": true,
+        "bottom": true,
+        "left": true
       },
       "allowedOutgoing": {
-        "top": null,
-        "right": null,
+        "top": true,
+        "right": true,
         "bottom": true,
-        "left": null
+        "left": true
       },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 11,
+      "zoneType": "corridor",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 20,
+      "zoneType": "corridor",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 21,
+      "zoneType": "corridor",
+      "transitionType": "stairLanding",
+      "allowedIncoming": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": true,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "passable": true
+    },
+    {
+      "row": 14,
+      "col": 2,
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 3,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 4,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 5,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 6,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 7,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 8,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 9,
-      "zoneType": "rowEntry",
+      "zoneType": "seat",
       "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 12,
-      "zoneType": "rowEntry",
+      "zoneType": "seat",
       "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 13,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 14,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 15,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 16,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 17,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 18,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 19,
-      "zoneType": "rowEntry",
+      "zoneType": "seat",
       "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 22,
-      "zoneType": "rowEntry",
+      "zoneType": "seat",
       "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 23,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 24,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 25,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 26,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 27,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 28,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
       "row": 14,
       "col": 29,
-      "zoneType": "rowEntry",
-      "transitionType": "rowBoundary",
-      "allowedIncoming": {
-        "top": true,
-        "right": null,
-        "bottom": null,
-        "left": null
-      },
-      "allowedOutgoing": {
-        "top": null,
-        "right": null,
-        "bottom": true,
-        "left": null
-      },
-      "passable": true
-    },
-    {
-      "row": 14,
-      "col": 10,
-      "zoneType": "corridor",
-      "transitionType": "stairLanding",
-      "allowedIncoming": {
-        "top": true,
-        "right": true,
-        "bottom": true,
-        "left": true
-      },
-      "allowedOutgoing": {
-        "top": true,
-        "right": true,
-        "bottom": true,
-        "left": true
-      },
-      "passable": true
-    },
-    {
-      "row": 14,
-      "col": 11,
-      "zoneType": "corridor",
-      "transitionType": "stairLanding",
-      "allowedIncoming": {
-        "top": true,
-        "right": true,
-        "bottom": true,
-        "left": true
-      },
-      "allowedOutgoing": {
-        "top": true,
-        "right": true,
-        "bottom": true,
-        "left": true
-      },
-      "passable": true
-    },
-    {
-      "row": 14,
-      "col": 20,
-      "zoneType": "corridor",
-      "transitionType": "stairLanding",
-      "allowedIncoming": {
-        "top": true,
-        "right": true,
-        "bottom": true,
-        "left": true
-      },
-      "allowedOutgoing": {
-        "top": true,
-        "right": true,
-        "bottom": true,
-        "left": true
-      },
-      "passable": true
-    },
-    {
-      "row": 14,
-      "col": 21,
-      "zoneType": "corridor",
-      "transitionType": "stairLanding",
-      "allowedIncoming": {
-        "top": true,
-        "right": true,
-        "bottom": true,
-        "left": true
-      },
-      "allowedOutgoing": {
-        "top": true,
-        "right": true,
-        "bottom": true,
-        "left": true
-      },
+      "zoneType": "seat",
+      "allowedIncoming": { "top": false, "right": true, "bottom": false, "left": true },
+      "allowedOutgoing": { "top": false, "right": true, "bottom": false, "left": true },
       "passable": true
     },
     {
@@ -944,6 +706,56 @@
         "left": false
       },
       "passable": false
+    },
+    {
+      "row": 18,
+      "col": 10,
+      "zoneType": "corridor",
+      "dropZone": true,
+      "passable": true,
+      "allowedIncoming": {
+        "top": false,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "walls": {
+        "top": true,
+        "right": false,
+        "bottom": false,
+        "left": false
+      }
+    },
+    {
+      "row": 18,
+      "col": 21,
+      "zoneType": "corridor",
+      "dropZone": true,
+      "passable": true,
+      "allowedIncoming": {
+        "top": false,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "allowedOutgoing": {
+        "top": false,
+        "right": true,
+        "bottom": true,
+        "left": true
+      },
+      "walls": {
+        "top": true,
+        "right": false,
+        "bottom": false,
+        "left": false
+      }
     }
   ],
   "sections": [
@@ -951,10 +763,10 @@
       "id": "A",
       "label": "Section A",
       "gridBounds": {
-        "top": 15,
+        "top": 14,
         "left": 2,
         "width": 8,
-        "height": 4
+        "height": 5
       },
       "rows": 4,
       "seatsPerRow": 8
@@ -963,10 +775,10 @@
       "id": "B",
       "label": "Section B",
       "gridBounds": {
-        "top": 15,
+        "top": 14,
         "left": 12,
         "width": 8,
-        "height": 4
+        "height": 5
       },
       "rows": 4,
       "seatsPerRow": 8
@@ -975,10 +787,10 @@
       "id": "C",
       "label": "Section C",
       "gridBounds": {
-        "top": 15,
+        "top": 14,
         "left": 22,
         "width": 8,
-        "height": 4
+        "height": 5
       },
       "rows": 4,
       "seatsPerRow": 8
@@ -988,10 +800,10 @@
     {
       "id": "stairs-A-B",
       "gridBounds": {
-        "top": 15,
+        "top": 14,
         "left": 10,
         "width": 2,
-        "height": 4
+        "height": 5
       },
       "connectsSections": [
         "A",
@@ -1001,10 +813,10 @@
     {
       "id": "stairs-B-C",
       "gridBounds": {
-        "top": 15,
+        "top": 14,
         "left": 20,
         "width": 2,
-        "height": 4
+        "height": 5
       },
       "connectsSections": [
         "B",
@@ -1019,7 +831,7 @@
       "sectionId": "A",
       "row": 0,
       "col": 0,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 2,
       "initialStats": {
         "happiness": 70,
@@ -1033,7 +845,7 @@
       "sectionId": "A",
       "row": 0,
       "col": 1,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 3,
       "initialStats": {
         "happiness": 70,
@@ -1047,7 +859,7 @@
       "sectionId": "A",
       "row": 0,
       "col": 2,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 4,
       "initialStats": {
         "happiness": 70,
@@ -1061,7 +873,7 @@
       "sectionId": "A",
       "row": 0,
       "col": 3,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 5,
       "initialStats": {
         "happiness": 70,
@@ -1075,7 +887,7 @@
       "sectionId": "A",
       "row": 0,
       "col": 4,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 6,
       "initialStats": {
         "happiness": 70,
@@ -1089,7 +901,7 @@
       "sectionId": "A",
       "row": 0,
       "col": 5,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 7,
       "initialStats": {
         "happiness": 70,
@@ -1103,7 +915,7 @@
       "sectionId": "A",
       "row": 0,
       "col": 6,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 8,
       "initialStats": {
         "happiness": 70,
@@ -1117,7 +929,7 @@
       "sectionId": "A",
       "row": 0,
       "col": 7,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 9,
       "initialStats": {
         "happiness": 70,
@@ -1131,7 +943,7 @@
       "sectionId": "A",
       "row": 1,
       "col": 0,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 2,
       "initialStats": {
         "happiness": 70,
@@ -1145,7 +957,7 @@
       "sectionId": "A",
       "row": 1,
       "col": 1,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 3,
       "initialStats": {
         "happiness": 70,
@@ -1159,7 +971,7 @@
       "sectionId": "A",
       "row": 1,
       "col": 2,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 4,
       "initialStats": {
         "happiness": 70,
@@ -1173,7 +985,7 @@
       "sectionId": "A",
       "row": 1,
       "col": 3,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 5,
       "initialStats": {
         "happiness": 70,
@@ -1187,7 +999,7 @@
       "sectionId": "A",
       "row": 1,
       "col": 4,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 6,
       "initialStats": {
         "happiness": 70,
@@ -1201,7 +1013,7 @@
       "sectionId": "A",
       "row": 1,
       "col": 5,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 7,
       "initialStats": {
         "happiness": 70,
@@ -1215,7 +1027,7 @@
       "sectionId": "A",
       "row": 1,
       "col": 6,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 8,
       "initialStats": {
         "happiness": 70,
@@ -1229,7 +1041,7 @@
       "sectionId": "A",
       "row": 1,
       "col": 7,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 9,
       "initialStats": {
         "happiness": 70,
@@ -1243,7 +1055,7 @@
       "sectionId": "A",
       "row": 2,
       "col": 0,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 2,
       "initialStats": {
         "happiness": 70,
@@ -1257,7 +1069,7 @@
       "sectionId": "A",
       "row": 2,
       "col": 1,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 3,
       "initialStats": {
         "happiness": 70,
@@ -1271,7 +1083,7 @@
       "sectionId": "A",
       "row": 2,
       "col": 2,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 4,
       "initialStats": {
         "happiness": 70,
@@ -1285,7 +1097,7 @@
       "sectionId": "A",
       "row": 2,
       "col": 3,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 5,
       "initialStats": {
         "happiness": 70,
@@ -1299,7 +1111,7 @@
       "sectionId": "A",
       "row": 2,
       "col": 4,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 6,
       "initialStats": {
         "happiness": 70,
@@ -1313,7 +1125,7 @@
       "sectionId": "A",
       "row": 2,
       "col": 5,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 7,
       "initialStats": {
         "happiness": 70,
@@ -1327,7 +1139,7 @@
       "sectionId": "A",
       "row": 2,
       "col": 6,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 8,
       "initialStats": {
         "happiness": 70,
@@ -1341,7 +1153,7 @@
       "sectionId": "A",
       "row": 2,
       "col": 7,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 9,
       "initialStats": {
         "happiness": 70,
@@ -1355,7 +1167,7 @@
       "sectionId": "A",
       "row": 3,
       "col": 0,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 2,
       "initialStats": {
         "happiness": 70,
@@ -1369,7 +1181,7 @@
       "sectionId": "A",
       "row": 3,
       "col": 1,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 3,
       "initialStats": {
         "happiness": 70,
@@ -1383,7 +1195,7 @@
       "sectionId": "A",
       "row": 3,
       "col": 2,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 4,
       "initialStats": {
         "happiness": 70,
@@ -1397,7 +1209,7 @@
       "sectionId": "A",
       "row": 3,
       "col": 3,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 5,
       "initialStats": {
         "happiness": 70,
@@ -1411,7 +1223,7 @@
       "sectionId": "A",
       "row": 3,
       "col": 4,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 6,
       "initialStats": {
         "happiness": 70,
@@ -1425,7 +1237,7 @@
       "sectionId": "A",
       "row": 3,
       "col": 5,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 7,
       "initialStats": {
         "happiness": 70,
@@ -1439,7 +1251,7 @@
       "sectionId": "A",
       "row": 3,
       "col": 6,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 8,
       "initialStats": {
         "happiness": 70,
@@ -1453,7 +1265,7 @@
       "sectionId": "A",
       "row": 3,
       "col": 7,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 9,
       "initialStats": {
         "happiness": 70,
@@ -1467,7 +1279,7 @@
       "sectionId": "B",
       "row": 0,
       "col": 0,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 12,
       "initialStats": {
         "happiness": 70,
@@ -1481,7 +1293,7 @@
       "sectionId": "B",
       "row": 0,
       "col": 1,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 13,
       "initialStats": {
         "happiness": 70,
@@ -1495,7 +1307,7 @@
       "sectionId": "B",
       "row": 0,
       "col": 2,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 14,
       "initialStats": {
         "happiness": 70,
@@ -1509,7 +1321,7 @@
       "sectionId": "B",
       "row": 0,
       "col": 3,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 15,
       "initialStats": {
         "happiness": 70,
@@ -1523,7 +1335,7 @@
       "sectionId": "B",
       "row": 0,
       "col": 4,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 16,
       "initialStats": {
         "happiness": 70,
@@ -1537,7 +1349,7 @@
       "sectionId": "B",
       "row": 0,
       "col": 5,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 17,
       "initialStats": {
         "happiness": 70,
@@ -1551,7 +1363,7 @@
       "sectionId": "B",
       "row": 0,
       "col": 6,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 18,
       "initialStats": {
         "happiness": 70,
@@ -1565,7 +1377,7 @@
       "sectionId": "B",
       "row": 0,
       "col": 7,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 19,
       "initialStats": {
         "happiness": 70,
@@ -1579,7 +1391,7 @@
       "sectionId": "B",
       "row": 1,
       "col": 0,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 12,
       "initialStats": {
         "happiness": 70,
@@ -1593,7 +1405,7 @@
       "sectionId": "B",
       "row": 1,
       "col": 1,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 13,
       "initialStats": {
         "happiness": 70,
@@ -1607,7 +1419,7 @@
       "sectionId": "B",
       "row": 1,
       "col": 2,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 14,
       "initialStats": {
         "happiness": 70,
@@ -1621,7 +1433,7 @@
       "sectionId": "B",
       "row": 1,
       "col": 3,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 15,
       "initialStats": {
         "happiness": 70,
@@ -1635,7 +1447,7 @@
       "sectionId": "B",
       "row": 1,
       "col": 4,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 16,
       "initialStats": {
         "happiness": 70,
@@ -1649,7 +1461,7 @@
       "sectionId": "B",
       "row": 1,
       "col": 5,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 17,
       "initialStats": {
         "happiness": 70,
@@ -1663,7 +1475,7 @@
       "sectionId": "B",
       "row": 1,
       "col": 6,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 18,
       "initialStats": {
         "happiness": 70,
@@ -1677,7 +1489,7 @@
       "sectionId": "B",
       "row": 1,
       "col": 7,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 19,
       "initialStats": {
         "happiness": 70,
@@ -1691,7 +1503,7 @@
       "sectionId": "B",
       "row": 2,
       "col": 0,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 12,
       "initialStats": {
         "happiness": 70,
@@ -1705,7 +1517,7 @@
       "sectionId": "B",
       "row": 2,
       "col": 1,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 13,
       "initialStats": {
         "happiness": 70,
@@ -1719,7 +1531,7 @@
       "sectionId": "B",
       "row": 2,
       "col": 2,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 14,
       "initialStats": {
         "happiness": 70,
@@ -1733,7 +1545,7 @@
       "sectionId": "B",
       "row": 2,
       "col": 3,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 15,
       "initialStats": {
         "happiness": 70,
@@ -1747,7 +1559,7 @@
       "sectionId": "B",
       "row": 2,
       "col": 4,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 16,
       "initialStats": {
         "happiness": 70,
@@ -1761,7 +1573,7 @@
       "sectionId": "B",
       "row": 2,
       "col": 5,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 17,
       "initialStats": {
         "happiness": 70,
@@ -1775,7 +1587,7 @@
       "sectionId": "B",
       "row": 2,
       "col": 6,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 18,
       "initialStats": {
         "happiness": 70,
@@ -1789,7 +1601,7 @@
       "sectionId": "B",
       "row": 2,
       "col": 7,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 19,
       "initialStats": {
         "happiness": 70,
@@ -1803,7 +1615,7 @@
       "sectionId": "B",
       "row": 3,
       "col": 0,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 12,
       "initialStats": {
         "happiness": 70,
@@ -1817,7 +1629,7 @@
       "sectionId": "B",
       "row": 3,
       "col": 1,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 13,
       "initialStats": {
         "happiness": 70,
@@ -1831,7 +1643,7 @@
       "sectionId": "B",
       "row": 3,
       "col": 2,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 14,
       "initialStats": {
         "happiness": 70,
@@ -1845,7 +1657,7 @@
       "sectionId": "B",
       "row": 3,
       "col": 3,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 15,
       "initialStats": {
         "happiness": 70,
@@ -1859,7 +1671,7 @@
       "sectionId": "B",
       "row": 3,
       "col": 4,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 16,
       "initialStats": {
         "happiness": 70,
@@ -1873,7 +1685,7 @@
       "sectionId": "B",
       "row": 3,
       "col": 5,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 17,
       "initialStats": {
         "happiness": 70,
@@ -1887,7 +1699,7 @@
       "sectionId": "B",
       "row": 3,
       "col": 6,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 18,
       "initialStats": {
         "happiness": 70,
@@ -1901,7 +1713,7 @@
       "sectionId": "B",
       "row": 3,
       "col": 7,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 19,
       "initialStats": {
         "happiness": 70,
@@ -1915,7 +1727,7 @@
       "sectionId": "C",
       "row": 0,
       "col": 0,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 22,
       "initialStats": {
         "happiness": 70,
@@ -1929,7 +1741,7 @@
       "sectionId": "C",
       "row": 0,
       "col": 1,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 23,
       "initialStats": {
         "happiness": 70,
@@ -1943,7 +1755,7 @@
       "sectionId": "C",
       "row": 0,
       "col": 2,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 24,
       "initialStats": {
         "happiness": 70,
@@ -1957,7 +1769,7 @@
       "sectionId": "C",
       "row": 0,
       "col": 3,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 25,
       "initialStats": {
         "happiness": 70,
@@ -1971,7 +1783,7 @@
       "sectionId": "C",
       "row": 0,
       "col": 4,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 26,
       "initialStats": {
         "happiness": 70,
@@ -1985,7 +1797,7 @@
       "sectionId": "C",
       "row": 0,
       "col": 5,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 27,
       "initialStats": {
         "happiness": 70,
@@ -1999,7 +1811,7 @@
       "sectionId": "C",
       "row": 0,
       "col": 6,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 28,
       "initialStats": {
         "happiness": 70,
@@ -2013,7 +1825,7 @@
       "sectionId": "C",
       "row": 0,
       "col": 7,
-      "gridRow": 15,
+      "gridRow": 14,
       "gridCol": 29,
       "initialStats": {
         "happiness": 70,
@@ -2027,7 +1839,7 @@
       "sectionId": "C",
       "row": 1,
       "col": 0,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 22,
       "initialStats": {
         "happiness": 70,
@@ -2041,7 +1853,7 @@
       "sectionId": "C",
       "row": 1,
       "col": 1,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 23,
       "initialStats": {
         "happiness": 70,
@@ -2055,7 +1867,7 @@
       "sectionId": "C",
       "row": 1,
       "col": 2,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 24,
       "initialStats": {
         "happiness": 70,
@@ -2069,7 +1881,7 @@
       "sectionId": "C",
       "row": 1,
       "col": 3,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 25,
       "initialStats": {
         "happiness": 70,
@@ -2083,7 +1895,7 @@
       "sectionId": "C",
       "row": 1,
       "col": 4,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 26,
       "initialStats": {
         "happiness": 70,
@@ -2097,7 +1909,7 @@
       "sectionId": "C",
       "row": 1,
       "col": 5,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 27,
       "initialStats": {
         "happiness": 70,
@@ -2111,7 +1923,7 @@
       "sectionId": "C",
       "row": 1,
       "col": 6,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 28,
       "initialStats": {
         "happiness": 70,
@@ -2125,7 +1937,7 @@
       "sectionId": "C",
       "row": 1,
       "col": 7,
-      "gridRow": 16,
+      "gridRow": 15,
       "gridCol": 29,
       "initialStats": {
         "happiness": 70,
@@ -2139,7 +1951,7 @@
       "sectionId": "C",
       "row": 2,
       "col": 0,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 22,
       "initialStats": {
         "happiness": 70,
@@ -2153,7 +1965,7 @@
       "sectionId": "C",
       "row": 2,
       "col": 1,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 23,
       "initialStats": {
         "happiness": 70,
@@ -2167,7 +1979,7 @@
       "sectionId": "C",
       "row": 2,
       "col": 2,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 24,
       "initialStats": {
         "happiness": 70,
@@ -2181,7 +1993,7 @@
       "sectionId": "C",
       "row": 2,
       "col": 3,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 25,
       "initialStats": {
         "happiness": 70,
@@ -2195,7 +2007,7 @@
       "sectionId": "C",
       "row": 2,
       "col": 4,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 26,
       "initialStats": {
         "happiness": 70,
@@ -2209,7 +2021,7 @@
       "sectionId": "C",
       "row": 2,
       "col": 5,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 27,
       "initialStats": {
         "happiness": 70,
@@ -2223,7 +2035,7 @@
       "sectionId": "C",
       "row": 2,
       "col": 6,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 28,
       "initialStats": {
         "happiness": 70,
@@ -2237,7 +2049,7 @@
       "sectionId": "C",
       "row": 2,
       "col": 7,
-      "gridRow": 17,
+      "gridRow": 16,
       "gridCol": 29,
       "initialStats": {
         "happiness": 70,
@@ -2251,7 +2063,7 @@
       "sectionId": "C",
       "row": 3,
       "col": 0,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 22,
       "initialStats": {
         "happiness": 70,
@@ -2265,7 +2077,7 @@
       "sectionId": "C",
       "row": 3,
       "col": 1,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 23,
       "initialStats": {
         "happiness": 70,
@@ -2279,7 +2091,7 @@
       "sectionId": "C",
       "row": 3,
       "col": 2,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 24,
       "initialStats": {
         "happiness": 70,
@@ -2293,7 +2105,7 @@
       "sectionId": "C",
       "row": 3,
       "col": 3,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 25,
       "initialStats": {
         "happiness": 70,
@@ -2307,7 +2119,7 @@
       "sectionId": "C",
       "row": 3,
       "col": 4,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 26,
       "initialStats": {
         "happiness": 70,
@@ -2321,7 +2133,7 @@
       "sectionId": "C",
       "row": 3,
       "col": 5,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 27,
       "initialStats": {
         "happiness": 70,
@@ -2335,7 +2147,7 @@
       "sectionId": "C",
       "row": 3,
       "col": 6,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 28,
       "initialStats": {
         "happiness": 70,
@@ -2349,7 +2161,7 @@
       "sectionId": "C",
       "row": 3,
       "col": 7,
-      "gridRow": 18,
+      "gridRow": 17,
       "gridCol": 29,
       "initialStats": {
         "happiness": 70,
