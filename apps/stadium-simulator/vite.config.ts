@@ -24,8 +24,11 @@ export default defineConfig(() => {
     },
     publicDir: 'public',
     server: {
+      host: true, // Listen on all addresses (0.0.0.0) for devcontainer access
       port: 3000,
-      open: true,
+      open: false, // Don't auto-open browser in devcontainer
+      strictPort: false,
+      cors: true, // Allow cross-origin requests in dev mode
     },
   };
 });

@@ -169,11 +169,14 @@ export class StadiumScene extends Phaser.Scene {
     this.aiManager = new AIManager(this.gameState, 2, this.gridManager, this.actorRegistry);
 
     // Initialize shared PathfindingService once and attach it everywhere
+    console.log('[StadiumScene] Initializing PathfindingService...', { hasGridManager: !!this.gridManager });
     if (this.gridManager) {
       this.pathfindingService = new PathfindingService(this.gridManager);
+      console.log('[StadiumScene] PathfindingService created successfully');
       this.aiManager.attachPathfindingService(this.pathfindingService);
+      console.log('[StadiumScene] PathfindingService attached to AIManager');
     } else {
-      console.warn('[StadiumScene] Cannot initialize PathfindingService without GridManager');
+      console.error('[StadiumScene] CRITICAL: Cannot initialize PathfindingService without GridManager - vendors will not be able to pathfind!');
     }
 
     // Create SectionActors from level data (Actor-first, data-driven!)
@@ -1948,40 +1951,50 @@ export class StadiumScene extends Phaser.Scene {
    */
   private handleCanvasClick(pointer: Phaser.Input.Pointer): void {
     if (this.vendorTargetingActive === null || !this.gridManager) return;
-    
+
     // Convert world coordinates to grid
     const gridPos = this.gridManager.worldToGrid(pointer.worldX, pointer.worldY);
     if (!gridPos) {
-      console.log('[StadiumScene] Click outside grid bounds, cancelling targeting');
+      this.showAssignmentError('Click is outside the stadium grid');
       this.exitVendorTargetingMode();
       return;
     }
-    
+
     // Validate click is in seat zone
     const cell = this.gridManager.getCell(gridPos.row, gridPos.col);
     if (!cell || cell.zoneType !== 'seat') {
-      console.log('[StadiumScene] Click on non-seat tile, cancelling targeting');
+      this.showAssignmentError('Click on a seat to assign vendor');
       this.exitVendorTargetingMode();
       return;
     }
-    
+
     // Determine which section this seat belongs to
     const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
     if (sectionIdx === null) {
-      console.log('[StadiumScene] Could not determine section for clicked seat');
+      this.showAssignmentError('Could not determine section');
       this.exitVendorTargetingMode();
       return;
     }
-    
+
     // Assign vendor to section
     console.log(`[StadiumScene] Assigning vendor ${this.vendorTargetingActive} to section ${sectionIdx} via click at grid (${gridPos.row},${gridPos.col})`);
     this.aiManager.assignVendorToSection(this.vendorTargetingActive, sectionIdx, gridPos.row, gridPos.col);
-    
+
     // Exit targeting mode
     this.exitVendorTargetingMode();
-    
+
     // Rebuild controls to show assignment
     this.rebuildVendorControls();
+  }
+
+  /**
+   * Show assignment error feedback to user
+   * @param message Error message to display
+   */
+  private showAssignmentError(message: string): void {
+    console.warn(`[StadiumScene] Assignment Error: ${message}`);
+    // TODO: Add visual feedback (red flash on reticle, temporary error text)
+    // For now, just log to console - UI feedback can be added later
   }
 
   /**
