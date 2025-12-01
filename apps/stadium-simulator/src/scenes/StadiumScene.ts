@@ -405,6 +405,8 @@ export class StadiumScene extends Phaser.Scene {
       const mascotActor = new MascotActor(actorId, sprite, null, this.gridManager, false);
       this.actorRegistry.register(mascotActor);
       this.aiManager.registerMascot(mascotActor);
+      // Attach AIManager to behavior so it can access sections/fans
+      mascotActor.getBehavior().attachAIManager(this.aiManager);
       this.mascotActors.push(mascotActor);
       // Wire mascot events for stat effects and visual feedback
       this.wireMascotEvents(mascotActor);

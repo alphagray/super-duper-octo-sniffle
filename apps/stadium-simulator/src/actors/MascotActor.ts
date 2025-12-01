@@ -5,6 +5,7 @@ import type { MascotPersonality } from '@/types/personalities';
 import type { GridManager } from '@/managers/GridManager';
 import type { StadiumSection } from '@/sprites/StadiumSection';
 import type { Mascot } from '@/sprites/Mascot';
+import { MascotPerimeterPath } from '@/sprites/MascotPerimeterPath';
 
 /**
  * MascotActor: Logic-layer wrapper for Mascot sprite.
@@ -17,6 +18,7 @@ export class MascotActor extends AnimatedActor {
   private personality: MascotPersonality | null;
   private gridManager?: GridManager; // optional for world/grid conversions
   private assignedSection: StadiumSection | null = null;
+  private perimeterPath: MascotPerimeterPath | null = null;
 
   // Activation / lifecycle state
   private active: boolean = false;
@@ -85,6 +87,7 @@ export class MascotActor extends AnimatedActor {
   public activateInSection(section: StadiumSection, mode: 'manual' | 'auto' = 'manual'): void {
     if (!this.canActivate()) return;
     this.assignSection(section);
+    this.perimeterPath = new MascotPerimeterPath(section);
     this.movementMode = mode;
     this.patrolling = true;
     this.active = true;
@@ -111,6 +114,8 @@ export class MascotActor extends AnimatedActor {
     // Assign cooldown between min/max
     const cd = Phaser.Math.Between(gameBalance.mascot.minCooldown, gameBalance.mascot.maxCooldown);
     this.cooldownRemainingMs = cd;
+    // Clear perimeter path
+    this.perimeterPath = null;
     // Clear section assignment (scene will remap)
     this.clearSection();
     this.sprite.setContextVisual('exit');
@@ -171,6 +176,16 @@ export class MascotActor extends AnimatedActor {
     // Tick behavior (internal cadence-based logic)
     this.behavior.tick(delta);
     const deltaMs = delta;
+
+    // Update perimeter movement if active
+    if (this.active && this.patrolling && this.perimeterPath && this.assignedSection) {
+      const speed = gameBalance.mascot.movementSpeed; // pixels per second
+      this.perimeterPath.advance(deltaMs, speed);
+      const position = this.perimeterPath.getCurrentPosition();
+      this.sprite.setPosition(position.x, position.y);
+      this.sprite.setFlipX(position.facing === 'left');
+    }
+
     // Cooldown decrement
     if (this.cooldownRemainingMs > 0) {
       this.cooldownRemainingMs = Math.max(0, this.cooldownRemainingMs - deltaMs);
