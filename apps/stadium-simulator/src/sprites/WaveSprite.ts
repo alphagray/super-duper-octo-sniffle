@@ -138,12 +138,20 @@ export class WaveSprite extends UtilityActor {
 
   /**
    * Calculate current movement speed based on wave strength
+   * Higher strength = faster wave
+   * Uses new gameBalance.waveSprite speed scaling config
    */
   private getCurrentSpeed(): number {
-    // Speed = baseSpeed × (waveStrength / 100)
-    // Minimum 20% of base speed even at 0 strength
-    const strengthMultiplier = Math.max(0.2, this.config.waveStrength / 100);
-    return this.config.baseSpeed * strengthMultiplier;
+    const cfg = gameBalance.waveSprite;
+    
+    // Get current wave strength (0-100)
+    const strength = this.config.waveStrength;
+    
+    // Formula: baseSpeed + (strength * speedMultiplier)
+    const calculatedSpeed = cfg.baseSpeed + (strength * cfg.speedMultiplier);
+    
+    // Clamp to min/max
+    return Math.max(cfg.minSpeed, Math.min(cfg.maxSpeed, calculatedSpeed));
   }
 
   /**
@@ -199,11 +207,13 @@ export class WaveSprite extends UtilityActor {
 
   /**
    * Update wave position and check for section collisions
+   * Recalculates speed dynamically each frame based on current wave strength
    */
   public update(delta: number): void {
     if (this.movementState !== 'moving') return;
 
     const deltaSeconds = delta / 1000;
+    // Recalculate speed dynamically (allows mid-wave changes)
     const currentSpeed = this.getCurrentSpeed();
     const moveDistance = currentSpeed * deltaSeconds;
 

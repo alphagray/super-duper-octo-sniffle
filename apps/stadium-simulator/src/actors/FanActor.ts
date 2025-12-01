@@ -167,7 +167,7 @@ export class FanActor extends AnimatedActor {
       // Do not decrease attention while frozen
     } else {
       this.attention = Math.max(
-        gameBalance.fanStats.attentionMinimum,
+        gameBalance.fanStats.attentionMinimum || 0,
         this.attention - frameSeconds * gameBalance.fanStats.attentionDecayRate
       );
     }
@@ -209,7 +209,16 @@ export class FanActor extends AnimatedActor {
       this.disappointment = Math.max(0, this.disappointment - frameSeconds * 0.5);
     }
 
-    // Visual updates deferred to update() state machine
+    // Apply caps to prevent overflow
+    this.thirst = Math.min(100, Math.max(0, this.thirst));
+    this.happiness = Math.min(
+      gameBalance.fanStats.happinessMaximum || 100,
+      Math.max(0, this.happiness)
+    );
+    this.attention = Math.min(
+      gameBalance.fanStats.attentionMaximum || 100,
+      Math.max(gameBalance.fanStats.attentionMinimum || 0, this.attention)
+    );
   }
 
   /**
@@ -220,8 +229,14 @@ export class FanActor extends AnimatedActor {
    * @param sceneOrTimestamp Scene reference or current timestamp in milliseconds
    */
   public drinkServed(sceneOrTimestamp: Phaser.Scene | number): void {
-    this.thirst = 0;
-    this.happiness = Math.min(100, this.happiness + 15);
+    // Reduce thirst using config value
+    this.thirst = Math.max(0, this.thirst - gameBalance.fanStats.thirstReductionOnServe);
+    
+    // NEW: Recover happiness on vendor serve
+    this.happiness = Math.min(
+      gameBalance.fanStats.happinessMaximum || 100,
+      this.happiness + gameBalance.fanStats.happinessRecoveryOnServe
+    );
     
     const timestamp = typeof sceneOrTimestamp === 'number' 
       ? sceneOrTimestamp 
@@ -237,7 +252,18 @@ export class FanActor extends AnimatedActor {
    */
   public onWaveParticipation(scene: Phaser.Scene, success: boolean): void {
     if (success) {
-      this.attention = 100;
+      // NEW: Recover attention on wave success
+      this.attention = Math.min(
+        gameBalance.fanStats.attentionMaximum || 100,
+        this.attention + gameBalance.fanStats.attentionRecoveryOnWaveSuccess
+      );
+      
+      // NEW: Recover happiness on wave success
+      this.happiness = Math.min(
+        gameBalance.fanStats.happinessMaximum || 100,
+        this.happiness + gameBalance.fanStats.happinessRecoveryOnWaveSuccess
+      );
+      
       this.attentionFreezeUntil = scene.time.now + gameBalance.fanStats.attentionFreezeDuration;
       this.reducedEffort = false;
     }

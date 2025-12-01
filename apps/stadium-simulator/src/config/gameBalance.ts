@@ -8,28 +8,37 @@ export const gameBalance = {
    * Fan stat configuration
    */
   fanStats: {
-    // Initial stat ranges
-
+    // === Initial Values ===
     initialHappiness: 70,
     initialThirstMin: 15,
     initialThirstMax: 30,
     initialAttention: 70,
 
-    // Thirst two-phase system
-    thirstRollChance: 0.33, // Phase 1: Chance per second to START getting thirsty (0-1)
-    thirstActivationAmount: 5, // Phase 1: Big jump when roll succeeds (pushes over threshold)
-    thirstThreshold: 50, // Threshold for state transition (Phase 1 → Phase 2)
-    thirstDecayRate: 2, // Phase 2: Linear pts/sec after threshold
+    // === Thirst System (Predictable) ===
+    thirstRollChance: 0.20, // Reduced from 0.33 - less random spikes
+    thirstActivationAmount: 3, // Reduced from 5 - smaller jumps
+    thirstThreshold: 50, // When Phase 2 decay kicks in
+    thirstDecayRate: 2, // Linear growth after threshold
+    thirstReductionOnServe: 30, // Partial thirst reduction (not full reset) to create strategic timing gameplay
+    
+    // === Happiness System (Recovery Added) ===
     unhappyHappinessThreshold: 30, // When happiness drops below this, fan becomes unhappy
-    happinessDecayRate: 1.0, // when thirst > 50
-    attentionDecayRate: 1.5,
-    attentionMinimum: 30,
+    happinessDecayRate: 1.0, // When thirst > 50
+    happinessRecoveryOnServe: 5, // NEW: Vendor serve gives +5 happiness
+    happinessRecoveryOnWaveSuccess: 10, // NEW: Wave success gives +10 happiness
+    happinessMaximum: 100, // Cap at 100
+    
+    // === Attention System (Recovery Added) ===
+    attentionDecayRate: 1.5, // Passive decay
+    attentionRecoveryOnWaveSuccess: 30, // NEW: Big boost on wave success
+    attentionMinimum: 30, // Floor
+    attentionMaximum: 100, // Cap
+    
+    // === Freeze Durations ===
+    thirstFreezeDuration: 4000, // After vendor serve
+    attentionFreezeDuration: 5000, // After wave success
 
-    // Freeze durations (milliseconds)
-    thirstFreezeDuration: 4000,
-    attentionFreezeDuration: 5000,
-
-    // Stat calculation modifiers
+    // === Wave Calculation ===
     waveChanceHappinessWeight: 0.5,
     waveChanceAttentionWeight: 0.5,
     waveChanceThirstPenalty: 0.3,
@@ -55,7 +64,7 @@ export const gameBalance = {
    */
   waveStrength: {
     starting: 70,
-    successBonus: 8,
+    successBonus: 10, // Increased from 8 - faster growth
     failurePenalty: -20,
     recoveryBonus: 10,
     recoveryThreshold: 30,
@@ -66,6 +75,10 @@ export const gameBalance = {
     strengthModifier: 0.004,
     columnSuccessThreshold: 0.6, // participation rate for column success
     peerPressureThreshold: 0.6, // % of column needed to trigger peer pressure
+    
+    // === Momentum System ===
+    consecutiveSuccessCap: 30, // NEW: Max +30 from streaks (prevents runaway)
+    consecutiveSuccessBonus: 5, // NEW: +5 per consecutive success
   },
 
   /**
@@ -346,6 +359,15 @@ export const gameBalance = {
     debugRadius: 12,
     trailLength: 5, // number of trail points to show
     trailFadeRate: 0.15, // how quickly trail points fade
+    
+    // === Dynamic Speed Scaling ===
+    baseSpeed: 150, // pixels per second (weak wave)
+    speedMultiplier: 1.5, // multiplier applied to strength (strength * speedMultiplier)
+    // Formula: speed = baseSpeed + (strength * speedMultiplier)
+    // At strength 70: 150 + (70 * 1.5) = 255 px/s
+    // At strength 100: 150 + (100 * 1.5) = 300 px/s
+    minSpeed: 150, // absolute minimum
+    maxSpeed: 300, // absolute maximum
   },
 
   /**

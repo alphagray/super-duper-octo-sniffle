@@ -45,6 +45,7 @@ export class WaveManager {
   private currentWaveStrength: number;
   private waveCalculationResults: WaveCalculationResult[];
   private consecutiveFailedColumns: number;
+  private consecutiveSuccesses: number = 0; // NEW: Track consecutive successful sections
   private lastSectionWaveState: 'success' | 'sputter' | 'death' | null;
   private lastColumnParticipationRate: number;
   private lastBoosterType: 'momentum' | 'recovery' | 'participation' | 'none';
@@ -665,30 +666,44 @@ export class WaveManager {
    * 
    * Logic:
    * - if lastState was 'success' (clean roll):
-   *   - if success: increase strength slightly
-   *   - if sputter: reduce strength
+   *   - if success: increase strength + apply consecutive bonus
+   *   - if sputter: reduce strength, reset consecutive counter
    * 
    * - if lastState was 'sputter':
    *   - if participation 40-60% (still sputtering): reduce strength
-   *   - if participation < 40% (death range): greatly reduce strength
+   *   - if participation < 40% (death range): greatly reduce strength, reset consecutive counter
    *   - if participation > 60% (recovery): increase strength
    * 
-   * - if lastState was 'death': keep strength very low
+   * - if lastState was 'death': keep strength very low, reset consecutive counter
    */
   public adjustWaveStrength(currentState: 'success' | 'sputter' | 'death', participationRate: number): void {
+    const cfg = gameBalance.waveStrength;
     const lastState = this.lastSectionWaveState;
     const momentumBoost = this.waveBoosterMultiplier && this.waveBoosterMultiplier > 1 ? this.waveBoosterMultiplier : 1;
     
     if (lastState === 'success') {
       // Coming from a clean success
       if (currentState === 'success') {
-        // Continue success: slight increase
-        this.currentWaveStrength = Math.min(100, this.currentWaveStrength + 5 * momentumBoost);
+        // Continue success: track consecutive successes
+        this.consecutiveSuccesses++;
+        
+        // Apply base success bonus
+        let bonus = cfg.successBonus;
+        
+        // Add consecutive bonus (capped)
+        const consecutiveBonus = Math.min(
+          cfg.consecutiveSuccessCap,
+          this.consecutiveSuccesses * cfg.consecutiveSuccessBonus
+        );
+        
+        this.currentWaveStrength = Math.min(100, this.currentWaveStrength + (bonus + consecutiveBonus) * momentumBoost);
       } else if (currentState === 'sputter') {
-        // Dropped to sputter: reduce significantly
+        // Dropped to sputter: reduce significantly, reset streak
+        this.consecutiveSuccesses = 0;
         this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 15);
       } else if (currentState === 'death') {
-        // Dropped to death: massive reduction
+        // Dropped to death: massive reduction, reset streak
+        this.consecutiveSuccesses = 0;
         this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 30);
       }
     } else if (lastState === 'sputter') {
@@ -700,11 +715,15 @@ export class WaveManager {
         // Still in sputter range: reduce slightly
         this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 8);
       } else if (participationRate < 0.4) {
-        // Dropped to death range: greatly reduce
+        // Dropped to death range: greatly reduce, reset streak
+        this.consecutiveSuccesses = 0;
         this.currentWaveStrength = Math.max(0, this.currentWaveStrength - 25);
       }
     } else if (lastState === 'death') {
-      // Coming from death: if somehow above 60%, treat as sputter recovery
+      // Coming from death: reset streak
+      this.consecutiveSuccesses = 0;
+      
+      // if somehow above 60%, treat as sputter recovery
       if (participationRate >= 0.6) {
         this.currentWaveStrength = Math.min(100, this.currentWaveStrength + 15 * momentumBoost);
       } else if (participationRate >= 0.4) {
