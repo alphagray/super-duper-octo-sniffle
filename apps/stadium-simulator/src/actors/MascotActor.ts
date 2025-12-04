@@ -99,7 +99,6 @@ export class MascotActor extends AnimatedActor {
   public activateInSection(section: StadiumSection, mode: 'manual' | 'auto' = 'manual'): void {
     if (!this.canActivate()) return;
     this.assignSection(section);
-    this.perimeterPath = new MascotPerimeterPath(section);
     this.movementMode = mode;
     this.patrolling = true;
     this.active = true;
@@ -126,8 +125,8 @@ export class MascotActor extends AnimatedActor {
     // Assign cooldown between min/max
     const cd = Phaser.Math.Between(gameBalance.mascot.minCooldown, gameBalance.mascot.maxCooldown);
     this.cooldownRemainingMs = cd;
-    // Clear perimeter path
-    this.perimeterPath = null;
+    // Clear any active path
+    this.clearPath();
     // Clear section assignment (scene will remap)
     this.clearSection();
     this.sprite.setContextVisual('exit');
@@ -217,14 +216,7 @@ export class MascotActor extends AnimatedActor {
     this.behavior.tick(delta, roundTime);
     const deltaMs = delta;
 
-    // Update perimeter movement if active
-    if (this.active && this.patrolling && this.perimeterPath && this.assignedSection) {
-      const speed = gameBalance.mascot.movementSpeed; // pixels per second
-      this.perimeterPath.advance(deltaMs, speed);
-      const position = this.perimeterPath.getCurrentPosition();
-      this.sprite.setPosition(position.x, position.y);
-      this.sprite.setFlipX(position.facing === 'left');
-    }
+    // Note: Mascot movement is handled by MascotBehavior via pathfinding
 
     // Cooldown decrement
     if (this.cooldownRemainingMs > 0) {

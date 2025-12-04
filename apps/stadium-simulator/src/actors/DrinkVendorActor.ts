@@ -84,8 +84,10 @@ export class DrinkVendorActor extends VendorActor {
    */
   private handleArrival(): void {
     const behaviorState = this.behavior.getState();
-    if (behaviorState === 'droppingOff' && typeof this.behavior.getCurrentDropZone === 'function') {
-      const dropZone = this.behavior.getCurrentDropZone();
+    // Use type assertion for DrinkVendorBehavior-specific method
+    const behaviorWithDropZone = this.behavior as AIActorBehavior & { getCurrentDropZone?: () => { row: number; col: number } | null };
+    if (behaviorState === 'droppingOff' && typeof behaviorWithDropZone.getCurrentDropZone === 'function') {
+      const dropZone = behaviorWithDropZone.getCurrentDropZone();
       const pos = this.getGridPosition();
       
       // Allow 1-cell tolerance for drop zone arrival (vendor might stop slightly short)

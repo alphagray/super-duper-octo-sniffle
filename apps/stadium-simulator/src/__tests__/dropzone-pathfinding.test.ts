@@ -92,8 +92,12 @@ describe('Drop Zone Pathfinding', () => {
       console.log('[TEST] Path waypoints:');
       path.forEach((waypoint, idx) => {
         const gridPos = gridManager.worldToGrid(waypoint.x, waypoint.y);
-        const cell = gridManager.getCell(gridPos.row, gridPos.col);
-        console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(${gridPos.row},${gridPos.col}) zone=${cell?.zoneType}`);
+        if (gridPos) {
+          const cell = gridManager.getCell(gridPos.row, gridPos.col);
+          console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(${gridPos.row},${gridPos.col}) zone=${cell?.zoneType}`);
+        } else {
+          console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(null)`);
+        }
       });
     }
 
@@ -152,8 +156,12 @@ describe('Drop Zone Pathfinding', () => {
       console.log('[TEST] Path waypoints:');
       path.forEach((waypoint, idx) => {
         const gridPos = gridManager.worldToGrid(waypoint.x, waypoint.y);
-        const cell = gridManager.getCell(gridPos.row, gridPos.col);
-        console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(${gridPos.row},${gridPos.col}) zone=${cell?.zoneType}`);
+        if (gridPos) {
+          const cell = gridManager.getCell(gridPos.row, gridPos.col);
+          console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(${gridPos.row},${gridPos.col}) zone=${cell?.zoneType}`);
+        } else {
+          console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(null)`);
+        }
       });
     }
 
@@ -229,8 +237,12 @@ describe('Drop Zone Pathfinding', () => {
       console.log('[TEST] Path waypoints:');
       path.forEach((waypoint, idx) => {
         const gridPos = gridManager.worldToGrid(waypoint.x, waypoint.y);
-        const cell = gridManager.getCell(gridPos.row, gridPos.col);
-        console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(${gridPos.row},${gridPos.col}) zone=${cell?.zoneType}`);
+        if (gridPos) {
+          const cell = gridManager.getCell(gridPos.row, gridPos.col);
+          console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(${gridPos.row},${gridPos.col}) zone=${cell?.zoneType}`);
+        } else {
+          console.log(`  ${idx}: world(${waypoint.x},${waypoint.y}) grid(null)`);
+        }
       });
     }
 

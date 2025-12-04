@@ -485,27 +485,47 @@ export class StadiumScene extends Phaser.Scene {
       }
     }
 
-    // Spawn mascot actors (one per section initially, inactive)
-    this.sections.forEach((section, index) => {
-      const sprite = new Mascot(this, section.x, section.y);
-      // Show faint placeholder in debug mode so user knows spawn points
-      if (this.debugMode) {
-        sprite.setVisible(true);
-        sprite.setAlpha(0.35);
-      } else {
-        sprite.setVisible(false);
+    // Spawn single mascot at ground center (original sb/add-vendor-scoring-and-splat implementation)
+    if (this.gridManager) {
+      const canvasWidth = this.cameras.main.width;
+      const canvasHeight = this.cameras.main.height;
+      const groundHeight = gameBalance.grid.cellSize * gameBalance.grid.groundLine.rowsFromBottom;
+      const centerX = canvasWidth / 2;
+      const groundY = canvasHeight - groundHeight / 2;
+      
+      // Convert to grid coordinates and back to world to ensure alignment
+      const gridPos = this.gridManager.worldToGrid(centerX, groundY);
+      if (gridPos) {
+        const alignedPos = this.gridManager.gridToWorld(gridPos.row, gridPos.col);
+        if (alignedPos) {
+          const mascotSprite = new Mascot(this, alignedPos.x, alignedPos.y);
+          this.add.existing(mascotSprite); // Add sprite to scene display list
+          mascotSprite.setVisible(true); // Always visible
+          mascotSprite.setDepth(500); // Above fans and vendors
+          const mascotActorId = 'actor:mascot-0';
+          const mascotActor = new MascotActor(mascotActorId, mascotSprite, null, this.gridManager, false);
+          if (this.pathfindingService) {
+            mascotActor.attachPathfindingService(this.pathfindingService);
+          }
+          this.actorRegistry.register(mascotActor);
+          this.aiManager.registerMascot(mascotActor);
+          this.mascotActors.push(mascotActor);
+          
+          // Listen for t-shirt cannon hits to apply stat changes
+          (mascotActor as any).on?.('tShirtCannonHit', (payload: { x: number; y: number; timestamp: number }) => {
+            this.handleTShirtCannonHit(payload, mascotActor);
+          });
+          
+          // Listen for crowd goes wild event
+          (mascotActor as any).on?.('crowdGoesWild', (payload: { intensity: number }) => {
+            this.handleCrowdGoesWild(payload.intensity);
+          });
+          
+          // Wire mascot events for speech bubbles (from main merge)
+          this.wireMascotEvents(mascotActor);
+        }
       }
-      const actorId = `actor:mascot-${index}`;
-      const mascotActor = new MascotActor(actorId, sprite, null, this.gridManager, false);
-      this.actorRegistry.register(mascotActor);
-      this.aiManager.registerMascot(mascotActor);
-      // Attach AIManager to behavior so it can access sections/fans
-      mascotActor.getBehavior().attachAIManager(this.aiManager);
-      this.mascotActors.push(mascotActor);
-      // Wire mascot events for stat effects and visual feedback
-      this.wireMascotEvents(mascotActor);
-      console.log(`[MascotActor] Registered and wired events for ${actorId} in section ${section.getId()}`);
-    });
+    }
 
     // Setup mascot keyboard controls
     this.setupMascotKeyboardControls();
@@ -2387,7 +2407,6 @@ export class StadiumScene extends Phaser.Scene {
     const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
     if (sectionIdx === null) {
       // console.log('[StadiumScene] Could not determine section for clicked seat');
-      this.showAssignmentError('Could not determine section');
       this.exitVendorTargetingMode();
       return;
     }
