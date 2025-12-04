@@ -657,10 +657,11 @@ export const gameBalance = {
     abilityBaseIntervalMs: 8000, // interval between ability activations (8s)
     // Per-phase base stat boosts (non-ultimate)
     abilityEffects: {
-      section: { attention: 6, happiness: 3 }, // applied to one section
-      global: { attention: 3, happiness: 1 }, // applied stadium-wide
-      cluster: { attention: 8, happiness: 4 }, // applied only to low-attention cluster
+      section: { attention: -6, happiness: 5 }, // applied to one section
+      global: { attention: -3, happiness: 1 }, // applied stadium-wide
+      cluster: { attention: -8, happiness: 6 }, // applied only to low-attention cluster
       ultimateMultiplier: 1.5, // multiply above boosts when firing during ultimate
+      attentionDrain: 2, // attention drained from each targeted fan and added to bank (Phase 4.2)
     },
     // Cluster selection parameters
     cluster: {

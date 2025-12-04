@@ -81,6 +81,72 @@
       font-size: 14px;
       font-weight: bold;
     }
+    .mascot-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      background: rgba(128, 0, 0, 0.2);
+      border: 2px solid #800000;
+      border-radius: 4px;
+    }
+    .mascot-btn {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      background: #800000;
+      color: #ffaa00;
+      border: 2px solid #ffaa00;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mascot-btn:hover:not(:disabled) {
+      background: #a00000;
+      transform: translateY(-2px);
+    }
+    .mascot-btn:disabled {
+      background: #444;
+      border-color: #666;
+      color: #888;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .mascot-label {
+      color: #ffaa00;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .attention-bar-container {
+      width: 120px;
+      height: 20px;
+      background: #333;
+      border: 2px solid #ffaa00;
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .attention-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #800000, #ffaa00);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .attention-bar-text {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 11px;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px black;
+    }
   </style>
 </head>
 <body>
@@ -98,6 +164,15 @@
       <button id="v2-a" class="vendor-btn">Section A</button>
       <button id="v2-b" class="vendor-btn">Section B</button>
       <button id="v2-c" class="vendor-btn">Section C</button>
+    </div>
+    <div class="mascot-controls">
+      <span class="mascot-label">Mascot:</span>
+      <button id="mascot-target" class="mascot-btn">Target: Section A</button>
+      <button id="mascot-ultimate" class="mascot-btn" disabled>Fire Ultimate</button>
+      <div class="attention-bar-container">
+        <div id="attention-bar-fill" class="attention-bar-fill"></div>
+        <div id="attention-bar-text" class="attention-bar-text">0/100</div>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

@@ -9,6 +9,13 @@ Concise, repo-specific guidance to make AI agents immediately productive. Keep c
 - Example: `FanActor` manages `happiness`/`thirst`/`attention` stats, derives `FanState` (`happy`|`thirsty`|`disengaged`), and delegates visuals to `Fan` sprite.
 - States are **derived** from stats via `deriveStateFromStats()`, never set manually. Transitions trigger `updateContinuousVisuals()`.
 
+**CRITICAL: Never Manipulate Sprites Directly from External Events**
+- ❌ WRONG: `sprite.playAnimation()` called from scene event handlers
+- ✅ RIGHT: Modify actor stats → actor derives new state → actor calls sprite methods
+- **Flow**: Event → Actor.modifyStats() → Actor.deriveStateFromStats() → Actor.transitionToState() → Sprite.playAnimation()
+- Example: T-shirt cannon hit → `fanActor.modifyStats({happiness: +3})` → fan derives `excited` state → `sprite.playExcitedJump()`
+- **Always** route through the actor's state machine. Sprites are dumb visual objects with no business logic.
+
 **Managers** — Domain logic in `src/managers/`:
 - `GameStateManager`: Central game state (score, timer, sections)
 - `WaveManager`: Wave propagation logic with event emission (`sectionSuccess`, `waveComplete`)

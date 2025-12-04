@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { MascotPersonality } from '@/types/personalities';
-import { BaseActorSprite } from './helpers/BaseActor';
+import { BaseActorContainer } from './helpers/BaseActor';
 
 // Visual-only contexts (logic lives in MascotBehavior)
 export type MascotVisualContext = 'entrance' | 'hyping' | 'ability' | 'ultimate' | 'exit';
@@ -8,16 +8,42 @@ export type MascotVisualContext = 'entrance' | 'hyping' | 'ability' | 'ultimate'
 /**
  * Refactored Mascot sprite: visual presentation only.
  * All game logic (timers, targeting, stat changes, analytics) moved to MascotActor + MascotBehavior.
+ * 
+ * Mascot is composed of two circles:
+ * - body: large circle (2x2 grid cells = 64px diameter), vibrant color
+ * - head: smaller circle on top, contrasting color
  */
-export class Mascot extends BaseActorSprite {
+export class Mascot extends BaseActorContainer {
+  private bodyCircle: Phaser.GameObjects.Ellipse;
+  private headCircle: Phaser.GameObjects.Rectangle;
   private personality: MascotPersonality | null;
   private currentContext: MascotVisualContext = 'entrance';
+  private originalBodyColor: number;
+  private originalHeadColor: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number, personality?: MascotPersonality) {
-    super(scene, x, y, 'mascot', 'mascot');
-    scene.add.existing(this);
+    super(scene, x, y, 'mascot', false); // disabled by default
+
+    // Body: ellipse (1.75 cells wide x 1.5 cells tall = 56px x 48px)
+    const bodyColor = 0x800000; // Maroon
+    const headColor = 0xffaa00; // Orange-yellow gold
+    
+    // Position body so its bottom edge aligns with container bottom (y=0 is center, so body bottom is at y=24)
+    this.bodyCircle = scene.add.ellipse(0, -24, 56, 48, bodyColor);
+    this.bodyCircle.setStrokeStyle(3, headColor); // Stroke with head color
+    this.originalBodyColor = bodyColor;
+
+    // Head: square (24x24) tucked down closer to body
+    // Body top is at y=-48, head tucked down 9px so center is at y=-51 (48 - 12 + 9)
+    this.headCircle = scene.add.rectangle(0, -51, 24, 24, headColor);
+    this.headCircle.setStrokeStyle(2, bodyColor); // Stroke with body color
+    this.originalHeadColor = headColor;
+
+    this.add([this.bodyCircle, this.headCircle]);
     this.personality = personality || null;
     this.applyPersonalityVisuals();
+
+    // Note: Don't call scene.add.existing here - let the caller decide
   }
 
   /** Apply personality-driven static visuals (tint, scale) */
@@ -25,7 +51,9 @@ export class Mascot extends BaseActorSprite {
     if (!this.personality) return;
     if (this.personality.appearance.colorPalette.length > 0) {
       const primaryColor = this.personality.appearance.colorPalette[0];
-      this.setTint(parseInt(primaryColor.replace('#', '0x')));
+      const color = parseInt(primaryColor.replace('#', '0x'));
+      this.bodyCircle.setFillStyle(color);
+      this.originalBodyColor = color;
     }
     this.setScale(this.personality.appearance.scale);
   }
@@ -74,9 +102,10 @@ export class Mascot extends BaseActorSprite {
 
   /** Helper to apply a quick tint flash */
   private flashTint(color: number, duration: number): void {
-    const original = (this as any).tintTopLeft;
-    this.setTint(color);
-    this.scene.time.delayedCall(duration, () => this.setTint(original));
+    this.bodyCircle.setFillStyle(color);
+    this.scene.time.delayedCall(duration, () => {
+      this.bodyCircle.setFillStyle(this.originalBodyColor);
+    });
   }
 
   /** No logic update needed; behavior drives visuals via setter methods */

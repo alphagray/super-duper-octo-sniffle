@@ -213,40 +213,89 @@ Safeguards:
 
 ## Phase 4: Mascot System Reintegration
 
-### 4.1 Wire T-Shirt Cannon Ability
-**Files**: `MascotBehavior.ts`, `MascotTargetingAI.ts`, `FanActor.ts`
+### 4.1 Create Mascot Sprite & Actor ✅
+**Files**: `Mascot.ts`, `MascotActor.ts`
 
-- [ ] Implement `executeAbility()` stat application
-- [ ] Call `MascotTargetingAI.selectTargets(sectionId, count)`
-- [ ] Apply `tShirtCannon.statBoosts` to selected fans:
-  - Attention: +6
-  - Happiness: +3
-- [ ] Use `fanActor.modifyStats()` for application
-- [ ] Spawn expanding ripple sprite at section center
-  - Scale: 0.5→3.0 over 800ms
-  - Alpha: 1.0→0.0
-  - Depth: 200
+- ✅ Mascot sprite: maroon ellipse body (56x48px) + gold square head (24x24px)
+- ✅ Container positioned with bottom edge at y=0 (feet at origin)
+- ✅ Single mascot spawn at grid-aligned ground position
+- ✅ `MascotActor` with lifecycle, patrol, and activation logic
+- ✅ Grid-aligned spawn position using `worldToGrid` → `gridToWorld`
 
 **Verification**:
-- Ability targets correct fans
-- Stats increase on targeted fans
-- Ripple visual effect plays
+- ✅ Mascot renders with correct maroon/gold colors
+- ✅ Spawns at grid-aligned position in ground area
+- ✅ Visual bottom edge aligns to grid cell centers
 
 ---
 
-### 4.2 Implement Attention Economy
-**Files**: `MascotBehavior.ts`, `gameBalance.ts`
+### 4.2 Implement T-Shirt Cannon Ability ✅
+**Files**: `MascotActor.ts`, `StadiumScene.ts`
 
-- [ ] Add `attentionBank: number` field (0-100)
-- [ ] Drain `tShirtCannon.attentionDrain: 2` from each targeted fan
-- [ ] Accumulate drained attention to mascot bank
-- [ ] Clamp bank to 0-100 range
-- [ ] Add getter `getAttentionBank()` for UI queries
+- ✅ Vendor-style click targeting with reticle and section highlights
+- ✅ Per-section cooldowns (10s) with Map-based tracking
+- ✅ Orange reticle/highlight for sections on cooldown
+- ✅ Real-time cooldown countdown display near cursor
+- ✅ Grid-based pathfinding to section center column in corridor
+- ✅ Manhattan movement (no diagonals) with slow speed (5x slower)
+- ✅ Mascot feet align to grid cell centers during movement
+- ✅ Wobble animation (6px horizontal + 8° rotation jitter)
+- ✅ Particle bezier arc trajectory with 30% distance height
+- ✅ Ripple effect with three expanding rings
+- ✅ Target random fan cluster within selected section
+- ✅ Emit `tShirtCannonHit` event with fan positions
 
 **Verification**:
-- Fans lose attention when targeted
-- Mascot bank increases
-- Bank respects max limit
+- ✅ Mascot paths to section center column (not target fan column)
+- ✅ Movement is Manhattan-only along grid
+- ✅ Feet stay aligned to cell centers
+- ✅ Cooldown system prevents spam
+- ✅ Particle arcs properly to target
+- ✅ Shots have "arc" when firing left/right from center
+
+---
+
+### 4.3 Wire T-Shirt Cannon Stat Application & Attention Economy
+**Files**: `MascotBehavior.ts`, `MascotActor.ts`, `StadiumScene.ts`
+
+- [ ] Connect `tShirtCannonHit` event listener in StadiumScene
+- [ ] Query fans at hit position via ActorRegistry (within ripple radius)
+- [ ] Apply stat changes from `gameBalance.mascotBehavior.abilityEffects`:
+  - Happiness: +3 (boost fan happiness)
+  - Attention: -2 (drain from fan, add to mascot bank)
+- [ ] Accumulate drained attention to mascot `attentionBank` (0-100, clamped)
+- [ ] Visual reaction: fans jump and jitter when hit by ripple
+- [ ] Add getter `getAttentionBank()` for UI queries (already exists ✅)
+
+**Note**: Mascot increases happiness at the COST of fan attention. He drains attention from fans and stores it in his ultimate bank.
+
+**Verification**:
+- Fans gain happiness on t-shirt hit
+- Fan attention drains to mascot bank
+- Bank accumulates correctly (clamped 0-100)
+- Fans visibly react (jump/jitter) when hit
+
+---
+
+### 4.4 Implement Ultimate Ability
+**Files**: `MascotBehavior.ts`, `MascotActor.ts`, `StadiumScene.ts`
+
+- [ ] Add `ultimateReady` computed property (true when `attentionBank >= 30`)
+- [ ] Implement `fireUltimate(sectionId)` method:
+  - Target count × 2 (hit more fans)
+  - Apply `ultimateStatBoosts` (attention +8, happiness +4)
+  - Ripple radius × 1.5
+  - Stadium white flash (depth 400, alpha 0.3, 200ms fade)
+  - Drain attention bank to 0
+- [ ] Wire ultimate button click in `setupMascotControlListeners()`
+- [ ] Hook `WaveManager.on('waveComplete')` listener
+- [ ] Add +10 to bank on successful waves
+
+**Verification**:
+- Ultimate button only fires when bank >=30
+- Enhanced effects apply to more fans
+- Flash effect visible across stadium
+- Wave success boosts bank
 
 ---
 

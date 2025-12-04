@@ -6,7 +6,7 @@ import { gameBalance } from '@/config/gameBalance';
 /**
  * Fan states (derived from stats, not manually set)
  */
-export type FanState = 'happy' | 'engaged' | 'disengaged' | 'waving' | 'thirsty' | 'unhappy' | 'drinking';
+export type FanState = 'happy' | 'engaged' | 'disengaged' | 'waving' | 'thirsty' | 'unhappy' | 'drinking' | 'excited';
 
 /**
  * FanActor: Actor managing fan game state and delegating rendering to Fan sprite.
@@ -40,6 +40,7 @@ export class FanActor extends AnimatedActor {
   private waveStrengthModifier: number = 0;
   private attentionFreezeUntil: number = 0;
   private thirstFreezeUntil: number = 0;
+  private excitedUntil: number = 0; // Temporary excited state from t-shirt cannon
   public reducedEffort: boolean = false;
   public lastWaveParticipated: boolean = false;
 
@@ -140,6 +141,39 @@ export class FanActor extends AnimatedActor {
   public setAttention(value: number): void {
     this.attention = Math.max(0, Math.min(100, value));
     // Visual update deferred to update() state machine
+  }
+
+  /**
+   * Apply t-shirt cannon effect (actor-to-actor interaction from mascot)
+   * Follows actor pattern: mascot → fanActor → fan sprite
+   * @param happinessBoost Amount of happiness to add
+   * @param attentionDrain Amount of attention to drain
+   * @param intensity Reaction intensity (1.0 = epicenter, lower = farther away)
+   */
+  public applyTShirtCannonEffect(happinessBoost: number, attentionDrain: number, intensity: number = 1.0): void {
+    console.log(`[FanActor] applyTShirtCannonEffect called with intensity=${intensity.toFixed(2)}, sprite=`, !!this.sprite);
+    
+    // Apply stat changes
+    this.modifyStats({ happiness: happinessBoost, attention: -attentionDrain });
+    
+    // Trigger visual reaction with intensity
+    this.triggerExcitedReaction(intensity);
+  }
+
+  /**
+   * Trigger excited reaction (t-shirt cannon hit)
+   * Follows actor pattern: actor changes state → actor triggers sprite animation
+   * @param intensity Reaction intensity (1.0 = full bounce, 0.33 = subtle)
+   */
+  public triggerExcitedReaction(intensity: number = 1.0): void {
+    console.log(`[FanActor] triggerExcitedReaction called, fan=`, !!this.fan, 'hasMethod=', typeof this.fan?.playExcitedJump);
+    
+    // Trigger visual jump through fan sprite (actor controls sprite, not external events)
+    if (this.fan && typeof this.fan.playExcitedJump === 'function') {
+      this.fan.playExcitedJump(intensity);
+    } else {
+      console.warn('[FanActor] Cannot trigger jump - fan sprite or method missing');
+    }
   }
 
   /** Generic stat modification helper (delta-based) */
@@ -562,6 +596,10 @@ export class FanActor extends AnimatedActor {
     // Priority order: specific states override general states
     
     // 1. Temporary states (highest priority)
+    if (this.excitedUntil > Date.now()) {
+      return 'excited';
+    }
+    
     if (this.thirst < 10 && this.thirstFreezeUntil > 0) {
       return 'drinking';
     }

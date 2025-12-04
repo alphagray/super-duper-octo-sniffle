@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 export class TargetingReticle extends Phaser.GameObjects.Container {
   private reticleCircle: Phaser.GameObjects.Graphics;
   private sectionHighlight: Phaser.GameObjects.Graphics | null = null;
+  private cooldownText: Phaser.GameObjects.Text | null = null;
   private isActive: boolean = false;
   private currentSection: number | null = null;
 
@@ -76,11 +77,18 @@ export class TargetingReticle extends Phaser.GameObjects.Container {
    * Set whether current position is a valid target
    * @param isValid True if hovering over valid section
    * @param sectionIdx Section index if valid
+   * @param customColor Optional custom color for reticle (e.g., orange for cooldown)
    */
-  public setTargetable(isValid: boolean, sectionIdx: number | null = null): void {
+  public setTargetable(isValid: boolean, sectionIdx: number | null = null, customColor?: number): void {
+    // Determine reticle color
+    let color = isValid ? 0x00ff00 : 0xff0000; // Green or red
+    if (customColor !== undefined) {
+      color = customColor; // Override with custom color (e.g., orange for cooldown)
+    }
+    
     // Update reticle color
     this.reticleCircle.clear();
-    this.reticleCircle.lineStyle(2, isValid ? 0x00ff00 : 0xff0000, 1);
+    this.reticleCircle.lineStyle(2, color, 1);
     
     // Outer circle
     this.reticleCircle.strokeCircle(0, 0, 20);
@@ -93,7 +101,7 @@ export class TargetingReticle extends Phaser.GameObjects.Container {
 
     // Update section highlight
     if (isValid && sectionIdx !== null && sectionIdx !== this.currentSection) {
-      this.highlightSection(sectionIdx);
+      this.highlightSection(sectionIdx, color);
       this.currentSection = sectionIdx;
     } else if (!isValid && this.currentSection !== null) {
       this.clearSectionHighlight();
@@ -102,10 +110,42 @@ export class TargetingReticle extends Phaser.GameObjects.Container {
   }
 
   /**
+   * Set cooldown text near reticle
+   * @param text Text to display (empty string to hide)
+   */
+  public setCooldownText(text: string): void {
+    if (!text) {
+      // Hide cooldown text
+      if (this.cooldownText) {
+        this.cooldownText.setVisible(false);
+      }
+      return;
+    }
+    
+    // Create or update cooldown text
+    if (!this.cooldownText) {
+      this.cooldownText = this.scene.add.text(0, -40, text, {
+        fontSize: '14px',
+        fontFamily: 'Arial',
+        color: '#ff8800',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        padding: { x: 6, y: 4 }
+      });
+      this.cooldownText.setOrigin(0.5, 0.5);
+      this.cooldownText.setDepth(1001); // Above reticle
+      this.add(this.cooldownText);
+    }
+    
+    this.cooldownText.setText(text);
+    this.cooldownText.setVisible(true);
+  }
+
+  /**
    * Highlight a section
    * @param sectionIdx Section index to highlight
+   * @param color Optional color for highlight (defaults to green)
    */
-  private highlightSection(sectionIdx: number): void {
+  private highlightSection(sectionIdx: number, color: number = 0x00ff00): void {
     this.clearSectionHighlight();
     
     // Create semi-transparent highlight overlay
@@ -125,9 +165,9 @@ export class TargetingReticle extends Phaser.GameObjects.Container {
       const legacyOffsetY = 480;
       const lx = legacyOffsetX + (sectionIdx * (legacyWidth + 64));
       const ly = legacyOffsetY;
-      this.sectionHighlight.fillStyle(0x00ff00, 0.15);
+      this.sectionHighlight.fillStyle(color, 0.15);
       this.sectionHighlight.fillRect(lx, ly, legacyWidth, legacyHeight);
-      this.sectionHighlight.lineStyle(2, 0x00ff00, 0.5);
+      this.sectionHighlight.lineStyle(2, color, 0.5);
       this.sectionHighlight.strokeRect(lx, ly, legacyWidth, legacyHeight);
       return;
     }
@@ -162,9 +202,9 @@ export class TargetingReticle extends Phaser.GameObjects.Container {
     const width = (colEnd - colStart + 1) * cellSize;
     const height = (rowEnd - rowStart + 1) * cellSize;
 
-    this.sectionHighlight.fillStyle(0x00ff00, 0.15);
+    this.sectionHighlight.fillStyle(color, 0.15);
     this.sectionHighlight.fillRect(x, y, width, height);
-    this.sectionHighlight.lineStyle(2, 0x00ff00, 0.5);
+    this.sectionHighlight.lineStyle(2, color, 0.5);
     this.sectionHighlight.strokeRect(x, y, width, height);
   }
 

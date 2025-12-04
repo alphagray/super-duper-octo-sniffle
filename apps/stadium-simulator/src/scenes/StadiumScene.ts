@@ -71,6 +71,7 @@ export class StadiumScene extends Phaser.Scene {
   private pathfindingService?: PathfindingService;
   private targetingReticle?: TargetingReticle;
   private vendorTargetingActive: number | null = null; // Vendor ID currently being targeted
+  private mascotTargetingActive: boolean = false; // Mascot targeting mode active
   private overlayManager?: OverlayManager;
 
   constructor() {
@@ -466,23 +467,42 @@ export class StadiumScene extends Phaser.Scene {
       }
     }
 
-    // Spawn mascot actors (one per section initially, inactive)
-    this.sections.forEach((section, index) => {
-      const sprite = new Mascot(this, section.x, section.y);
-      // Show faint placeholder in debug mode so user knows spawn points
-      if (this.debugMode) {
-        sprite.setVisible(true);
-        sprite.setAlpha(0.35);
-      } else {
-        sprite.setVisible(false);
+    // Spawn single mascot actor in ground area - aligned to grid
+    if (this.gridManager) {
+      const centerX = this.cameras.main.centerX;
+      const groundY = groundLineY + 60 + (3 * 32); // 60px below ground line + 3 rows (96px)
+      
+      // Convert to grid coordinates and back to world to ensure alignment
+      const gridPos = this.gridManager.worldToGrid(centerX, groundY);
+      if (gridPos) {
+        const alignedPos = this.gridManager.gridToWorld(gridPos.row, gridPos.col);
+        if (alignedPos) {
+          const mascotSprite = new Mascot(this, alignedPos.x, alignedPos.y);
+          this.add.existing(mascotSprite); // Add sprite to scene display list
+          mascotSprite.setVisible(true); // Always visible so we can see the new visuals
+          mascotSprite.setDepth(500); // Above fans and vendors
+          const mascotActorId = 'actor:mascot-0';
+          const mascotActor = new MascotActor(mascotActorId, mascotSprite, null, this.gridManager, false);
+          if (this.pathfindingService) {
+            mascotActor.attachPathfindingService(this.pathfindingService);
+          }
+          this.actorRegistry.register(mascotActor);
+          this.aiManager.registerMascot(mascotActor);
+          this.mascotActors.push(mascotActor);
+          // console.log(`[MascotActor] Registered mascot actor ${mascotActorId} at grid (${gridPos.row}, ${gridPos.col})`);
+          
+          // Listen for t-shirt cannon hits to apply stat changes
+          (mascotActor as any).on?.('tShirtCannonHit', (payload: { x: number; y: number; timestamp: number }) => {
+            this.handleTShirtCannonHit(payload, mascotActor);
+          });
+          
+          // Listen for crowd goes wild event
+          (mascotActor as any).on?.('crowdGoesWild', (payload: { intensity: number }) => {
+            this.handleCrowdGoesWild(payload.intensity);
+          });
+        }
       }
-      const actorId = `actor:mascot-${index}`;
-      const mascotActor = new MascotActor(actorId, sprite, null, this.gridManager, false);
-      this.actorRegistry.register(mascotActor);
-      this.aiManager.registerMascot(mascotActor);
-      this.mascotActors.push(mascotActor);
-      // console.log(`[MascotActor] Registered mascot actor ${actorId} for section ${section.getId()}`);
-    });
+    }
 
     // Setup mascot keyboard controls
     this.setupMascotKeyboardControls();
@@ -1043,8 +1063,11 @@ export class StadiumScene extends Phaser.Scene {
     // Update vendor button cooldowns (real-time countdown)
     this.updateVendorCooldowns();
 
+    // Update mascot UI controls (real-time attention bar and ultimate button)
+    this.updateMascotControls();
+
     // Update targeting reticle cursor validation (real-time)
-    if (this.vendorTargetingActive !== null && this.targetingReticle) {
+    if ((this.vendorTargetingActive !== null || this.mascotTargetingActive) && this.targetingReticle) {
       this.updateTargetingReticle();
     }
   }
@@ -1819,6 +1842,80 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   /**
+   * Setup mascot UI control event listeners (called after dynamic DOM rebuild)
+   */
+  private setupMascotControlListeners(): void {
+    const targetBtn = document.getElementById('mascot-target') as HTMLButtonElement;
+    const ultimateBtn = document.getElementById('mascot-ultimate') as HTMLButtonElement;
+    const attentionBarFill = document.getElementById('attention-bar-fill') as HTMLDivElement;
+    const attentionBarText = document.getElementById('attention-bar-text') as HTMLDivElement;
+
+    if (!targetBtn || !ultimateBtn || !attentionBarFill || !attentionBarText) {
+      console.warn('[StadiumScene] Mascot control elements not found in DOM');
+      return;
+    }
+
+    // Target button - enters mascot targeting mode
+    targetBtn.addEventListener('click', () => {
+      if (this.mascotTargetingActive) {
+        this.exitMascotTargetingMode();
+      } else {
+        this.enterMascotTargetingMode();
+      }
+    });
+
+    // Ultimate button - fires ultimate ability
+    ultimateBtn.addEventListener('click', () => {
+      if (this.mascotActors.length === 0) return;
+      
+      const mascot = this.mascotActors[0];
+      const behavior = (mascot as any).getBehavior?.();
+      
+      if (behavior && behavior.isUltimateReady && behavior.isUltimateReady()) {
+        console.log('[Mascot] Ultimate fired!');
+        // Get section sprites from ActorRegistry
+        const sectionActors = this.actorRegistry.getByCategory('section');
+        const sections = sectionActors.map((actor: any) => actor.getSprite?.()).filter(Boolean);
+        // Get ultimate power from attention bank
+        const ultimatePower = behavior.getAttentionBank?.() || 30;
+        (mascot as any).fireUltimate?.(this, sections, ultimatePower);
+      }
+    });
+
+    // Update attention bar every frame in the update loop (handled separately)
+    // Store references for update method
+    (this as any).mascotControlElements = {
+      targetBtn,
+      ultimateBtn,
+      attentionBarFill,
+      attentionBarText
+    };
+  }
+
+  /**
+   * Update mascot UI controls (called every frame in update loop)
+   */
+  private updateMascotControls(): void {
+    const elements = (this as any).mascotControlElements;
+    if (!elements || this.mascotActors.length === 0) return;
+
+    const mascot = this.mascotActors[0];
+    const behavior = (mascot as any).getBehavior?.();
+    
+    if (!behavior) return;
+
+    // Update attention bar
+    const attentionBank = behavior.getAttentionBank?.() ?? 0;
+    const isUltimateReady = behavior.isUltimateReady?.() ?? false;
+    
+    elements.attentionBarFill.style.width = `${attentionBank}%`;
+    elements.attentionBarText.textContent = `${Math.round(attentionBank)}/100`;
+    
+    // Enable/disable ultimate button based on readiness
+    elements.ultimateBtn.disabled = !isUltimateReady;
+  }
+
+  /**
    * Update vendor sprite positions to match their instance positions
    */
   private updateVendorPositions(): void {
@@ -1999,6 +2096,55 @@ export class StadiumScene extends Phaser.Scene {
       row.appendChild(statusWrap);
       controlsRoot.appendChild(row);
     });
+
+    // Add mascot controls
+    const mascotRow = document.createElement('div');
+    mascotRow.className = 'mascot-controls';
+    mascotRow.style.cssText = 'display:flex;gap:10px;align-items:center;padding:10px;background:rgba(128,0,0,0.2);border:2px solid #800000;border-radius:4px;margin-top:8px;';
+
+    // Mascot label
+    const mascotLabel = document.createElement('span');
+    mascotLabel.textContent = 'Mascot:';
+    mascotLabel.style.cssText = 'color:#ffaa00;font-size:14px;font-weight:bold;';
+    mascotRow.appendChild(mascotLabel);
+
+    // Target button
+    const targetBtn = document.createElement('button');
+    targetBtn.id = 'mascot-target';
+    targetBtn.className = 'mascot-btn';
+    targetBtn.textContent = 'Target: Section A';
+    targetBtn.style.cssText = 'padding:8px 16px;font-size:14px;font-weight:bold;background:#800000;color:#ffaa00;border:2px solid #ffaa00;border-radius:4px;cursor:pointer;';
+    mascotRow.appendChild(targetBtn);
+
+    // Ultimate button
+    const ultimateBtn = document.createElement('button');
+    ultimateBtn.id = 'mascot-ultimate';
+    ultimateBtn.className = 'mascot-btn';
+    ultimateBtn.textContent = 'Fire Ultimate';
+    ultimateBtn.disabled = true;
+    ultimateBtn.style.cssText = 'padding:8px 16px;font-size:14px;font-weight:bold;background:#800000;color:#ffaa00;border:2px solid #ffaa00;border-radius:4px;cursor:pointer;';
+    mascotRow.appendChild(ultimateBtn);
+
+    // Attention bar
+    const attentionBarContainer = document.createElement('div');
+    attentionBarContainer.style.cssText = 'width:120px;height:20px;background:#333;border:2px solid #ffaa00;border-radius:3px;overflow:hidden;position:relative;';
+    
+    const attentionBarFill = document.createElement('div');
+    attentionBarFill.id = 'attention-bar-fill';
+    attentionBarFill.style.cssText = 'height:100%;background:linear-gradient(90deg,#800000,#ffaa00);width:0%;transition:width 0.3s ease;';
+    attentionBarContainer.appendChild(attentionBarFill);
+    
+    const attentionBarText = document.createElement('div');
+    attentionBarText.id = 'attention-bar-text';
+    attentionBarText.textContent = '0/100';
+    attentionBarText.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:bold;text-shadow:1px 1px 2px black;';
+    attentionBarContainer.appendChild(attentionBarText);
+    
+    mascotRow.appendChild(attentionBarContainer);
+    controlsRoot.appendChild(mascotRow);
+
+    // Setup mascot control event listeners
+    this.setupMascotControlListeners();
   }
 
   /**
@@ -2058,6 +2204,13 @@ export class StadiumScene extends Phaser.Scene {
    * Handle canvas click during vendor targeting
    */
   private handleCanvasClick(pointer: Phaser.Input.Pointer): void {
+    // Handle mascot targeting first
+    if (this.mascotTargetingActive && this.gridManager) {
+      this.handleMascotTargetClick(pointer);
+      return;
+    }
+    
+    // Handle vendor targeting
     if (this.vendorTargetingActive === null || !this.gridManager) return;
     
     // Convert world coordinates to grid
@@ -2093,6 +2246,189 @@ export class StadiumScene extends Phaser.Scene {
     
     // Rebuild controls to show assignment
     this.rebuildVendorControls();
+  }
+
+  /**
+   * Enter mascot targeting mode
+   */
+  private enterMascotTargetingMode(): void {
+    if (this.mascotTargetingActive) return;
+    
+    this.mascotTargetingActive = true;
+    console.log('[StadiumScene] Entered mascot targeting mode');
+    
+    // Show reticle
+    if (this.targetingReticle) {
+      this.targetingReticle.show();
+    }
+    
+    // Update button state
+    const btn = document.getElementById('mascot-target') as HTMLButtonElement | null;
+    if (btn) {
+      btn.style.border = '2px solid #ffaa00';
+      btn.style.background = '#a00';
+      btn.textContent = '▶ Click Target ◀';
+    }
+  }
+
+  /**
+   * Exit mascot targeting mode
+   */
+  private exitMascotTargetingMode(): void {
+    if (!this.mascotTargetingActive) return;
+    
+    console.log('[StadiumScene] Exited mascot targeting mode');
+    
+    // Hide reticle
+    if (this.targetingReticle) {
+      this.targetingReticle.hide();
+    }
+    
+    // Restore button state
+    const btn = document.getElementById('mascot-target') as HTMLButtonElement | null;
+    if (btn) {
+      btn.style.border = '2px solid #ffaa00';
+      btn.style.background = '#800000';
+      btn.textContent = 'Target Section';
+    }
+    
+    this.mascotTargetingActive = false;
+  }
+
+  /**
+   * Handle mascot target click
+   */
+  private handleMascotTargetClick(pointer: Phaser.Input.Pointer): void {
+    if (!this.gridManager || this.mascotActors.length === 0) return;
+    
+    // Convert world coordinates to grid
+    const gridPos = this.gridManager.worldToGrid(pointer.worldX, pointer.worldY);
+    if (!gridPos) {
+      console.log('[Mascot] Click outside grid bounds, cancelling targeting');
+      this.exitMascotTargetingMode();
+      return;
+    }
+    
+    // Validate click: allow 'seat' zone only
+    const cell = this.gridManager.getCell(gridPos.row, gridPos.col);
+    if (!cell || cell.zoneType !== 'seat') {
+      console.log('[Mascot] Click on non-seat tile, cancelling targeting');
+      this.exitMascotTargetingMode();
+      return;
+    }
+    
+    // Determine which section this seat belongs to
+    const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
+    if (sectionIdx === null) {
+      console.log('[Mascot] Could not determine section for clicked seat');
+      this.exitMascotTargetingMode();
+      return;
+    }
+    
+    // Get section ID (A, B, C)
+    const sectionId = String.fromCharCode(65 + sectionIdx); // 0='A', 1='B', 2='C'
+    const mascot = this.mascotActors[0];
+    
+    // Check if section is on cooldown
+    if (mascot.isSectionOnCooldown(sectionId)) {
+      const remaining = Math.ceil(mascot.getSectionCooldownRemaining(sectionId) / 1000);
+      console.log(`[Mascot] Section ${sectionId} is on cooldown (${remaining}s remaining)`);
+      this.exitMascotTargetingMode();
+      return;
+    }
+    
+    // Fire at clicked position
+    console.log(`[Mascot] Firing at section ${sectionId} grid (${gridPos.row},${gridPos.col})`);
+    mascot.fireTShirtCannonAt(pointer.worldX, pointer.worldY, sectionId, sectionIdx, this);
+    
+    // Exit targeting mode
+    this.exitMascotTargetingMode();
+  }
+
+  /**
+   * Handle t-shirt cannon hit: apply stat changes and visual reactions
+   */
+  private handleTShirtCannonHit(payload: { x: number; y: number; timestamp: number }, mascotActor: any): void {
+    if (!this.gridManager) return;
+
+    const { x, y } = payload;
+    const hitGrid = this.gridManager.worldToGrid(x, y);
+    if (!hitGrid) return;
+
+    // Query fans within ripple radius (3 cells)
+    const rippleRadius = 3;
+    const fanActors = this.actorRegistry.getByCategory('fan');
+    let totalAttentionDrained = 0;
+
+    fanActors.forEach((actor: any) => {
+      const fanGrid = { row: actor.gridRow, col: actor.gridCol };
+      const distance = Math.abs(fanGrid.row - hitGrid.row) + Math.abs(fanGrid.col - hitGrid.col);
+      
+      if (distance <= rippleRadius) {
+        // Apply t-shirt cannon effect via actor (triggers excited state + animation)
+        const happinessBoost = 3;
+        const attentionDrain = 2;
+        
+        // Calculate intensity falloff (1.5 at epicenter, 0.5 at max distance) - extreme for visibility
+        const intensity = 1.5 - (distance / rippleRadius) * 1.0;
+        
+        // Slower ripple delay: 150ms per cell (3x slower than 50ms)
+        // Animation duration is 300ms, so with 150ms spacing there's good overlap but visible wave
+        const delay = distance * 150; // 0ms at epicenter, 450ms at distance 3
+        
+        console.log(`[TShirtCannon] Fan at (${fanGrid.row},${fanGrid.col}) distance=${distance} intensity=${intensity.toFixed(2)} delay=${delay.toFixed(0)}ms`);
+        
+        if (actor.applyTShirtCannonEffect) {
+          // Apply stat changes immediately
+          if (actor.modifyStats) {
+            actor.modifyStats({ happiness: happinessBoost, attention: -attentionDrain });
+            totalAttentionDrained += attentionDrain;
+          }
+          
+          // Trigger visual reaction with ripple delay
+          this.time.delayedCall(delay, () => {
+            if (typeof (actor as any).triggerExcitedReaction === 'function') {
+              (actor as any).triggerExcitedReaction(intensity);
+            }
+          });
+        } else {
+          console.warn('[TShirtCannon] applyTShirtCannonEffect not found on actor', actor);
+        }
+      }
+    });
+
+    // Add drained attention to mascot bank
+    const behavior = mascotActor.getBehavior?.();
+    if (behavior && behavior.addAttention) {
+      behavior.addAttention(totalAttentionDrained);
+    }
+
+    console.log(`[Mascot] Drained ${totalAttentionDrained} attention from fans`);
+  }
+
+  /**
+   * Handle crowd goes wild animation (triggered by ultimate ability)
+   * @param intensity Intensity of the crowd reaction (0.0-1.0, based on ultimate power 30-100)
+   */
+  private handleCrowdGoesWild(intensity: number): void {
+    console.log(`[CrowdGoesWild] Intensity: ${intensity.toFixed(2)}`);
+    
+    const fanActors = this.actorRegistry.getByCategory('fan');
+    
+    // Make all fans bounce with random delays for wave effect
+    fanActors.forEach((actor: any) => {
+      // Random delay 0-500ms for organic stadium-wide excitement
+      const delay = Math.random() * 500;
+      
+      // Scale intensity: 0.0 (30p) = 0.5 reaction, 1.0 (100p) = 1.5 reaction
+      const fanIntensity = 0.5 + intensity * 1.0;
+      
+      this.time.delayedCall(delay, () => {
+        if (typeof (actor as any).triggerExcitedReaction === 'function') {
+          (actor as any).triggerExcitedReaction(fanIntensity);
+        }
+      });
+    });
   }
 
   /**
@@ -2230,11 +2566,30 @@ export class StadiumScene extends Phaser.Scene {
 
     // Check zone, allow seats and rowEntry boundary cells on seat rows
     const zone = this.gridManager.getZoneType(gridPos.row, gridPos.col);
-    // console.log(`[TargetingReticle] Hovered cell at row=${gridPos.row}, col=${gridPos.col}, zoneType=${zone}`);
     const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
     const isValidTarget = zone === 'seat' && sectionIdx !== null;
 
-    this.targetingReticle.setTargetable(!!isValidTarget, isValidTarget ? sectionIdx : null);
+    // Handle mascot targeting (check cooldowns and show orange for cooldown)
+    if (this.mascotTargetingActive && this.mascotActors.length > 0 && isValidTarget && sectionIdx !== null) {
+      const mascot = this.mascotActors[0];
+      const sectionId = String.fromCharCode(65 + sectionIdx); // 0='A', 1='B', 2='C'
+      
+      if (mascot.isSectionOnCooldown(sectionId)) {
+        // Section is on cooldown - show orange reticle with cooldown text
+        const remainingMs = mascot.getSectionCooldownRemaining(sectionId);
+        const remainingSec = Math.ceil(remainingMs / 1000);
+        this.targetingReticle.setTargetable(false, sectionIdx, 0xff8800); // Orange
+        this.targetingReticle.setCooldownText(`Section Cooldown: ${remainingSec}s`);
+      } else {
+        // Valid target
+        this.targetingReticle.setTargetable(true, sectionIdx);
+        this.targetingReticle.setCooldownText('');
+      }
+    } else {
+      // Vendor targeting or invalid
+      this.targetingReticle.setTargetable(!!isValidTarget, isValidTarget ? sectionIdx : null);
+      this.targetingReticle.setCooldownText('');
+    }
   }
 
   /**
