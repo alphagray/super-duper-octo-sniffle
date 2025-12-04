@@ -4,6 +4,7 @@ import { gameBalance } from '@/config/gameBalance';
 interface SessionScore {
   grade: string;
   completedWaves: number;
+  maxPossibleWaves: number;
   netHappiness: number;
   netAttention: number;
   netThirst: number;
@@ -76,7 +77,7 @@ export class ScoreReportScene extends Phaser.Scene {
     const lineHeight = 45;
 
     const stats = [
-      { label: 'Waves Completed:', value: this.sessionScore.completedWaves.toString() },
+      { label: 'Waves Completed:', value: `${this.sessionScore.completedWaves} / ${this.sessionScore.maxPossibleWaves}` },
       { label: 'Participation Rate:', value: Math.round(this.sessionScore.scorePercentage * 100) + '%' },
       { label: 'Net Happiness:', value: this.formatStat(this.sessionScore.netHappiness) },
       { label: 'Net Attention:', value: this.formatStat(this.sessionScore.netAttention) },

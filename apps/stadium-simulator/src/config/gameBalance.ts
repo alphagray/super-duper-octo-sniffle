@@ -45,7 +45,7 @@ export const gameBalance = {
     thirstFreezeDuration: 4000,
     attentionFreezeDuration: 5000,
 
-    // Stat calculation modifiers
+    // === Wave Calculation ===
     waveChanceHappinessWeight: 0.5,
     waveChanceAttentionWeight: 0.5,
     waveChanceThirstPenalty: 0.3,
@@ -71,7 +71,7 @@ export const gameBalance = {
    */
   waveStrength: {
     starting: 70,
-    successBonus: 8,
+    successBonus: 10, // Increased from 8 - faster growth
     failurePenalty: -20,
     recoveryBonus: 10,
     recoveryThreshold: 30,
@@ -82,6 +82,10 @@ export const gameBalance = {
     strengthModifier: 0.004,
     columnSuccessThreshold: 0.6, // participation rate for column success
     peerPressureThreshold: 0.6, // % of column needed to trigger peer pressure
+    
+    // === Momentum System ===
+    consecutiveSuccessCap: 30, // NEW: Max +30 from streaks (prevents runaway)
+    consecutiveSuccessBonus: 5, // NEW: +5 per consecutive success
   },
 
   /**
@@ -269,9 +273,39 @@ export const gameBalance = {
     // Points awarded for various achievements
     basePointsPerWave: 100,
     participationBonus: 10, // per percentage point of participation
-    // Estimated max waves based on session duration and wave timing
-    // Calculated as: Math.ceil(runModeDuration / (baseCooldown + triggerCountdown))
-    maxWavesEstimate: 8, // ~100s session / ~12.5s per wave cycle
+    
+    /**
+     * Calculate maximum possible waves for a session duration.
+     * 
+     * Formula: Math.ceil(sessionDuration / totalCycleTime)
+     * where totalCycleTime = triggerCountdown + baseCooldown + avgWaveLength
+     * 
+     * Example calculation for 100s session:
+     * - Total cycle time = 5000 + 15000 + 2000 = 22000ms
+     * - Max waves = Math.ceil(100000 / 22000) = 5 waves
+     * 
+     * Assumptions:
+     * - Average wave takes ~2000ms to propagate across all sections
+     * - Countdown time: 5000ms (from waveTiming.triggerCountdown)
+     * - Cooldown time: 15000ms (from waveTiming.baseCooldown)
+     * - Success refund: -5000ms (from waveTiming.successRefund, not included in worst case)
+     * 
+     * @param sessionDurationMs - Total session duration in milliseconds
+     * @returns Estimated maximum waves achievable (rounded up)
+     */
+    calculateMaxWavesEstimate(sessionDurationMs: number): number {
+      const waveTiming = gameBalance.waveTiming;
+      // Average time for a wave to complete propagation across all sections
+      // This is an empirical estimate based on typical wave behavior
+      const avgWaveLength = 2000; // ~2 seconds for wave to complete
+      
+      // Total time per wave cycle (worst case, no success refunds)
+      // = countdown + cooldown + propagation time
+      const totalCycleTime = waveTiming.triggerCountdown + waveTiming.baseCooldown + avgWaveLength;
+      
+      // Calculate max waves (round up since partial waves still count)
+      return Math.ceil(sessionDurationMs / totalCycleTime);
+    },
   },
 
   /**
@@ -302,6 +336,13 @@ export const gameBalance = {
     },
     waveCelebration: {
       yOffset: -67, // vertical offset for overlay above section top
+    },
+    speechBubble: {
+      duration: 3000, // ms to display bubble
+      fadeInDuration: 200, // ms for fade in animation
+      fadeOutDuration: 200, // ms for fade out animation
+      maxBubbles: 3, // maximum simultaneous bubbles
+      offsetY: 20, // pixels above target sprite
     },
   },
 
@@ -353,6 +394,15 @@ export const gameBalance = {
     debugRadius: 12,
     trailLength: 5, // number of trail points to show
     trailFadeRate: 0.15, // how quickly trail points fade
+    
+    // === Dynamic Speed Scaling ===
+    baseSpeed: 150, // pixels per second (weak wave)
+    speedMultiplier: 1.5, // multiplier applied to strength (strength * speedMultiplier)
+    // Formula: speed = baseSpeed + (strength * speedMultiplier)
+    // At strength 70: 150 + (70 * 1.5) = 255 px/s
+    // At strength 100: 150 + (100 * 1.5) = 300 px/s
+    minSpeed: 150, // absolute minimum
+    maxSpeed: 300, // absolute maximum
   },
 
   /**

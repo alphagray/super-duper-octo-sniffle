@@ -18,7 +18,8 @@
     "test:integration": "vitest --run src/__tests__/integration",
     "audit:security": "./scripts/security-audit.sh",
     "vercel:dev": "vercel dev",
-    "vercel:deploy": "vercel --prod"
+    "vercel:deploy": "vercel --prod",
+    "deploy:itch": "pnpm run build && butler push dist $ITCH_ACCOUNT/$ITCH_PROJECT:html5 --userversion $(git rev-parse --short HEAD)"
   },
   "dependencies": {
     "axios": "^1.7.9",

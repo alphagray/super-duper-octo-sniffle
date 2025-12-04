@@ -313,8 +313,14 @@ export class FanActor extends AnimatedActor {
    * @param sceneOrTimestamp Scene reference or current timestamp in milliseconds
    */
   public drinkServed(sceneOrTimestamp: Phaser.Scene | number): void {
-    this.thirst = 0;
-    this.happiness = Math.min(100, this.happiness + 15);
+    // Reduce thirst using config value
+    this.thirst = Math.max(0, this.thirst - gameBalance.fanStats.thirstReductionOnServe);
+    
+    // NEW: Recover happiness on vendor serve
+    this.happiness = Math.min(
+      gameBalance.fanStats.happinessMaximum || 100,
+      this.happiness + gameBalance.fanStats.happinessRecoveryOnServe
+    );
     
     const timestamp = typeof sceneOrTimestamp === 'number' 
       ? sceneOrTimestamp 

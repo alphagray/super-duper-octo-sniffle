@@ -14,6 +14,7 @@ interface AggregateStats {
 interface SessionScore {
   grade: string;
   completedWaves: number;
+  maxPossibleWaves: number;
   netHappiness: number;
   netAttention: number;
   netThirst: number;
@@ -470,6 +471,10 @@ export class GameStateManager {
     const netAttention = finalAggregateStats.attention - this.initialAggregateStats.attention;
     const netThirst = this.initialAggregateStats.thirst - finalAggregateStats.thirst; // inverted: lower is better
 
+    // Calculate dynamic max waves based on session duration
+    const sessionDuration = gameBalance.sessionConfig.runModeDuration;
+    const maxPossibleWaves = gameBalance.scoring.calculateMaxWavesEstimate(sessionDuration);
+
     // Determine grade based on completed waves
     let grade = 'F';
     const waveThresholds = gameBalance.scoring.gradeThresholds;
@@ -482,7 +487,6 @@ export class GameStateManager {
       grade = 'S-';
     } else {
       // Fall back to percentage-based grading using dynamic max waves estimate
-      const maxPossibleWaves = gameBalance.scoring.maxWavesEstimate;
       const percentage = this.completedWaves / maxPossibleWaves;
 
       // Sort thresholds in descending order to ensure deterministic grade assignment
@@ -496,14 +500,15 @@ export class GameStateManager {
       }
     }
 
-  // Calculate final score using dynamic max waves estimate
-  const maxPossibleScore = gameBalance.scoring.basePointsPerWave * gameBalance.scoring.maxWavesEstimate;
+    // Calculate final score using dynamic max waves estimate
+    const maxPossibleScore = gameBalance.scoring.basePointsPerWave * maxPossibleWaves;
     const finalScore = Math.round(this.completedWaves * gameBalance.scoring.basePointsPerWave);
     const scorePercentage = finalScore / maxPossibleScore;
 
     return {
       grade,
       completedWaves: this.completedWaves,
+      maxPossibleWaves,
       netHappiness,
       netAttention,
       netThirst,

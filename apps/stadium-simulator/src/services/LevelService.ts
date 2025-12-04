@@ -3,6 +3,7 @@
 
 import type { StadiumSceneConfig, FanDescriptor } from '@/managers/interfaces/ZoneConfig';
 import { gameBalance } from '@/config/gameBalance';
+import { getAssetPath } from '@/utils/assetPath';
 
 // Re-export FanDescriptor as FanData for backward compatibility
 export type FanData = FanDescriptor;
@@ -50,7 +51,7 @@ export class LevelService {
     try {
       // Fetch the JSON configuration
       // Use relative path from public/ - Vite will resolve it correctly with base path
-      const response = await fetch('/stadium-simulator/assets/stadium-grid-config.json');
+      const response = await fetch(getAssetPath('assets/stadium-grid-config.json'));
       if (!response.ok) {
         throw new Error(`Failed to load grid config: ${response.statusText}`);
       }

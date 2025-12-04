@@ -14,6 +14,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AIContentManager } from '@/systems/AIContentManager';
+import { getAssetPath } from '@/utils/assetPath';
 import type {
   GameAIContent,
   VendorPersonality,
@@ -33,7 +34,7 @@ describe('Content Quality Tests', () => {
 
     // Fetch actual static fallback content
     try {
-      const response = await fetch('/stadium-simulator/assets/ai-content-static.json');
+      const response = await fetch(getAssetPath('assets/ai-content-static.json'));
       if (response.ok) {
         staticContent = await response.json();
       }

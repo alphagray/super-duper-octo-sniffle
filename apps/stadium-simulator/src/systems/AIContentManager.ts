@@ -13,6 +13,7 @@
  */
 
 import { openDB, type IDBPDatabase } from 'idb';
+import { getAssetPath } from '@/utils/assetPath';
 import type {
   GameAIContent,
   ContentCacheEntry,
@@ -136,7 +137,7 @@ export class AIContentManager {
    */
   private async loadFallbackContent(): Promise<void> {
     try {
-      const response = await fetch('/stadium-simulator/assets/ai-content-static.json');
+      const response = await fetch(getAssetPath('assets/ai-content-static.json'));
       if (!response.ok) {
         throw new Error(`Failed to load fallback content: ${response.statusText}`);
       }

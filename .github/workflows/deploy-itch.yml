@@ -1,0 +1,127 @@
+name: Deploy to itch.io
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/stadium-simulator/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (optional, defaults to git SHA)'
+        required: false
+        type: string
+
+# Ensure only one deployment runs at a time
+concurrency:
+  group: itch-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Deploy to itch.io
+    runs-on: ubuntu-latest
+    environment: itch-io
+    
+    defaults:
+      run:
+        working-directory: apps/stadium-simulator
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('apps/stadium-simulator/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Verify lockfile exists
+        run: |
+          if [ ! -f "pnpm-lock.yaml" ]; then
+            echo "❌ pnpm-lock.yaml not found in $(pwd)"
+            ls -la
+            exit 1
+          fi
+          echo "✅ pnpm-lock.yaml found"
+          head -5 pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm run type-check
+
+      - name: Build game
+        run: pnpm run build
+        env:
+          NODE_ENV: production
+          VITE_DEPLOY_TARGET: itch
+
+      - name: Verify build output
+        run: |
+          if [ ! -f "dist/index.html" ]; then
+            echo "❌ Build failed: dist/index.html not found"
+            exit 1
+          fi
+          echo "✅ Build verified: dist/index.html exists"
+          echo "📦 Build contents:"
+          ls -la dist/
+
+      - name: Install Butler
+        run: |
+          set -e
+          # Download Butler binary and its SHA256SUMS
+          curl -L -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          # curl -L -o SHA256SUMS https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default.sha256
+          # Extract expected hash from SHA256SUMS
+          # EXPECTED_HASH=$(cat SHA256SUMS | awk '{print $1}')
+          # Calculate actual hash
+          # ACTUAL_HASH=$(sha256sum butler.zip | awk '{print $1}')
+          # Compare hashes
+          # if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+          #  echo "❌ Butler binary checksum verification failed!"
+          #  echo "Expected: $EXPECTED_HASH"
+          #  echo "Actual:   $ACTUAL_HASH"
+          #  exit 1
+          # fi
+          # echo "✅ Butler binary checksum verified."
+          unzip butler.zip
+          chmod +x butler
+          ./butler -V
+
+      - name: Push to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          VERSION="${{ inputs.version || github.sha }}"
+          echo "🚀 Deploying version: $VERSION"
+          ./butler push dist ${{ secrets.ITCH_ACCOUNT }}/${{ vars.ITCH_PROJECT }}:html5 --userversion "$VERSION"
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🎮 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Project**: ${{ secrets.ITCH_ACCOUNT }}/${{ vars.ITCH_PROJECT }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Game URL**: https://${{ secrets.ITCH_ACCOUNT }}.itch.io/${{ vars.ITCH_PROJECT }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Channel**: html5" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ inputs.version || github.sha }}" >> $GITHUB_STEP_SUMMARY

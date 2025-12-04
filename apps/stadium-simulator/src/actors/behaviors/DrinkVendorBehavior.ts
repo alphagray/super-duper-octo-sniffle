@@ -91,6 +91,15 @@ export class DrinkVendorBehavior implements AIActorBehavior {
    * Vendor will scan only this section for targets
    */
   public assignToSection(sectionIdx: number, targetRow?: number, targetCol?: number): void {
+    console.log(`[DrinkVendorBehavior] assignToSection called: section=${sectionIdx}, targetRow=${targetRow}, targetCol=${targetCol}, hasPathfinding=${!!this.pathfindingService}`);
+
+    // Defensive check: Cannot assign without pathfinding service
+    if (!this.pathfindingService) {
+      console.error('[DrinkVendorBehavior] Cannot assign to section - PathfindingService is not available!');
+      this.state = 'awaitingAssignment' as AIActorState;
+      return;
+    }
+
     this.assignedSectionIdx = sectionIdx;
     this.state = 'idle' as AIActorState;
     this.scanTimer = 0; // Scan immediately
@@ -151,7 +160,7 @@ export class DrinkVendorBehavior implements AIActorBehavior {
         this.state = 'moving' as AIActorState;
         // console.log(`[DrinkVendorBehavior] Pathing to target (${desiredRow},${desiredCol}), path has ${path.length} cells (state=moving)`);
       } else {
-        // Detailed failure diagnostics
+        // Pathfinding failed - detailed failure diagnostics
         const startGrid = this.gridManager.worldToGrid(vendorPos.x, vendorPos.y);
         const endGrid = this.gridManager.worldToGrid(targetWorld.x, targetWorld.y);
         // console.warn(`[DrinkVendorBehavior] No path to target (${desiredRow},${desiredCol}). startGrid=${startGrid ? `${startGrid.row},${startGrid.col}` : 'null'} endGrid=${endGrid ? `${endGrid.row},${endGrid.col}` : 'null'}`);
@@ -163,6 +172,19 @@ export class DrinkVendorBehavior implements AIActorBehavior {
           const c = this.gridManager.getCell(endGrid.row, endGrid.col);
           // console.warn('[EndCell]', { passable: c?.passable, zone: c?.zoneType, walls: c?.walls, out: c?.allowedOutgoing, inc: c?.allowedIncoming });
         }
+
+        // TODO: Emit event for UI feedback when AIManager has public event method
+        // this.aiManager.emit('vendorAssignmentFailed', {
+        //   vendorId: (this.vendorActor as any).id,
+        //   reason: 'No path found',
+        //   targetRow: desiredRow,
+        //   targetCol: desiredCol,
+        //   sectionIdx
+        // });
+
+        // Reset to awaiting assignment so user can retry
+        this.state = 'awaitingAssignment' as AIActorState;
+        this.assignedSectionIdx = null;
       }
     } else {
       // console.log(`[DrinkVendorBehavior] No target coordinates or pathfinding service unavailable, will scan for targets`);

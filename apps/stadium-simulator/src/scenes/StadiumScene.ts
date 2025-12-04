@@ -9,6 +9,7 @@ import { MascotActor } from '@/actors/MascotActor';
 import { VendorState } from '@/managers/interfaces';
 import { AnnouncerService } from '@/managers/AnnouncerService';
 import { DevPanel } from '@/ui/DevPanel';
+import { SpeechBubble } from '@/ui/SpeechBubble';
 
 import { gameBalance } from '@/config/gameBalance';
 import { ActorRegistry } from '@/actors/base/ActorRegistry';
@@ -26,9 +27,11 @@ import { LevelService } from '@/services/LevelService';
 import { GridOverlay } from '@/scenes/GridOverlay';
 import { PathfindingService } from '@/services/PathfindingService';
 import { TargetingIndicator } from '@/components/TargetingIndicator';
+import { CatchParticles } from '@/components/CatchParticles';
 import { TargetingReticle } from '@/ui/TargetingReticle';
 import { OverlayManager } from '@/managers/OverlayManager';
 import PersonalityIntegrationManager from '@/systems/PersonalityIntegrationManager';
+import { RipplePropagationEngine } from '@/systems/RipplePropagationEngine';
 
 /**
  * StadiumScene renders the visual state of the stadium simulator
@@ -68,11 +71,14 @@ export class StadiumScene extends Phaser.Scene {
   private groundActor?: any;
   private gridOverlay?: GridOverlay;
   public targetingIndicator!: TargetingIndicator;
+  private rippleEngine!: RipplePropagationEngine;
   private pathfindingService?: PathfindingService;
   private targetingReticle?: TargetingReticle;
   private vendorTargetingActive: number | null = null; // Vendor ID currently being targeted
   private mascotTargetingActive: boolean = false; // Mascot targeting mode active
   private overlayManager?: OverlayManager;
+  private activeSpeechBubbles: SpeechBubble[] = [];
+
 
   constructor() {
     super({ key: 'StadiumScene' });
@@ -221,11 +227,15 @@ export class StadiumScene extends Phaser.Scene {
     this.aiManager = new AIManager(this.gameState, 2, this.gridManager, this.actorRegistry);
 
     // Initialize shared PathfindingService once and attach it everywhere
+    console.log('[StadiumScene] Initializing PathfindingService...', { hasGridManager: !!this.gridManager });
     if (this.gridManager) {
       this.pathfindingService = new PathfindingService(this.gridManager);
+      console.log('[StadiumScene] PathfindingService created successfully');
       this.aiManager.attachPathfindingService(this.pathfindingService);
+      console.log('[StadiumScene] PathfindingService attached to AIManager');
     } else {
       // console.warn('[StadiumScene] Cannot initialize PathfindingService without GridManager');
+      console.error('[StadiumScene] CRITICAL: Cannot initialize PathfindingService without GridManager - vendors will not be able to pathfind!');
     }
 
     // Create SectionActors from level data (Actor-first, data-driven!)
@@ -411,6 +421,9 @@ export class StadiumScene extends Phaser.Scene {
     }
     this.targetingIndicator = new TargetingIndicator(this);
 
+    // Initialize ripple propagation engine for mascot effects
+    this.rippleEngine = new RipplePropagationEngine();
+
     // Create GridOverlay for debug rendering (must be in same scene as camera)
     if (this.gridManager) {
       this.gridOverlay = new GridOverlay(this, this.gridManager);
@@ -472,42 +485,27 @@ export class StadiumScene extends Phaser.Scene {
       }
     }
 
-    // Spawn single mascot actor in ground area - aligned to grid
-    if (this.gridManager) {
-      const centerX = this.cameras.main.centerX;
-      const groundY = groundLineY + 60 + (3 * 32); // 60px below ground line + 3 rows (96px)
-      
-      // Convert to grid coordinates and back to world to ensure alignment
-      const gridPos = this.gridManager.worldToGrid(centerX, groundY);
-      if (gridPos) {
-        const alignedPos = this.gridManager.gridToWorld(gridPos.row, gridPos.col);
-        if (alignedPos) {
-          const mascotSprite = new Mascot(this, alignedPos.x, alignedPos.y);
-          this.add.existing(mascotSprite); // Add sprite to scene display list
-          mascotSprite.setVisible(true); // Always visible so we can see the new visuals
-          mascotSprite.setDepth(500); // Above fans and vendors
-          const mascotActorId = 'actor:mascot-0';
-          const mascotActor = new MascotActor(mascotActorId, mascotSprite, null, this.gridManager, false);
-          if (this.pathfindingService) {
-            mascotActor.attachPathfindingService(this.pathfindingService);
-          }
-          this.actorRegistry.register(mascotActor);
-          this.aiManager.registerMascot(mascotActor);
-          this.mascotActors.push(mascotActor);
-          // console.log(`[MascotActor] Registered mascot actor ${mascotActorId} at grid (${gridPos.row}, ${gridPos.col})`);
-          
-          // Listen for t-shirt cannon hits to apply stat changes
-          (mascotActor as any).on?.('tShirtCannonHit', (payload: { x: number; y: number; timestamp: number }) => {
-            this.handleTShirtCannonHit(payload, mascotActor);
-          });
-          
-          // Listen for crowd goes wild event
-          (mascotActor as any).on?.('crowdGoesWild', (payload: { intensity: number }) => {
-            this.handleCrowdGoesWild(payload.intensity);
-          });
-        }
+    // Spawn mascot actors (one per section initially, inactive)
+    this.sections.forEach((section, index) => {
+      const sprite = new Mascot(this, section.x, section.y);
+      // Show faint placeholder in debug mode so user knows spawn points
+      if (this.debugMode) {
+        sprite.setVisible(true);
+        sprite.setAlpha(0.35);
+      } else {
+        sprite.setVisible(false);
       }
-    }
+      const actorId = `actor:mascot-${index}`;
+      const mascotActor = new MascotActor(actorId, sprite, null, this.gridManager, false);
+      this.actorRegistry.register(mascotActor);
+      this.aiManager.registerMascot(mascotActor);
+      // Attach AIManager to behavior so it can access sections/fans
+      mascotActor.getBehavior().attachAIManager(this.aiManager);
+      this.mascotActors.push(mascotActor);
+      // Wire mascot events for stat effects and visual feedback
+      this.wireMascotEvents(mascotActor);
+      console.log(`[MascotActor] Registered and wired events for ${actorId} in section ${section.getId()}`);
+    });
 
     // Setup mascot keyboard controls
     this.setupMascotKeyboardControls();
@@ -1554,6 +1552,10 @@ export class StadiumScene extends Phaser.Scene {
     // Clean up on scene shutdown
     this.events.on('shutdown', () => {
       debugPanel.remove();
+      
+      // Clean up speech bubbles
+      this.activeSpeechBubbles.forEach(b => b.destroy());
+      this.activeSpeechBubbles = [];
     });
   }
 
@@ -1650,6 +1652,10 @@ export class StadiumScene extends Phaser.Scene {
         sprite.setMovementState('cooldown');
       }
       // console.log(`[Vendor] Vendor ${data.vendorId} completed service`);
+      console.log(`[Vendor] Vendor ${data.vendorId} completed service`);
+      
+      // Show speech bubble on service completion
+      this.showVendorDialogue(data.vendorId);
     });
 
     this.aiManager.on('vendorDistracted', (data: { vendorId: number }) => {
@@ -1856,6 +1862,110 @@ export class StadiumScene extends Phaser.Scene {
       this.mascotActors.forEach(m => m.setMovementMode(this.autoRotationMode ? 'auto' : 'manual'));
       // console.log(`[MascotActor] Auto-rotation mode: ${this.autoRotationMode ? 'ON' : 'OFF'}`);
     });
+  }
+
+  /**
+   * Wire mascot event listeners for stat effects and ability notifications
+   */
+  private wireMascotEvents(mascot: MascotActor): void {
+    // Get the sprite to listen for events (events are emitted through the sprite)
+    const sprite = mascot.getSprite();
+
+    // Listen for stat effect events (replaces cannonFired)
+    sprite.on('mascotStatEffect', (data: { phase: string; effect: any; ultimate: boolean; targets: any }) => {
+      this.handleMascotStatEffect(data, mascot);
+    });
+
+    sprite.on('mascotAbilityStart', (data: { phase: string; timestamp: number }) => {
+      console.log(`[Mascot] Ability started: ${data.phase}`);
+    });
+
+    // Listen for activated event (speech bubbles)
+    sprite.on('activated', (data: { section: string }) => {
+      console.log(`[Mascot] Activated in section ${data.section}`);
+      this.showMascotDialogue(mascot);
+    });
+  }
+
+  /**
+   * Handle mascot stat effect event - show targeting and apply ripple
+   */
+  private handleMascotStatEffect(data: any, mascot: MascotActor): void {
+    const section = mascot.getAssignedSection();
+    if (!section) return;
+
+    // Get SectionActor for this section
+    const sectionActors = this.actorRegistry.getByCategory('section');
+    const sectionActor = sectionActors.find((sa: any) => sa.getSection().getId() === section.getId());
+    if (!sectionActor) return;
+
+    // Show targeting indicator (1s preview)
+    this.showMascotTargetingIndicator(sectionActor, data.phase);
+
+    // After 1s delay, apply ripple effects
+    this.time.delayedCall(1000, () => {
+      this.applyMascotRippleEffects(sectionActor, data);
+    });
+  }
+
+  /**
+   * Show targeting indicator for mascot activation
+   */
+  private showMascotTargetingIndicator(sectionActor: any, phase: string): void {
+    // Get fans from section based on phase
+    const fans = sectionActor.getFans();
+
+    // For cluster phase, target disinterested fans (attention < 30, happiness < 40)
+    let targetFans = fans;
+    if (phase === 'cluster') {
+      targetFans = fans.filter((fan: any) => {
+        const stats = fan.getStats?.() || { attention: 50, happiness: 50 };
+        return stats.attention < 30 && stats.happiness < 40;
+      });
+    }
+
+    if (targetFans.length > 0 && this.targetingIndicator) {
+      this.targetingIndicator.showTargetArea(targetFans, 1000);
+    }
+  }
+
+  /**
+   * Apply ripple effects from mascot activation
+   */
+  private applyMascotRippleEffects(sectionActor: any, data: any): void {
+    const fanActors = sectionActor.getFanActors();
+    if (!fanActors || fanActors.length === 0) return;
+
+    // Find disinterested fans for ripple epicenters
+    const disinterestedFans = fanActors.filter((fan: any) => {
+      const stats = fan.getStats();
+      return stats.attention < 30 && stats.happiness < 40;
+    });
+
+    if (disinterestedFans.length === 0) {
+      console.log('[Mascot] No disinterested fans to target');
+      return;
+    }
+
+    // Apply ripple from each disinterested fan (up to 5 epicenters)
+    const epicenters = disinterestedFans.slice(0, 5);
+
+    epicenters.forEach((epicenterFan: any) => {
+      // Calculate ripple effect
+      const ripple = this.rippleEngine.calculateRipple(epicenterFan, sectionActor);
+
+      // Apply ripple to affected fans
+      this.rippleEngine.applyRipple(ripple, sectionActor);
+
+      // Get fan sprite for particle position
+      const fanSprite = sectionActor.getFans().find((s: any) => s.fanActor?.id === epicenterFan.id);
+      if (fanSprite) {
+        // Spawn catch particles at epicenter
+        CatchParticles.create(this, fanSprite.x, fanSprite.y);
+      }
+    });
+
+    console.log(`[Mascot] Applied ripple from ${epicenters.length} epicenters, affected ${disinterestedFans.length} fans`);
   }
 
   /**
@@ -2256,7 +2366,7 @@ export class StadiumScene extends Phaser.Scene {
     
     // Handle vendor targeting
     if (this.vendorTargetingActive === null || !this.gridManager) return;
-    
+
     // Convert world coordinates to grid
     const gridPos = this.gridManager.worldToGrid(pointer.worldX, pointer.worldY);
     if (!gridPos) {
@@ -2272,22 +2382,23 @@ export class StadiumScene extends Phaser.Scene {
       this.exitVendorTargetingMode();
       return;
     }
-    
+
     // Determine which section this seat belongs to
     const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
     if (sectionIdx === null) {
       // console.log('[StadiumScene] Could not determine section for clicked seat');
+      this.showAssignmentError('Could not determine section');
       this.exitVendorTargetingMode();
       return;
     }
-    
+
     // Assign vendor to section
     // console.log(`[StadiumScene] Assigning vendor ${this.vendorTargetingActive} to section ${sectionIdx} via click at grid (${gridPos.row},${gridPos.col})`);
     this.aiManager.assignVendorToSection(this.vendorTargetingActive, sectionIdx, gridPos.row, gridPos.col);
-    
+
     // Exit targeting mode
     this.exitVendorTargetingMode();
-    
+
     // Rebuild controls to show assignment
     this.rebuildVendorControls();
   }
@@ -2672,6 +2783,99 @@ export class StadiumScene extends Phaser.Scene {
     graphics.fillRect(0, 0, 4, 4);
     graphics.generateTexture('particle', 4, 4);
     graphics.destroy();
+  }
+
+  /**
+   * Show speech bubble for vendor service
+   */
+  private showVendorDialogue(vendorId: number): void {
+    const vendorSprite = this.vendorSprites.get(vendorId);
+    if (!vendorSprite) return;
+
+    // Get dialogue from personality system
+    const dialogue = vendorSprite.triggerDialogue('vendorServe', {
+      score: this.waveManager.getScore(),
+      waveState: this.waveManager.isActive() ? 'active' : 'inactive',
+    });
+    
+    // Fallback if no personality
+    const vendorFallbacks = [
+      'Hot dogs!',
+      'Get your snacks here!',
+      'Ice cold drinks!',
+      'Popcorn!',
+      'Who ordered the nachos?',
+    ];
+    const text = dialogue || vendorFallbacks[Math.floor(Math.random() * vendorFallbacks.length)];
+    
+    // Create and show bubble (Vendor is a Container, cast for typing)
+    this.showSpeechBubble(vendorSprite, text);
+  }
+
+  /**
+   * Show speech bubble for mascot activation
+   */
+  private showMascotDialogue(mascotActor: MascotActor): void {
+    const sprite = mascotActor.getSprite();
+    
+    // Get personality if available - use dialogue lines as fallback to catchphrase
+    const personality = mascotActor.getPersonality();
+    const mascotFallbacks = [
+      "Let's get HYPED!",
+      'WAVE TIME!',
+      'GO TEAM GO!',
+      'Make some NOISE!',
+      'YEAH!!!',
+    ];
+    
+    // Try to get a dialogue line from personality first
+    let text = mascotFallbacks[Math.floor(Math.random() * mascotFallbacks.length)];
+    if (personality && personality.dialogue && personality.dialogue.length > 0) {
+      const randomDialogue = personality.dialogue[Math.floor(Math.random() * personality.dialogue.length)];
+      text = randomDialogue.text;
+    }
+    
+    // Create and show bubble
+    this.showSpeechBubble(sprite, text);
+  }
+
+  /**
+   * Generic method to show speech bubble above any sprite
+   */
+  private showSpeechBubble(target: Phaser.GameObjects.Sprite | Phaser.GameObjects.Container, text: string): void {
+    const config = gameBalance.ui.speechBubble;
+    
+    // Enforce maximum bubble limit
+    if (this.activeSpeechBubbles.length >= config.maxBubbles) {
+      // Remove oldest bubble
+      const oldest = this.activeSpeechBubbles.shift();
+      oldest?.destroy();
+    }
+    
+    // Create new bubble
+    const bubble = new SpeechBubble(this, 0, 0, {
+      text,
+      duration: config.duration,
+      fadeInDuration: config.fadeInDuration,
+      fadeOutDuration: config.fadeOutDuration,
+    });
+    
+    // Position above target (works for both Sprite and Container)
+    bubble.positionAboveTarget(target, config.offsetY);
+    
+    // Add to scene
+    this.add.existing(bubble);
+    
+    // Track active bubble
+    this.activeSpeechBubbles.push(bubble);
+    
+    // Remove from tracking when destroyed
+    bubble.once('destroy', () => {
+      const index = this.activeSpeechBubbles.indexOf(bubble);
+      if (index > -1) {
+        this.activeSpeechBubbles.splice(index, 1);
+      }
+    });
   }
 }
 
