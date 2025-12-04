@@ -164,6 +164,11 @@ export class GridManager extends BaseManager {
     return { x: this.offsetX, y: this.offsetY };
   }
 
+  /** Get the cell width in pixels */
+  public get cellWidth(): number {
+    return this.cellSize;
+  }
+
   public getCell(row: number, col: number): GridCellData | null {
     if (!this.isValidCell(row, col)) return null;
     return this.cells[row][col];

@@ -45,6 +45,12 @@ export const gameBalance = {
     thirstFreezeDuration: 4000,
     attentionFreezeDuration: 5000,
 
+    // Vendor service effects
+    thirstReductionOnServe: 100, // Full thirst reset when served
+    happinessMaximum: 100, // Maximum happiness cap
+    happinessRecoveryOnServe: 15, // Happiness boost when served
+    happinessDecayRate: 1.0, // Legacy: happiness decay rate per second (deprecated)
+
     // === Wave Calculation ===
     waveChanceHappinessWeight: 0.5,
     waveChanceAttentionWeight: 0.5,

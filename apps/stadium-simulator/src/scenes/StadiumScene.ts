@@ -2387,7 +2387,6 @@ export class StadiumScene extends Phaser.Scene {
     const sectionIdx = this.getSectionAtGridPosition(gridPos.row, gridPos.col);
     if (sectionIdx === null) {
       // console.log('[StadiumScene] Could not determine section for clicked seat');
-      this.showAssignmentError('Could not determine section');
       this.exitVendorTargetingMode();
       return;
     }

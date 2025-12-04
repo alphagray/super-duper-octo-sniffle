@@ -8,6 +8,7 @@ import type { StadiumSceneConfig } from '@/managers/interfaces/ZoneConfig';
 // Helper to get all seat cells from config
 function getAllSeatCells(config: StadiumSceneConfig) {
   const seats: Array<{ row: number; col: number }> = [];
+  if (!config.cellRanges) return seats;
   for (const range of config.cellRanges) {
     if (range.zoneType === 'seat' && range.passable !== false) {
       for (let row = range.rowStart; row <= range.rowEnd; row++) {

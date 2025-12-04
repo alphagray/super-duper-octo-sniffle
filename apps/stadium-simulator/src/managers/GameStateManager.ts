@@ -51,7 +51,6 @@ export class GameStateManager {
   
   // Cluster decay state (global coordination)
   private clusterDecayTimer: number = 0;
-  private sessionStartTime: number = 0;
 
   constructor() {
     // Initialize empty sections array - will be populated by initializeSections()
