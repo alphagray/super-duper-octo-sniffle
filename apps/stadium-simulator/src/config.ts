@@ -6,6 +6,7 @@ import { ScoreReportScene } from './scenes/ScoreReportScene';
 import { GameOverScene } from './scenes/GameOverScene';
 
 import { SpeechBubbleDemoScene } from './scenes/SpeechBubbleDemoScene';
+import { CollisionTestScene } from './scenes/CollisionTestScene';
 
 // Detect debug mode from URL before exporting config
 let scenes: Phaser.Types.Scenes.SceneType[] = [MenuScene, WorldScene, StadiumScene, ScoreReportScene, GameOverScene, SpeechBubbleDemoScene];
@@ -14,6 +15,8 @@ try {
   const demoMode = url.searchParams.get('demo');
   if (demoMode === 'debug' || demoMode === 'speech') {
     scenes = [SpeechBubbleDemoScene];
+  } else if (demoMode === 'collision') {
+    scenes = [CollisionTestScene];
   }
 } catch (e) {
   // fallback to default scenes

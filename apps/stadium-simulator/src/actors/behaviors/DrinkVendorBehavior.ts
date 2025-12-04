@@ -1,4 +1,5 @@
-import type { AIActorBehavior, AIActorState } from '@/actors/interfaces/AIBehavior';
+import type { AIActorBehavior } from '@/actors/interfaces/AIBehavior';
+import { AIActorState } from '@/actors/interfaces/AIBehavior';
 import type { DrinkVendorActor } from '@/actors/DrinkVendorActor';
 import type { AIManager } from '@/managers/AIManager';
 import type { GridManager } from '@/managers/GridManager';
@@ -50,6 +51,9 @@ export class DrinkVendorBehavior implements AIActorBehavior {
   
   // Scoring tracking
   private pointsEarned: number = 0;
+  
+  // Splat tracking
+  private splatTimer: number = 0;
   
   constructor(
     vendorActor: DrinkVendorActor,
@@ -372,6 +376,10 @@ export class DrinkVendorBehavior implements AIActorBehavior {
         // Movement to drop zone, onArrival() handles fade sequence
         break;
         
+      case 'splatted':
+        this.updateSplatted(deltaTime);
+        break;
+        
       default:
         break;
     }
@@ -554,6 +562,98 @@ export class DrinkVendorBehavior implements AIActorBehavior {
    */
   public getPointsEarned(): number {
     return this.pointsEarned;
+  }
+
+  /**
+   * Handle collision splat check - called when vendor collides with wave
+   * @param vendorPos Vendor grid position at collision
+   * @returns true if splatted, false otherwise
+   */
+  public handleCollisionSplat(vendorPos: { row: number; col: number }): boolean {
+    // Prevent double-splatting if already splatted
+    if (this.state === AIActorState.Splatted) {
+      console.log(`[DrinkVendorBehavior] Already splatted, ignoring collision`);
+      return false;
+    }
+    
+    // Calculate splat chance based on points earned
+    const splatChance = 0.99; // Temporary: 99% for testing (was: Math.min(0.50, this.pointsEarned * gameBalance.waveCollision.splatChancePerPoint))
+    
+    // Roll for splat
+    const roll = Math.random();
+    const splatted = roll < splatChance;
+    
+    console.log(`[DrinkVendorBehavior] handleCollisionSplat called - points=${this.pointsEarned}, chance=${(splatChance * 100).toFixed(1)}%, roll=${(roll * 100).toFixed(1)}%, splatted=${splatted}`);
+    
+    if (splatted) {
+      // Store points for UI display before zeroing
+      const pointsLost = this.pointsEarned;
+      
+      console.log(`[DrinkVendorBehavior] SPLAT! Transitioning to splatted state, current state: ${this.state}`);
+      
+      // Clear path immediately to stop movement
+      this.vendorActor.clearPath();
+      console.log(`[DrinkVendorBehavior] Cleared vendor path`);
+      
+      // Transition to splatted state
+      this.state = AIActorState.Splatted;
+      this.splatTimer = gameBalance.waveCollision.splatRecoveryTime; // 3s recovery time
+      console.log(`[DrinkVendorBehavior] State set to splatted, recovery timer: ${this.splatTimer}ms`);
+      
+      // Get vendor's current world position and convert to grid
+      const vendorSprite = this.vendorActor.getVendor();
+      const spriteWorldPos = { x: vendorSprite.x, y: vendorSprite.y };
+      const spriteGridPos = this.gridManager.worldToGrid(spriteWorldPos.x, spriteWorldPos.y);
+      
+      console.log(`[DrinkVendorBehavior] Vendor sprite at world (${spriteWorldPos.x}, ${spriteWorldPos.y}), grid (${spriteGridPos?.row}, ${spriteGridPos?.col})`);
+      console.log(`[DrinkVendorBehavior] Actor reports grid position: (${this.vendorActor.getGridPosition().row}, ${this.vendorActor.getGridPosition().col})`);
+      
+      // Calculate ground position - fall vertically to first ground row in same column
+      // Use SPRITE's current grid position, not the actor's stale position
+      const currentCol = spriteGridPos?.col ?? this.vendorActor.getGridPosition().col;
+      const groundRow = 20; // First ground row (grid counts top-left to bottom-right)
+      const groundCol = currentCol; // Fall vertically - same column
+      
+      console.log(`[DrinkVendorBehavior] Falling vertically from col ${currentCol} to ground row ${groundRow}`);
+      
+      const targetWorld = this.gridManager.gridToWorld(groundRow, groundCol);
+      console.log(`[DrinkVendorBehavior] Target world position: (${targetWorld.x}, ${targetWorld.y})`);
+      
+      // Play tumble animation on sprite (visual tween over 3s with bounce landing)
+      if (vendorSprite && typeof vendorSprite.playTumbleAnimation === 'function') {
+        console.log(`[DrinkVendorBehavior] Calling playTumbleAnimation to fall vertically to ground cell (${groundRow}, ${groundCol}) at world (${targetWorld.x}, ${targetWorld.y})...`);
+        
+        // Start animation and wait for it to complete before updating actor grid position
+        vendorSprite.playTumbleAnimation(targetWorld.x, targetWorld.y).then(() => {
+          // After animation completes, update actor grid position and sync position with sprite
+          console.log(`[DrinkVendorBehavior] Animation complete. Finalizing splat - grid (${groundRow}, ${groundCol})`);
+          this.vendorActor.completeSplatAnimation(groundRow, groundCol);
+        });
+      } else {
+        console.log(`[DrinkVendorBehavior] No playTumbleAnimation method found on sprite`);
+      }
+      
+      // Emit splat event for UI (floating text, scoring)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('vendorSplatted', {
+          detail: {
+            vendorId: (this.vendorActor as any).id,
+            vendorPos,
+            pointsLost,
+          }
+        }));
+      }
+      
+      // Emit through AIManager for score tracking
+      this.aiManager.notifyVendorSplatted((this.vendorActor as any).id, pointsLost);
+      
+      // Zero out points
+      this.pointsEarned = 0;
+      
+      console.log(`[DrinkVendorBehavior] SPLAT! Lost ${pointsLost} points`);
+    }
+    
+    return splatted;
   }
 
   // === Private Update Methods ===
@@ -806,6 +906,33 @@ export class DrinkVendorBehavior implements AIActorBehavior {
 
       // Reset patrol timer for next waypoint selection (even if path failed)
       this.patrolTimer = this.config.patrol.intervalMs;
+    }
+  }
+
+  /**
+   * Update splatted state - wait for recovery, then rotate back and return to awaiting assignment
+   */
+  private updateSplatted(deltaTime: number): void {
+    this.splatTimer -= deltaTime;
+    
+    if (this.splatTimer <= 0) {
+      // Recovery time complete, rotate back to standing
+      console.log('[DrinkVendorBehavior] Splat recovery complete, rotating back to standing');
+      
+      const vendorSprite = this.vendorActor.getVendor();
+      if (vendorSprite && typeof vendorSprite.recoverFromSplat === 'function') {
+        vendorSprite.recoverFromSplat().then(() => {
+          // Return to awaiting assignment (no cooldown penalty, no recall)
+          this.assignedSectionIdx = null;
+          this.state = 'awaitingAssignment' as AIActorState;
+          console.log('[DrinkVendorBehavior] Vendor recovered from splat -> awaitingAssignment');
+        });
+      } else {
+        // Fallback if sprite method not available
+        this.assignedSectionIdx = null;
+        this.state = 'awaitingAssignment' as AIActorState;
+        console.log('[DrinkVendorBehavior] Vendor recovered from splat (no animation) -> awaitingAssignment');
+      }
     }
   }
 

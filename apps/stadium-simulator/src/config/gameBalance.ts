@@ -733,6 +733,7 @@ export const gameBalance = {
     localRadius: 2, // Cell radius for local penalties
     splatChancePerPoint: 0.05, // 5% chance per point earned (max 50%)
     splatCooldownPenalty: 5000, // Extra cooldown (ms) on splat
+    splatRecoveryTime: 3000, // Time vendor stays splatted before recovering (ms)
     seatRowMin: 14, // Min row for collision detection (seat zone)
     seatRowMax: 17, // Max row for collision detection (seat zone)
     columnTolerance: 0, // Exact column match required (±0)

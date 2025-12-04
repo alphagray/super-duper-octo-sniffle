@@ -25,6 +25,8 @@ export enum AIActorState {
   Patrolling = 'patrolling',
   /** Vendor is dropping off at drop zone (fade out, delay, fade in) */
   DroppingOff = 'droppingOff',
+  /** Vendor was hit by wave and is splatting (tumbling, falling, prone) */
+  Splatted = 'splatted',
 }
 
 /**

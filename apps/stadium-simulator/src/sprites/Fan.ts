@@ -18,6 +18,27 @@ import { CatchParticles } from '@/components/CatchParticles';
  * - playWave(delay, intensity) to perform the quick up/down motion with variable intensity
  */
 export class Fan extends BaseActorContainer {
+      /**
+       * Blink a red border around the fan to indicate a collision penalty
+       */
+      public blinkBorderRed(durationMs: number = 500): void {
+        // Draw a rectangle slightly larger than the fan body
+        const borderSize = Math.max(this.size, this.size * 1.3);
+        const border = this.scene.add.rectangle(0, -Math.round(this.size * 1.3 / 2), borderSize, borderSize, 0xff0000)
+          .setOrigin(0.5, 0.5)
+          .setStrokeStyle(3, 0xff0000, 1)
+          .setAlpha(1);
+        this.add(border);
+        // Animate alpha to 0, then destroy
+        this.scene.tweens.add({
+          targets: border,
+          alpha: 0,
+          duration: durationMs,
+          onComplete: () => {
+            border.destroy();
+          }
+        });
+      }
     private _originalX: number;
     private _originalY: number;
   private top: Phaser.GameObjects.Rectangle;

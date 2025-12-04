@@ -44,7 +44,11 @@ export class DrinkVendorActor extends VendorActor {
     // Update behavior state machine first
     this.behavior.tick(delta, roundTime);
 
-    if (hasPath) {
+    // Only update movement if not splatted (allow animation to run freely during splat)
+    const currentState = (this.behavior as any).getState?.();
+    const isSplatted = currentState === 'splatted';
+    
+    if (hasPath && !isSplatted) {
       this.updateMovement(delta);
 
       if (this.hasReachedFinalWaypoint()) {

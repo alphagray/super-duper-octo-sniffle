@@ -28,6 +28,7 @@ export class SectionActor extends SceneryActor {
   private thirstAgg: number = 0;
   private attentionAgg: number = 0;
   private actorRegistry?: any;
+  private lastCollisionAppliedWaveKeys: Set<string> = new Set();
 
   constructor(
     id: string,
@@ -180,6 +181,116 @@ export class SectionActor extends SceneryActor {
     });
 
     this.logger.debug(`Section ${this.sectionId} populated with ${this.fans.size} fans across ${rowCount} rows`);
+  }
+
+  /**
+   * Apply collision penalties for a wave-section event with cooldown per wave+section.
+   * @param waveKey Unique key for the active wave and this section (e.g., `${waveSerial}:${sectionId}`)
+   * @param vendorPos Grid position of vendor
+   * @param localRadius Radius in cells for local happiness penalty
+   */
+  public applyCollisionPenalties(waveKey: string, vendorPos: { row: number; col: number }, localRadius: number = gameBalance.waveCollision.localRadius): void {
+    if (this.lastCollisionAppliedWaveKeys.has(waveKey)) {
+      // Debug: penalty suppressed due to per-wave-per-section cooldown
+      console.log(`[SectionActor:${this.sectionId}] Collision penalties suppressed for waveKey=${waveKey}`);
+      return; // Cooldown: already applied for this wave+section
+    }
+
+    this.lastCollisionAppliedWaveKeys.add(waveKey);
+    console.log(`[SectionActor:${this.sectionId}] Applying collision penalties for waveKey=${waveKey} at (${vendorPos.row},${vendorPos.col})`);
+
+    // Section-wide attention penalty
+    const attentionPenalty = gameBalance.waveCollision.sectionAttentionPenalty;
+
+    // Apply to all fan actors in this section
+    this.fanActors.forEach((fanActor) => {
+      const state = (fanActor as any).getState?.();
+      if (state === 'engaged' || state === 'drinking') return;
+      // Modify attention (correct key)
+      (fanActor as any).modifyStats?.({ attention: -attentionPenalty });
+    });
+
+    // Local happiness penalty
+    const happinessPenalty = gameBalance.waveCollision.localHappinessPenalty;
+    const radius = localRadius;
+
+    this.fanActors.forEach((fanActor) => {
+      const pos = (fanActor as any).getGridPosition?.();
+      if (!pos) return;
+      const dr = Math.abs(pos.row - vendorPos.row);
+      const dc = Math.abs(pos.col - vendorPos.col);
+      if (dr + dc <= radius) {
+        const state = (fanActor as any).getState?.();
+        if (state === 'engaged' || state === 'drinking') return;
+        (fanActor as any).modifyStats?.({ happiness: -happinessPenalty });
+      }
+    });
+    // Check for vendor splat (if vendor actor has behavior with collision handler)
+    if (this.actorRegistry) {
+      const vendors = this.actorRegistry.getByCategory('vendor');
+      console.log(`[SectionActor:${this.sectionId}] Checking ${vendors.length} vendors for splat at (${vendorPos.row},${vendorPos.col})`);
+      for (const vendorActor of vendors) {
+        const vPos = (vendorActor as any).getGridPosition?.();
+        console.log(`[SectionActor:${this.sectionId}] Vendor at (${vPos?.row},${vPos?.col})`);
+        if (vPos) {
+          // Check if vendor is within collision radius
+          const dr = Math.abs(vPos.row - vendorPos.row);
+          const dc = Math.abs(vPos.col - vendorPos.col);
+          const distance = dr + dc;
+          
+          if (distance <= localRadius) {
+            // Found a vendor within collision radius
+            console.log(`[SectionActor:${this.sectionId}] Found vendor at distance ${distance} <= ${localRadius}, checking for splat!`);
+            const behavior = (vendorActor as any).getBehavior?.();
+            if (behavior && typeof behavior.handleCollisionSplat === 'function') {
+              console.log(`[SectionActor:${this.sectionId}] Calling handleCollisionSplat...`);
+              const splatted = behavior.handleCollisionSplat(vPos);
+              console.log(`[SectionActor:${this.sectionId}] Splat result: ${splatted}`);
+            } else {
+              console.log(`[SectionActor:${this.sectionId}] No handleCollisionSplat method found`);
+            }
+            break; // Only splat one vendor per collision
+          }
+        }
+      }
+    }
+    
+    // Emit collision notification for AIManager listeners
+    if (this.actorRegistry && typeof this.actorRegistry.emit === 'function') {
+      this.actorRegistry.emit('vendorCollision', {
+        sectionId: this.sectionId,
+        vendorPos,
+        waveKey,
+        attentionPenalty,
+        happinessPenalty,
+        radius
+      });
+    }
+
+    // Emit a UI event so the Scene can render an overlay
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('vendorPenaltyApplied', {
+        detail: {
+          sectionId: this.sectionId,
+          message: 'Vendor In the Way! Booooo!',
+          vendorRow: vendorPos.row,
+          vendorCol: vendorPos.col,
+          attentionPenalty,
+          happinessPenalty,
+          radius
+        }
+      }));
+    }
+  }
+
+  /**
+   * Reset collision cooldown keys for a new wave cycle.
+   */
+  public resetCollisionCooldown(): void {
+    if (this.lastCollisionAppliedWaveKeys.size > 0) {
+      console.log(`[SectionActor:${this.sectionId}] Resetting ${this.lastCollisionAppliedWaveKeys.size} collision cooldown keys`);
+    }
+    this.lastCollisionAppliedWaveKeys.clear();
   }
 
   /**

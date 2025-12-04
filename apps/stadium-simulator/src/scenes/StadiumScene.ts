@@ -57,6 +57,7 @@ export class StadiumScene extends Phaser.Scene {
   private demoMode: boolean = false;
   private debugMode: boolean = false;
   private successStreak: number = 0;
+  private waveSerial: number = 0; // Incremented each waveStart for cooldown keys
   private sessionCountdownOverlay?: Phaser.GameObjects.Container;
   private waveStrengthMeter?: Phaser.GameObjects.Container;
   private forceSputterNextSection: boolean = false;
@@ -90,6 +91,60 @@ export class StadiumScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+        // Show vendor penalty overlay when SectionActor applies penalties
+        window.addEventListener('vendorPenaltyApplied', (e: any) => {
+          const d = e.detail || {};
+          const world = this.gridManager?.gridToWorld(d.vendorRow, d.vendorCol);
+          const x = world?.x ?? 900;
+          const y = world?.y ?? 120;
+          const text = this.add.text(x, y - 20, d.message || 'Vendor In the Way! Booooo!', {
+            fontFamily: 'Arial',
+            fontSize: '16px',
+            color: '#ff5555',
+            backgroundColor: 'rgba(0,0,0,0.4)'
+          }).setOrigin(0.5, 1);
+          text.setDepth(355);
+            // Move slightly during solid display, then fade/move
+            this.tweens.add({
+              targets: text,
+              y: y - 40,
+              duration: 3000,
+              ease: 'Sine.easeOut'
+            });
+            this.time.delayedCall(3000, () => {
+              this.tweens.add({
+                targets: text,
+                y: y - 80,
+                alpha: 0,
+                duration: 3000,
+                ease: 'Cubic.easeOut',
+                onComplete: () => text.destroy()
+              });
+            });
+        });
+    // Listen for vendor collision events (emitted by FanActor)
+    window.addEventListener('vendorCollision', (e: any) => {
+      const d = e.detail || {};
+      console.log('[StadiumScene] vendorCollision event', {
+        waveSerial: this.waveSerial,
+        gridRow: d.gridRow,
+        gridCol: d.gridCol,
+        vendorId: d.vendorId,
+      });
+      const sectionId = this.getSectionIdForGridCol(d.gridCol);
+      if (!sectionId) {
+        console.warn('[StadiumScene] No sectionId for gridCol', d.gridCol);
+        return;
+      }
+      const waveKey = `${this.waveSerial}:${sectionId}`;
+      console.log('[StadiumScene] Mapped collision', { sectionId, waveKey });
+      const sectionActor = this.getSectionActorById(sectionId);
+      if (sectionActor) {
+        sectionActor.applyCollisionPenalties(waveKey, { row: d.gridRow, col: d.gridCol });
+      } else {
+        console.warn('[StadiumScene] No SectionActor found for', sectionId);
+      }
+    });
 
     // Initialize personality integration manager (loads AI content)
     if (gameBalance.debug.sceneLogs) console.log('[StadiumScene] Initializing PersonalityIntegrationManager...');
@@ -602,6 +657,13 @@ export class StadiumScene extends Phaser.Scene {
 
     // Listen to WaveManager events for visual feedback
     this.waveManager.on('waveStart', () => {
+      // Reset per-section collision cooldowns at the start of each wave
+      const sections = this.actorRegistry.getByCategory('section') || [];
+      for (const a of sections) {
+        (a as any).resetCollisionCooldown?.();
+      }
+      this.waveSerial++;
+      console.log('[StadiumScene] waveStart incremented waveSerial', this.waveSerial);
       this.successStreak = 0;
       // Show wave strength meter
       if (this.waveStrengthMeter) {
@@ -791,6 +853,7 @@ export class StadiumScene extends Phaser.Scene {
 
     this.waveManager.on('waveComplete', (data: { results: any[] }) => {
       this.gameState.incrementCompletedWaves();
+            // Wave points are added per-section within WaveManager; no UI-side addition here
       if (waveBtn) {
         waveBtn.disabled = false;
         waveBtn.textContent = 'START WAVE';
@@ -940,10 +1003,11 @@ export class StadiumScene extends Phaser.Scene {
       }
     }
 
-    // Update score display
-    if (this.scoreText) {
-      this.scoreText.setText(`Score: ${this.waveManager.getScore()}`);
-    }
+    // Update score display (use vendor score to reflect point deposits)
+      if (this.scoreText) {
+        const total = this.gameState.getTotalScore();
+        this.scoreText.setText(`Score: ${total}`);
+      }
 
     // Update visual displays
     this.updateDisplay();
@@ -1117,6 +1181,24 @@ export class StadiumScene extends Phaser.Scene {
         }
       },
     });
+
+    // Helper listeners done
+  }
+
+  private getSectionIdForGridCol(gridCol: number): string | null {
+    if (!this.levelData?.sections) return null;
+    for (const s of this.levelData.sections) {
+      if (gridCol >= s.gridLeft && gridCol <= s.gridRight) return s.id;
+    }
+    return null;
+  }
+
+  private getSectionActorById(sectionId: string): SectionActor | null {
+    const actors = this.actorRegistry.getByCategory('section') || [];
+    for (const a of actors) {
+      if ((a as any).getSectionId?.() === sectionId) return a as any;
+    }
+    return null;
   }
 
   /**
@@ -1614,7 +1696,54 @@ export class StadiumScene extends Phaser.Scene {
       
       // Update score display
       if (this.scoreText) {
-        this.scoreText.setText(`Score: ${this.gameState.getVendorScore()}`);
+        const total = this.gameState.getTotalScore();
+        this.scoreText.setText(`Score: ${total}`);
+      }
+    });
+
+    // Vendor splat event (collision with wave)
+    this.aiManager.on('vendorSplatted', (data: { vendorId: string; pointsLost: number }) => {
+      console.log(`[Vendor] Vendor ${data.vendorId} splatted! Lost ${data.pointsLost} points`);
+      
+      // Subtract points from GameStateManager
+      this.gameState.addVendorScore(-data.pointsLost);
+      
+      // Find vendor actor via registry
+      const vendorActor = this.actorRegistry.get(data.vendorId) as VendorActor;
+      if (vendorActor) {
+        // Spawn floating text "-X pts SPILLED!" at vendor position
+        const worldPos = vendorActor.getPosition();
+        const floatingText = this.add.text(
+          worldPos.x,
+          worldPos.y,
+          `-${data.pointsLost} pts SPILLED!`,
+          {
+            fontSize: '20px',
+            fontFamily: 'Arial',
+            color: '#ff0000', // Red
+            stroke: '#000000',
+            strokeThickness: 3
+          }
+        );
+        floatingText.setOrigin(0.5, 0.5);
+        floatingText.setDepth(360); // Above vendor and fans
+        
+        // Animate floating text (move up and fade)
+        this.tweens.add({
+          targets: floatingText,
+          y: worldPos.y - 40,
+          alpha: 0,
+          duration: 1800,
+          onComplete: () => {
+            floatingText.destroy();
+          }
+        });
+      }
+      
+      // Update score display
+      if (this.scoreText) {
+        const total = this.gameState.getTotalScore();
+        this.scoreText.setText(`Score: ${total}`);
       }
     });
   }

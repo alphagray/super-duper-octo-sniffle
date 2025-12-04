@@ -1066,7 +1066,9 @@ export class WaveManager {
     }
     // Award points for successful sections
     if (sectionState === 'success') {
-      this.score += 100;
+      const points = 100;
+      this.score += points;
+      this.gameState.addWaveScore(points);
       this.gameState.incrementSectionSuccesses();
       if (typeof window !== 'undefined') {
         // console.log(`[DEBUG] Score incremented! New score: ${this.score}`);

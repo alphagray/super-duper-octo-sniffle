@@ -97,8 +97,8 @@ This plan adds five major features to complete the core game loop:
 **Files**: `DropZoneActor.ts` (new), `ActorFactory.ts`
 
 - ✅ Create `DropZoneActor` extending `SceneryActor`
-- [ ] Add dark square sprite (1x1 cell, depth 100)
-- [ ] Implement white outline flash effect (500ms pulse)
+- ✅ Add dark square sprite (1x1 cell, depth 100)
+- ✅ Implement white outline flash effect (500ms pulse)
 - ✅ Register in `ActorFactory` and `ActorRegistry`
 - ✅ Spawn two drop zones in `StadiumScene.create()` at (15,10) and (15,21)
 
@@ -137,63 +137,71 @@ This plan adds five major features to complete the core game loop:
   - Depth: 355
   - Color: green
   - Animation: move up 30px + fade over 1.5s
-- [ ] Update score display UI
+- ✅ Update score display UI
 
 **Verification**:
+- Event forwarder is hooked
 - Score increases on dropoff
 - Floating text appears at correct position
 - Text visible above scenery
 
 ---
 
-## Phase 3: Wave-Vendor Collision & Splat Mechanics
+## Phase 3: Wave-Vendor Collision & Splat Mechanics (Fan-Oriented)
 
-### 3.1 Implement Collision Detection
-**Files**: `WaveSprite.ts`, `WaveManager.ts`
+### 3.1 Implement Collision Detection (refactored to fans/sections)
+**Files**: `FanActor.ts`, `SectionActor.ts`, `WaveManager.ts`
 
-- [ ] Add `checkVendorCollisions(vendors: VendorActor[])` to WaveSprite
-- ✅ Call collision check in `WaveManager.propagateWave()` per column
-- ✅ Query vendors via `ActorRegistry.getByCategory('vendor')`
-- ✅ Check vendor grid position matches wave column ±1 row in seat zones (16-19)
-- ✅ Emit `vendorCollision` event with `{vendorId, sectionId, pointsAtRisk}`
+- ✅ Collision detection is now handled inside fan participation logic rather than the wave sprite.
+- ✅ `WaveManager` triggers column participation via `emit('columnWaveReached', ...)`; fans roll participation and handle local collision checks.
+- ✅ Vendors are discovered via `ActorRegistry` in AI systems; sections/fans evaluate proximity vs current wave column.
+- [ ] Emit `vendorCollision` events from fan/section layer with `{vendorId, sectionId, pointsAtRisk}` for upstream managers.
+
+**Why**: This honors the architectural decision to keep the wave as a visual/trigger and move interaction logic to actors/sections. Long-term, “UtilityActors” (e.g., trigger volumes) could encapsulate column triggers, but this is a nice-to-have, not required.
 
 **Verification**:
-- Collision detection fires when wave hits vendor
-- Event payload includes correct data
-- Console logs show collision detection
+- Fan-driven checks fire as columns reach seats
+- Section/fan layers generate appropriate collision context
+- Logs confirm column arrivals and participation rolls
 
 ---
 
 ### 3.2 Apply Collision Penalties
-**Files**: `SectionActor.ts`, `AIManager.ts`
+**Files**: `SectionActor.ts`, `FanActor.ts`, `AIManager.ts`
 
-- [ ] Implement `SectionActor.applyCollisionPenalties(vendorPos, localRadius)`
-- [ ] Apply section-wide attention penalty (-15 to all fans)
-- [ ] Apply local happiness penalty (-10 to fans within 2-cell radius)
-- [ ] Use `fanActor.modifyStats()` for stat changes
-- [ ] Listen for collision events in AIManager/StadiumScene
+- ✅ Implemented `SectionActor.applyCollisionPenalties(vendorPos, localRadius)` driven by fan/section events
+- ✅ Section-wide attention penalty (-15 to all fans)
+- ✅ Local happiness penalty (-10 within 2-cell radius)
+- ✅ Used `fanActor.modifyStats()`; skipped `engaged`/`drinking`
+- ✅ AIManager listens for fan/section collision notifications (no direct WaveSprite coupling)
+- ✅ Fan sprite now blinks red border when penalty applied (visual feedback)
+
+Safeguards:
+- Penalties are applied exactly once per collision event. Per-section cooldown (500ms) keyed by `vendorId+gridCol` prevents double application when multiple fans emit for the same column.
+- FanActor does not adjust stats directly on collision; it only emits the event. SectionActor centralizes penalty application.
 
 **Verification**:
 - Section attention drops on collision
 - Local fans lose happiness
-- Penalties apply correctly
+- Penalties apply correctly without scene-level logic
+- Red border blink visible on penalized fans
 
 ---
 
 ### 3.3 Implement Splat Mechanics
-**Files**: `DrinkVendorBehavior.ts`, `VendorActor.ts`, `gameBalance.ts`
+**Files**: `DrinkVendorBehavior.ts`, `VendorActor.ts`, `Vendor.ts`, `StadiumScene.ts`, `gameBalance.ts`
 
-- [ ] Calculate splat chance: `Math.min(0.50, pointsEarned * 0.05)`
-- [ ] Roll random on collision, emit `vendorSplatted` if true
-- [ ] Add `splatted` state to behavior
-- [ ] Implement tumble animation:
-  - Rotate sprite 720° over 1.5s
+- ✅ Calculate splat chance: `Math.min(0.50, pointsEarned * gameBalance.waveCollision.splatChancePerPoint)`
+- ✅ Roll random on collision (from fan/section), emit `vendorSplatted` if true
+- ✅ Add `splatted` state to behavior
+- ✅ Implement tumble animation:
+  - Rotate 720° over 1.5s
   - Scale bounce: 1.0→0.8→1.2→1.0
-- [ ] Spawn floating text "-X pts SPILLED!" (depth 360, red)
-- [ ] Force recall with +5s cooldown penalty
-- [ ] Set `pointsEarned = 0` on splat
+- ✅ Spawn floating text "-X pts SPILLED!" (depth 360, red)
+- ✅ Force recall with +`splatCooldownPenalty` ms
+- ✅ Set `pointsEarned = 0` on splat
 
-**Config**: `waveCollision: {sectionAttentionPenalty: 15, localHappinessPenalty: 10, localRadius: 2, splatChancePerPoint: 0.05, splatCooldownPenalty: 5000}`
+**Config**: `waveCollision: { sectionAttentionPenalty: 15, localHappinessPenalty: 10, localRadius: 2, splatChancePerPoint: 0.05, splatCooldownPenalty: 5000 }`
 
 **Verification**:
 - Splat triggers based on probability

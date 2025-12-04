@@ -144,14 +144,21 @@ export class FanActor extends AnimatedActor {
 
   /** Generic stat modification helper (delta-based) */
   public modifyStats(delta: { happiness?: number; thirst?: number; attention?: number }): void {
+    let penaltyApplied = false;
     if (delta.happiness !== undefined) {
       this.happiness = Phaser.Math.Clamp(this.happiness + delta.happiness, 0, 100);
+      if (delta.happiness < 0) penaltyApplied = true;
     }
     if (delta.thirst !== undefined) {
       this.thirst = Phaser.Math.Clamp(this.thirst + delta.thirst, 0, 100);
     }
     if (delta.attention !== undefined) {
       this.attention = Phaser.Math.Clamp(this.attention + delta.attention, 0, 100);
+      if (delta.attention < 0) penaltyApplied = true;
+    }
+    // If a penalty was applied, blink the fan's border red
+    if (penaltyApplied && this.fan?.blinkBorderRed) {
+      this.fan.blinkBorderRed();
     }
     // Visual update deferred to update() state machine
   }
@@ -312,9 +319,6 @@ export class FanActor extends AnimatedActor {
     
     const fanPos = this.getGridPosition();
     
-    // Only check seat rows (16-19) to avoid false positives in aisles
-    if (fanPos.row < 16 || fanPos.row > 19) return null;
-    
     // Get fan's world position and cell bounds
     const fanWorldPos = this.gridManager.gridToWorld(fanPos.row, fanPos.col);
     const cellWidth = this.gridManager.cellWidth ?? 40;
@@ -373,13 +377,19 @@ export class FanActor extends AnimatedActor {
       return seatPos.row === fanPos.row && seatPos.col === fanPos.col;
     });
     
-    // Emit collision event to WaveManager for scoring/UI
-    // Note: This requires FanActor to have event emission capability
-    // For now, log it - we'll wire up event emission in next step
-    console.log(
-      `[FanActor] 💥 WAVE COLLISION! Fan ${this.id} + Vendor ${vendor.id} at (${fanPos.row},${fanPos.col}) | ` +
-      `${pointsAtRisk} pts at risk | Seat: ${seatAtPosition?.id ?? 'unknown'}`
-    );
+    // Emit DOM event for scene-level listener to handle penalties (keeps actors decoupled)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('vendorCollision', {
+        detail: {
+          vendorId: vendor.id,
+          fanId: this.id,
+          gridRow: fanPos.row,
+          gridCol: fanPos.col,
+          pointsAtRisk,
+          seatId: seatAtPosition?.id ?? null
+        }
+      }));
+    }
   }
 
   // === Grump/Difficult Terrain Methods ===

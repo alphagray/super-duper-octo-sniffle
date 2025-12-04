@@ -504,8 +504,39 @@ export class AIManager {
 
   /** Cross-actor: simple collision avoidance between vendors (stub) */
   private handleVendorCollisions(): void {
-    // TODO: Implement proximity checks and path re-routing
+    // Listen for vendor collision events from window (emitted by FanActor)
+    // When a vendor collides with a wave, roll for splat chance
+    if (typeof window !== 'undefined' && !this.collisionListenerAttached) {
+      this.collisionListenerAttached = true;
+      window.addEventListener('vendorCollision', (e: any) => {
+        const detail = e.detail || {};
+        const vendorId = detail.vendorId;
+        const gridRow = detail.gridRow;
+        const gridCol = detail.gridCol;
+        
+        console.log(`[AIManager] Vendor collision event for ${vendorId} at (${gridRow},${gridCol})`);
+        
+        // Find the vendor actor by ID
+        if (this.actorRegistry) {
+          const vendorActors = this.actorRegistry.getByCategory('vendor');
+          const vendorActor = vendorActors.find((v: any) => v.id === vendorId);
+          
+          if (vendorActor) {
+            const behavior = (vendorActor as any).getBehavior?.();
+            if (behavior && typeof behavior.handleCollisionSplat === 'function') {
+              console.log(`[AIManager] Calling handleCollisionSplat for ${vendorId}...`);
+              const vendorPos = (vendorActor as any).getGridPosition?.();
+              if (vendorPos) {
+                behavior.handleCollisionSplat(vendorPos);
+              }
+            }
+          }
+        }
+      });
+    }
   }
+  
+  private collisionListenerAttached = false;
 
   /** Cross-actor: balance vendor distribution across sections (stub) */
   private balanceVendorDistribution(): void {
@@ -564,6 +595,15 @@ export class AIManager {
    */
   public notifyVendorDropoff(actorId: string, pointsEarned: number): void {
     this.emit('vendorDropoff', { actorId, pointsEarned });
+  }
+
+  /**
+   * Notify listeners that a vendor has been splatted by a wave
+   * @param actorId String actor ID (e.g., 'actor:vendor-0')
+   * @param pointsLost Points lost from splat
+   */
+  public notifyVendorSplatted(actorId: string, pointsLost: number): void {
+    this.emit('vendorSplatted', { vendorId: actorId, pointsLost });
   }
 
   /**

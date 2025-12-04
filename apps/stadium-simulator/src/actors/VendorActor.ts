@@ -244,6 +244,69 @@ export class VendorActor extends AnimatedActor {
   }
 
   /**
+   * Move vendor to new position (world coordinates)
+   * Updates both actor position and sprite
+   * @param x World X coordinate
+   * @param y World Y coordinate
+   */
+  public moveToPosition(x: number, y: number): void {
+    this.position.x = x;
+    this.position.y = y;
+    this.vendor.setPosition(x, y);
+    
+    // Update grid position
+    if (this.gridManager) {
+      const gridPos = this.gridManager.worldToGrid(x, y);
+      if (gridPos) {
+        this.gridRow = gridPos.row;
+        this.gridCol = gridPos.col;
+        // Update depth for new position
+        const depth = this.gridManager.getDepthForPosition(gridPos.row, gridPos.col);
+        this.vendor.setDepth(depth);
+      }
+    }
+  }
+
+  /**
+   * Update grid position only (without moving sprite)
+   * Used when sprite is animating and we need to update logical grid coordinates
+   * Assumes sprite is already at the target world position
+   * @param gridRow Grid row
+   * @param gridCol Grid column
+   */
+  public updateGridPosition(gridRow: number, gridCol: number): void {
+    this.gridRow = gridRow;
+    this.gridCol = gridCol;
+    
+    // Update depth for new position
+    if (this.gridManager) {
+      const depth = this.gridManager.getDepthForPosition(gridRow, gridCol);
+      this.vendor.setDepth(depth);
+    }
+  }
+
+  /**
+   * Complete splat animation by syncing grid and position after sprite animation
+   * Called after splat tween completes to finalize actor state
+   * @param gridRow Target grid row
+   * @param gridCol Target grid column
+   */
+  public completeSplatAnimation(gridRow: number, gridCol: number): void {
+    this.gridRow = gridRow;
+    this.gridCol = gridCol;
+    
+    // Sync actor position with sprite's current position (where tween left it)
+    this.position.x = this.vendor.x;
+    this.position.y = this.vendor.y;
+    
+    // Update depth for new position
+    if (this.gridManager) {
+      const depth = this.gridManager.getDepthForPosition(gridRow, gridCol);
+      this.vendor.setDepth(depth);
+    }
+  }
+
+  /**
    * Update vendor actor (called each frame)
    * Override in subclasses to add behavior
    * @param delta - Time elapsed in milliseconds

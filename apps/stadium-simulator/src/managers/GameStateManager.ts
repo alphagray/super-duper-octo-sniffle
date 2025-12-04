@@ -40,6 +40,9 @@ export class GameStateManager {
   private waveAttempts: number = 0;
   private totalSectionSuccesses: number = 0;
   private vendorScore: number = 0; // Track vendor service points
+  private waveScore: number = 0;   // Track wave points
+  private lostVendorPoints: number = 0; // Points lost due to vendor splats
+  private lostWavePoints: number = 0;   // Points lost due to failed waves
   private initialAggregateStats: AggregateStats | null = null;
   private eventListeners: Map<string, Array<Function>>;
   private waveBoosts: Map<string, WaveBoost> = new Map(); // Track temporary boosts per section
@@ -316,6 +319,16 @@ export class GameStateManager {
     return this.vendorScore;
   }
 
+  /** Get wave score */
+  public getWaveScore(): number {
+    return this.waveScore;
+  }
+
+  /** Get total combined score */
+  public getTotalScore(): number {
+    return this.vendorScore + this.waveScore - this.lostVendorPoints - this.lostWavePoints;
+  }
+
   /**
    * Add points from vendor service
    */
@@ -323,8 +336,41 @@ export class GameStateManager {
     this.vendorScore += points;
     this.logger.push({
       level: 'info',
-      category: 'system:gamestate',
+      category: 'system:score',
       message: `Vendor score: +${points} (total: ${this.vendorScore})`,
+      ts: Date.now()
+    });
+  }
+
+  /** Add points from successful waves */
+  public addWaveScore(points: number): void {
+    this.waveScore += points;
+    this.logger.push({
+      level: 'info',
+      category: 'system:score',
+      message: `Wave score: +${points} (total: ${this.waveScore})`,
+      ts: Date.now()
+    });
+  }
+
+  /** Track points lost due to vendor splats */
+  public addLostVendorPoints(points: number): void {
+    this.lostVendorPoints += points;
+    this.logger.push({
+      level: 'warn',
+      category: 'system:score',
+      message: `Lost vendor points: +${points} (total: ${this.lostVendorPoints})`,
+      ts: Date.now()
+    });
+  }
+
+  /** Track points lost due to wave crashes/failures */
+  public addLostWavePoints(points: number): void {
+    this.lostWavePoints += points;
+    this.logger.push({
+      level: 'warn',
+      category: 'system:score',
+      message: `Lost wave points: +${points} (total: ${this.lostWavePoints})`,
       ts: Date.now()
     });
   }

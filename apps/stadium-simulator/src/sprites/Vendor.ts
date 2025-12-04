@@ -220,6 +220,98 @@ export class Vendor extends BaseActorContainer {
   }
 
   /**
+   * Play tumble animation when vendor gets splatted by wave
+   * Rotate 720° + 90° over 3s, fall to ground with bounce landing
+   * @param targetX Target X coordinate (ground cell center)
+   * @param targetY Target Y coordinate (ground row)
+   */
+  public playTumbleAnimation(targetX: number, targetY: number): Promise<void> {
+    return new Promise((resolve) => {
+      const originalRotation = this.rotation;
+      const originalScale = this.scale;
+      const totalDuration = 3000; // 3 second total fall
+      const startX = this.x;
+      const startY = this.y;
+      
+      console.log(`[Vendor.playTumbleAnimation] Starting animation from (${startX}, ${startY}) to (${targetX}, ${targetY})`);
+      
+      // Rotate 720° + 90° (2.5 full rotations, ending prone) over 3s
+      this.scene.tweens.add({
+        targets: this,
+        rotation: originalRotation + Math.PI * 4 + Math.PI / 2, // 720° + 90°
+        duration: totalDuration,
+        ease: 'Cubic.easeOut',
+      });
+      
+      // Scale bounce: 1.0 → 0.8 → 1.2 → 1.0 over 3s
+      this.scene.tweens.add({
+        targets: this,
+        scale: originalScale * 0.8,
+        duration: totalDuration * 0.25, // 750ms
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: this,
+            scale: originalScale * 1.2,
+            duration: totalDuration * 0.25, // 750ms
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+              this.scene.tweens.add({
+                targets: this,
+                scale: originalScale,
+                duration: totalDuration * 0.5, // 1500ms
+                ease: 'Sine.easeInOut',
+              });
+            },
+          });
+        },
+      });
+      
+      // Fall to ground position over 3s with bounce at end
+      // Use a custom object to tween and manually update position each frame
+      const easeObj = { progress: 0 };
+      this.scene.tweens.add({
+        targets: easeObj,
+        progress: 1,
+        duration: totalDuration,
+        ease: 'Bounce.easeOut',
+        onUpdate: (tween) => {
+          // Calculate interpolated Y position based on ease
+          const t = tween.progress;
+          const newY = startY + (targetY - startY) * t;
+          // Use setPosition to ensure display is updated
+          this.setPosition(startX, newY);
+          
+          if (Math.random() < 0.05) {
+            console.log(`[Vendor.playTumbleAnimation] onUpdate t=${t.toFixed(2)}, y=${this.y.toFixed(1)}`);
+          }
+        },
+        onComplete: () => {
+          // Ensure we're at exact final position
+          console.log(`[Vendor.playTumbleAnimation] Animation complete, final position (${targetX}, ${targetY})`);
+          this.setPosition(targetX, targetY);
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Recover from splat - rotate back to standing position
+   */
+  public recoverFromSplat(): Promise<void> {
+    return new Promise((resolve) => {
+      this.scene.tweens.add({
+        targets: this,
+        rotation: 0,
+        duration: 500,
+        ease: 'Back.easeOut',
+        onComplete: () => resolve()
+      });
+    });
+  }
+
+  /**
    * Random head color (pale yellow to medium brown, same as Fan)
    */
   private static randomHeadColor(): number {
