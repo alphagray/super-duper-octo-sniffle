@@ -13,6 +13,7 @@ import type { GridPathCell } from '@/managers/interfaces/VendorTypes';
  * Creates and manages its own Vendor sprite internally.
  */
 export class VendorActor extends AnimatedActor {
+  private isFalling: boolean = false;
   protected vendor: Vendor;
   protected personality: any;
   protected position: { x: number; y: number };
@@ -144,20 +145,14 @@ export class VendorActor extends AnimatedActor {
    * @param deltaTime Time elapsed since last update (ms)
    */
   public updateMovement(deltaTime: number): void {
+    if (this.isFalling) return; // Prevent movement during fall animation
     const path = this.currentPath;
     if (!path || path.length === 0) return;
-
     const currentSegment = path[this.currentPathIndex];
-    if (!currentSegment) {
-      // console.warn('[VendorActor] Current segment is null at index', this.currentPathIndex, 'path length:', path.length);
-      return;
-    }
-
-    // Move toward current waypoint
+    if (!currentSegment) return;
     let targetX = currentSegment.x;
     let targetY = currentSegment.y;
     
-    // Add visual offset to make sprite appear fully in the target cell
     // Vendor sprite is 20px wide, so offset by 8px in movement direction
     // This ensures 75% of the sprite bounding box is in the target cell
     const isLastWaypoint = this.currentPathIndex >= path.length - 1;
@@ -344,6 +339,104 @@ export class VendorActor extends AnimatedActor {
       const depth = this.gridManager.getDepthForWorld(x, y);
       if (typeof depth === 'number') this.vendor.setDepth(depth + 2);
     }
+  }
+
+  /**
+   * Generate a vertical fall path from current grid cell to nearest ground cell in the same column.
+   * Ignores normal passability rules.
+   */
+  public generateFallPathToGround(): Array<{ row: number; col: number }> {
+    if (!this.gridManager) return [];
+    const coords = this.gridManager.worldToGrid(this.position.x, this.position.y);
+    if (!coords) return [];
+    const { row, col } = coords;
+    const path: Array<{ row: number; col: number }> = [];
+    // Start at current row, go down to bottom row
+    for (let r = row; r < this.gridManager.getRowCount(); r++) {
+      path.push({ row: r, col });
+      // Stop at first ground cell
+      const cell = this.gridManager.getCell(r, col);
+      if (cell && cell.zoneType === 'ground') break;
+    }
+    return path;
+  }
+
+  /**
+   * Animate the vendor sprite/container along the fall path.
+   * Disables normal movement logic during animation.
+   */
+  public async animateFallAlongPath(path: Array<{ row: number; col: number }>): Promise<void> {
+    if (!path || path.length === 0 || !this.gridManager) return;
+    this.isFalling = true;
+    
+    const totalDuration = path.length * 120; // Total fall time based on path length
+    const startRotation = this.vendor.rotation;
+    const startScale = this.vendor.scale;
+    
+    // Start rotation animation (720° + 90° over total duration)
+    this.vendor.scene.tweens.add({
+      targets: this.vendor,
+      rotation: startRotation + Math.PI * 4 + Math.PI / 2, // 720° + 90°
+      duration: totalDuration,
+      ease: 'Cubic.easeOut'
+    });
+    
+    // Start scale animation (1.0 → 0.8 → 1.2 → 1.0)
+    this.vendor.scene.tweens.add({
+      targets: this.vendor,
+      scale: startScale * 0.8,
+      duration: totalDuration * 0.25,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        this.vendor.scene.tweens.add({
+          targets: this.vendor,
+          scale: startScale * 1.2,
+          duration: totalDuration * 0.25,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            this.vendor.scene.tweens.add({
+              targets: this.vendor,
+              scale: startScale,
+              duration: totalDuration * 0.5,
+              ease: 'Sine.easeInOut'
+            });
+          }
+        });
+      }
+    });
+    
+    // Animate through each cell in the path
+    for (let i = 0; i < path.length; i++) {
+      const { row, col } = path[i];
+      const { x, y } = this.gridManager.gridToWorld(row, col);
+      await new Promise<void>(resolve => {
+        this.vendor.scene.tweens.add({
+          targets: this.vendor,
+          x,
+          y,
+          duration: 120, // fast drop per cell
+          ease: 'Linear',
+          onUpdate: () => {
+            // Update actor position to match sprite
+            this.position.x = this.vendor.x;
+            this.position.y = this.vendor.y;
+          },
+          onComplete: () => resolve()
+        });
+      });
+    }
+    
+    // Update grid position to final cell
+    const finalCell = path[path.length - 1];
+    this.gridRow = finalCell.row;
+    this.gridCol = finalCell.col;
+    
+    // Play bounce animation on top/bottom sprites
+    if (typeof this.vendor.playBounceAnimation === 'function') {
+      this.vendor.playBounceAnimation();
+    }
+    
+    this.isFalling = false;
   }
 
   /**

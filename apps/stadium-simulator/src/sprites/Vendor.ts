@@ -16,6 +16,45 @@ import type { DialogueManager } from '@/systems/DialogueManager';
  * - distracted: shake/confusion effect
  */
 export class Vendor extends BaseActorContainer {
+  /**
+   * Play bounce animation on landing - simulates ball bouncing to rest with multiple bounces
+   * When rotated, "up" is -x and "down" is +x
+   */
+  public playBounceAnimation(): void {
+    // First big bounce
+    this.scene.tweens.add({
+      targets: [this.bottom, this.top],
+      x: '-=20', // Big bounce up
+      duration: 200,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onComplete: () => {
+        // Second smaller bounce
+        this.scene.tweens.add({
+          targets: [this.bottom, this.top],
+          x: '-=12', // Medium bounce up
+          duration: 150,
+          ease: 'Quad.easeOut',
+          yoyo: true,
+          onComplete: () => {
+            // Third tiny settle bounce
+            this.scene.tweens.add({
+              targets: [this.bottom, this.top],
+              x: '-=6', // Small bounce up
+              duration: 75,
+              ease: 'Bounce.easeOut',
+              yoyo: true,
+              onComplete: () => {
+                // Reset to exact original positions
+                this.bottom.x = 0;
+                this.top.x = 0;
+              }
+            });
+          }
+        });
+      }
+    });
+  }
   private top: Phaser.GameObjects.Rectangle;
   private bottom: Phaser.GameObjects.Rectangle;
   private currentState: VendorState;

@@ -1703,10 +1703,10 @@ export class StadiumScene extends Phaser.Scene {
 
     // Vendor splat event (collision with wave)
     this.aiManager.on('vendorSplatted', (data: { vendorId: string; pointsLost: number }) => {
-      console.log(`[Vendor] Vendor ${data.vendorId} splatted! Lost ${data.pointsLost} points`);
+      console.log(`[Vendor] Vendor ${data.vendorId} splatted! Lost ${data.pointsLost} uncollected points`);
       
-      // Subtract points from GameStateManager
-      this.gameState.addVendorScore(-data.pointsLost);
+      // Don't subtract from total score - these points were never added yet (still pocketed)
+      // Just record the event for the scoreboard/stats
       
       // Find vendor actor via registry
       const vendorActor = this.actorRegistry.get(data.vendorId) as VendorActor;

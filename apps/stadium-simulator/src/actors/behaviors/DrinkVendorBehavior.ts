@@ -600,37 +600,17 @@ export class DrinkVendorBehavior implements AIActorBehavior {
       this.splatTimer = gameBalance.waveCollision.splatRecoveryTime; // 3s recovery time
       console.log(`[DrinkVendorBehavior] State set to splatted, recovery timer: ${this.splatTimer}ms`);
       
-      // Get vendor's current world position and convert to grid
-      const vendorSprite = this.vendorActor.getVendor();
-      const spriteWorldPos = { x: vendorSprite.x, y: vendorSprite.y };
-      const spriteGridPos = this.gridManager.worldToGrid(spriteWorldPos.x, spriteWorldPos.y);
+      // Generate fall path using pathfinding infrastructure (vertical drop to ground)
+      const fallPath = this.vendorActor.generateFallPathToGround();
+      console.log(`[DrinkVendorBehavior] Generated fall path with ${fallPath.length} cells`);
       
-      console.log(`[DrinkVendorBehavior] Vendor sprite at world (${spriteWorldPos.x}, ${spriteWorldPos.y}), grid (${spriteGridPos?.row}, ${spriteGridPos?.col})`);
-      console.log(`[DrinkVendorBehavior] Actor reports grid position: (${this.vendorActor.getGridPosition().row}, ${this.vendorActor.getGridPosition().col})`);
-      
-      // Calculate ground position - fall vertically to first ground row in same column
-      // Use SPRITE's current grid position, not the actor's stale position
-      const currentCol = spriteGridPos?.col ?? this.vendorActor.getGridPosition().col;
-      const groundRow = 20; // First ground row (grid counts top-left to bottom-right)
-      const groundCol = currentCol; // Fall vertically - same column
-      
-      console.log(`[DrinkVendorBehavior] Falling vertically from col ${currentCol} to ground row ${groundRow}`);
-      
-      const targetWorld = this.gridManager.gridToWorld(groundRow, groundCol);
-      console.log(`[DrinkVendorBehavior] Target world position: (${targetWorld.x}, ${targetWorld.y})`);
-      
-      // Play tumble animation on sprite (visual tween over 3s with bounce landing)
-      if (vendorSprite && typeof vendorSprite.playTumbleAnimation === 'function') {
-        console.log(`[DrinkVendorBehavior] Calling playTumbleAnimation to fall vertically to ground cell (${groundRow}, ${groundCol}) at world (${targetWorld.x}, ${targetWorld.y})...`);
-        
-        // Start animation and wait for it to complete before updating actor grid position
-        vendorSprite.playTumbleAnimation(targetWorld.x, targetWorld.y).then(() => {
-          // After animation completes, update actor grid position and sync position with sprite
-          console.log(`[DrinkVendorBehavior] Animation complete. Finalizing splat - grid (${groundRow}, ${groundCol})`);
-          this.vendorActor.completeSplatAnimation(groundRow, groundCol);
+      // Animate fall along path with bounce at end
+      if (fallPath.length > 0) {
+        this.vendorActor.animateFallAlongPath(fallPath).then(() => {
+          console.log(`[DrinkVendorBehavior] Fall animation complete`);
         });
       } else {
-        console.log(`[DrinkVendorBehavior] No playTumbleAnimation method found on sprite`);
+        console.warn(`[DrinkVendorBehavior] No fall path generated, vendor may be at ground`);
       }
       
       // Emit splat event for UI (floating text, scoring)
